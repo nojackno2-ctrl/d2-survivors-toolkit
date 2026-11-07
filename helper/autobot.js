@@ -1694,12 +1694,18 @@
   function applyCheats(g) {
     if (!g || !settings.cheat?.enabled) { restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); return; }
     // 補充背包中的恐怖燃燒精華；關閉後保留已寫入的物品。
+    // 遊戲的精華格式：type 為 "essence"、base 為名稱 "Burning Essence of Terror"，數量存在 count（單疊上限 99）。
     if (settings.cheat.forgeMax) {
       const cls = g.kit?.id, inv = cls && g.save?.inventoryByClass?.[cls];
       if (Array.isArray(inv)) {
-        let essence = inv.find((item) => item?.base === "bet");
-        if (!essence) { essence = { base: "bet", count: 99 }; inv.push(essence); }
-        else essence.count = 99;
+        const name = "Burning Essence of Terror";
+        const stacks = inv.filter((item) => item?.type === "essence" && item.base === name);
+        if (stacks.length) {
+          stacks[0].count = 99;
+          for (const extra of stacks.slice(1)) inv.splice(inv.indexOf(extra), 1);
+        } else {
+          inv.push({ id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), base: name, type: "essence", rarity: "normal", name, level: 1, mods: [], count: 99 });
+        }
       }
     }
     const currentGold = (Number.isFinite(g.save?.gold) ? g.save.gold : 0) + (Number.isFinite(g.world?.gold) ? g.world.gold : 0);
