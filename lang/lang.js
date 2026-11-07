@@ -1067,6 +1067,9 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
   let tipLayout = "top";
   try { if (localStorage.getItem(TIP_LAYOUT_KEY) === "game") tipLayout = "game"; } catch {}
   const tipTouched = new Set();
+  // 遊戲原本排出的縮放（以它實際畫出的寬度 ÷ 版面寬度量得）；我們自己寫入的 transform 不會被當成遊戲的值
+  const tipNatural = new WeakMap();
+  const tipOwnTf = new WeakMap();
 
   // 純函式（不碰 DOM）：boxes 為未縮放的版面尺寸 {w, h}；回傳共用縮放、各框 left 與共同 top
   function planTipLayout({ vw, top, bottom, base = 1, gap = 6, margin = 8, boxes }) {
@@ -1101,6 +1104,8 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       el.style.top = "";
       el.style.transform = "";
       el.style.transformOrigin = "";
+      tipOwnTf.delete(el);
+      tipNatural.delete(el);
     }
     tipTouched.clear();
   }
@@ -1113,7 +1118,15 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
 
     const vw = document.documentElement.clientWidth || innerWidth;
     const vh = innerHeight;
-    const base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+    // 每個框的原始縮放：遊戲改過 transform 才重新量；否則沿用上次量到的值
+    for (const el of boxes) {
+      if (tipOwnTf.get(el) !== el.style.transform || !tipNatural.has(el)) {
+        const s = el.getBoundingClientRect().width / (el.offsetWidth || 1);
+        if (s > 0) tipNatural.set(el, s);
+      }
+    }
+    // 共用縮放取各框原始縮放的最小值，避免並列時大小不一
+    const base = Math.min(1, ...boxes.map((el) => tipNatural.get(el) || 1));
     // 安全區：頂部取 env(safe-area-inset-top)，底部下限為「丟下／出售／移動」鍵的上緣
     const probe = document.createElement("div");
     probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top);";
@@ -1137,6 +1150,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       if (el.style.top !== t) el.style.top = t;
       if (el.style.transform !== tf) el.style.transform = tf;
       if (el.style.transformOrigin !== "0px 0px" && el.style.transformOrigin !== "0 0") el.style.transformOrigin = "0 0";
+      tipOwnTf.set(el, el.style.transform);
       tipTouched.add(el);
     });
   }
