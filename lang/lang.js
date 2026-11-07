@@ -581,6 +581,10 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
   const HAS_LETTER = /[A-Za-z]/, HAS_CJK = /[　-鿿가-힣＀-￯]/;
   function translateString(str) {
     if (!str || typeof str !== "string" || currentLang === "en" || !HAS_LETTER.test(str)) return str;
+    // 淬鍊後綴：遊戲以不換行空白把「×N」接在屬性句尾（如 "+28% Faster Cast Rate ×2"）。
+    // 後綴會讓整句查不到字典，所以先剝掉只翻核心句，再把「×N」原樣接回。
+    const temper = /^(.*\S)(\s×\d+)$/.exec(str);
+    if (temper) return translateString(temper[1]) + temper[2];
     let r = cache.get(str);
     if (r !== undefined) return r;
     const look = (s) => (gameTr ? gameTr.translate(s) : simpleTranslate(s));

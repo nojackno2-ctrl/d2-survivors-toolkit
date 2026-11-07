@@ -1155,6 +1155,8 @@
  "Cold Damage": "冰寒傷害",
  "Cold Enchanted": "冰寒強化",
  "+# to Cold Mastery (Sorceress Only)": "+{0} 至冰寒專精（只限魔法使）",
+ "+# to Fire Mastery (Sorceress Only)": "+{0} 至火焰專精（只限魔法使）",
+ "+# to Lightning Mastery (Sorceress Only)": "+{0} 至閃電專精（只限魔法使）",
  "Cold Mastery": "冰寒專精",
  "Cold Plains": "冰冷之原",
  "Cold Resist": "冰寒抗性",
