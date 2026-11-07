@@ -38,6 +38,13 @@ app.whenReady().then(async () => {
   const none = await run(null);
   assert.ok(none.issues.some(t => t.includes('遊戲存檔總檢查未驗證')), 'unknown row missing');
   assert.ok(!none.issues.some(t => t.includes('遊戲存檔總檢查通過')), 'null must not show as pass');
+  const unknownOnly = await win.webContents.executeJavaScript(`(() => {
+    faultyItems = null; ruleBad = null; gameSaveFaults = null; save.leaderboard = {};
+    renderDetails([{ unknown: true, text: '未驗證' }]);
+    return { verdict: document.querySelector('#verdict').textContent, details: document.querySelector('#details').textContent };
+  })()`);
+  assert.ok(unknownOnly.verdict.includes('未驗證') && !unknownOnly.verdict.includes('沒有發現問題'), 'unknown verdict: ' + unknownOnly.verdict);
+  assert.ok(!unknownOnly.details.includes('沒有問題'), 'unknown details must not claim success');
 
   console.log('存檔檢查（遊戲 saveFaults）介面測試通過'); clearTimeout(watchdog); app.exit(0);
 }).catch(e => { console.error(e.stack); clearTimeout(watchdog); app.exit(1); });

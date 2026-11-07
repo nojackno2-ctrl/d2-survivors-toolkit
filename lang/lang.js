@@ -472,7 +472,8 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
         // 中文字級放大：原版字級是為韓文算的，中文筆畫多、偏小。記下原字級，依語言切換倍率（寬度快取一併清掉）
         if (this.foreignSize) {
           this.__d2langBase ??= this.foreignSize;
-          const want = currentLang === "en" ? this.__d2langBase : Math.round(this.__d2langBase * CJK_SCALE);
+          // 小字畫布有固定高度；放大超過畫布會裁掉筆畫並擠壓角色屬性頁。
+          const want = currentLang === "en" ? this.__d2langBase : Math.min(Math.round(this.__d2langBase * CJK_SCALE), this.info?.height || Infinity);
           if (this.foreignSize !== want) {
             this.foreignSize = want;
             try { this.foreignWidths?.clear?.(); } catch {}
@@ -508,7 +509,13 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       P[name] = keepFunctionName(orig, function (text, ...rest) {
         const raw = text, out = orig.call(this, typeof text === "string" && currentLang !== "en" ? translateString(text) : text, ...rest);
         // 記下原文與繪製參數，換語言（含切回 English）時可原地以新語言重畫，不必重新整理
-        if (name === "canvas" && typeof raw === "string" && out instanceof HTMLCanvasElement) { out.__d2langSrc = { font: this, text: raw, rest }; liveCanvases.add(out); }
+        if (name === "canvas" && typeof raw === "string" && out instanceof HTMLCanvasElement) {
+          // 點陣圖與瀏覽器文字混畫後同步讀取，避免部分環境批次繪製時出現黑塊。
+          if (currentLang !== "en" && HAS_CJK.test(out.textContent || "")) {
+            try { out.getContext("2d")?.getImageData(0, 0, 1, 1); } catch {}
+          }
+          out.__d2langSrc = { font: this, text: raw, rest }; liveCanvases.add(out);
+        }
         return out;
       });
     }
@@ -991,6 +998,19 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
         }
         menu.appendChild(item);
       }
+      for (const [mode, label] of [["top", "比較框上方並列"], ["game", "比較框原版位置"]]) {
+        const layoutItem = document.createElement("div");
+        layoutItem.textContent = (tipLayout === mode ? "✓ " : "  ") + label;
+        layoutItem.style.cssText = "padding:8px 16px;color:#f2e5c6;font:14px system-ui,sans-serif;cursor:pointer;";
+        layoutItem.onclick = (e) => {
+          e.preventDefault(); e.stopPropagation(); menu.style.display = "none";
+          setTipLayout(mode);
+        };
+        for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) {
+          layoutItem.addEventListener(ev, (e) => e.stopPropagation());
+        }
+        menu.appendChild(layoutItem);
+      }
       const fontItem = document.createElement("div");
       fontItem.textContent = "使用 D2R 原版字型…";
       fontItem.style.cssText = "padding:8px 16px;color:#f2e5c6;font:14px system-ui,sans-serif;cursor:pointer;";
@@ -1037,6 +1057,99 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
 
     setInterval(syncBtn, 300);
     syncBtn();
+    requestAnimationFrame(tipLoop);
+  }
+
+  // ===== 裝備比較框排版（觸控裝置）=====
+  // 遊戲把物品框 #tooltip 與比較框 .worn-box 放在物品旁邊，手機上會蓋住下方的「丟下／出售／移動」鍵。
+  // 預設改為：可見的框上緣對齊畫面上方、並排放在一起，縮放到不超過按鈕上緣；可在「語言」選單切回原版位置。
+  const TIP_LAYOUT_KEY = "d2lang:tipLayout";
+  let tipLayout = "top";
+  try { if (localStorage.getItem(TIP_LAYOUT_KEY) === "game") tipLayout = "game"; } catch {}
+  const tipTouched = new Set();
+
+  // 純函式（不碰 DOM）：boxes 為未縮放的版面尺寸 {w, h}；回傳共用縮放、各框 left 與共同 top
+  function planTipLayout({ vw, top, bottom, base = 1, gap = 6, margin = 8, boxes }) {
+    const n = boxes.length;
+    if (!n) return { scale: base, top, lefts: [] };
+    const sumW = boxes.reduce((a, b) => a + b.w, 0) || 1;
+    const maxH = Math.max(1, ...boxes.map((b) => b.h));
+    const availW = vw - margin * 2 - gap * (n - 1);
+    const availH = bottom - top;
+    const scale = Math.max(0.1, Math.min(base, availW / sumW, availH / maxH));
+    const total = sumW * scale + gap * (n - 1);
+    let x = Math.max(margin, (vw - total) / 2);
+    const lefts = boxes.map((b) => {
+      const left = x;
+      x += b.w * scale + gap;
+      return left;
+    });
+    return { scale, top, lefts };
+  }
+
+  function tipVisibleBoxes() {
+    const list = [];
+    const tip = document.getElementById("tooltip");
+    if (tip) list.push(tip);
+    for (const w of document.querySelectorAll(".worn-box")) list.push(w);
+    return list.filter((el) => !el.classList.contains("hidden") && el.offsetWidth > 0 && el.offsetHeight > 0);
+  }
+
+  function restoreTipLayout() {
+    for (const el of tipTouched) {
+      el.style.left = "";
+      el.style.top = "";
+      el.style.transform = "";
+      el.style.transformOrigin = "";
+    }
+    tipTouched.clear();
+  }
+
+  function applyTipLayout() {
+    // 只在觸控裝置（遊戲手機版的物品框是點擊後顯示）套用；桌機的滑鼠提示框維持原樣
+    const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+    const boxes = tipLayout === "top" && touch ? tipVisibleBoxes() : [];
+    if (!boxes.length) { if (tipTouched.size) restoreTipLayout(); return; }
+
+    const vw = document.documentElement.clientWidth || innerWidth;
+    const vh = innerHeight;
+    const base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+    // 安全區：頂部取 env(safe-area-inset-top)，底部下限為「丟下／出售／移動」鍵的上緣
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top);";
+    document.body.appendChild(probe);
+    const safeTop = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+    probe.remove();
+    const top = safeTop + 8;
+    const btnTops = ["drop-held", "sell-held", "move-held"]
+      .map((id) => document.getElementById(id))
+      .filter((b) => b && b.offsetWidth > 0 && getComputedStyle(b).display !== "none")
+      .map((b) => b.getBoundingClientRect().top);
+    const bottom = btnTops.length ? Math.min(...btnTops) - 8 : vh - 120;
+    if (bottom - top < 120) { if (tipTouched.size) restoreTipLayout(); return; }
+
+    const plan = planTipLayout({
+      vw, top, bottom, base, boxes: boxes.map((el) => ({ w: el.offsetWidth, h: el.offsetHeight })),
+    });
+    boxes.forEach((el, i) => {
+      const left = `${plan.lefts[i]}px`, t = `${plan.top}px`, tf = `scale(${plan.scale})`;
+      if (el.style.left !== left) el.style.left = left;
+      if (el.style.top !== t) el.style.top = t;
+      if (el.style.transform !== tf) el.style.transform = tf;
+      if (el.style.transformOrigin !== "0px 0px" && el.style.transformOrigin !== "0 0") el.style.transformOrigin = "0 0";
+      tipTouched.add(el);
+    });
+  }
+
+  function tipLoop() {
+    try { applyTipLayout(); } catch (e) { console.warn("[d2lang] 比較框排版失敗", e); }
+    requestAnimationFrame(tipLoop);
+  }
+
+  function setTipLayout(mode) {
+    tipLayout = mode === "game" ? "game" : "top";
+    try { localStorage.setItem(TIP_LAYOUT_KEY, tipLayout); } catch {}
+    if (tipLayout === "game") restoreTipLayout();
   }
 
   // 初始化並套用預設語言

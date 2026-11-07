@@ -15,6 +15,7 @@
       localStorage.setItem(KEY, v);
       if (v === "en") localStorage.setItem("d2lang", "en");
       else if (v === "zh") localStorage.setItem("d2lang", "zh-TW");
+      else localStorage.removeItem("d2lang"); // 自動：清掉手動語言，否則 d2lang 優先會讓它停在先前的選擇
     } catch {}
     location.reload();
   };

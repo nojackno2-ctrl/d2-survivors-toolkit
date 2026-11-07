@@ -71,7 +71,7 @@
 - 戰鬥中按「停止自動戰鬥」只會關閉自動戰鬥；設定面板的「立即停止輔助」會關閉兩個開關；死亡保護、錯誤停機等自動停機不會改掉你存的設定。
 - 畫面上方狀態列顯示目前模式與輔助器正在做什麼；設定面板顯示任務進度。目前模式用不到的設定會自動隱藏。
 - 遊戲版本更新後，輔助器與修改器的設定上方會提示「遊戲已更新」，代表尚未驗證新版，部分功能可能失效。
-- 不保證存活或通關；設計與實測調整見 [AUTOBOT_DESIGN.md](helper/AUTOBOT_DESIGN.md)，遊戲機制分析見 [docs/game-analysis](docs/game-analysis/README.md)。
+- 不保證存活或通關；遊戲機制分析見 [docs/game-analysis](docs/game-analysis/README.md)。
 
 **實測數據**
 
@@ -170,7 +170,7 @@ npm run dist       # 封裝 Windows 可攜版（僅 editor/ 改動時需要）
 | `tests/live-harness/` | 實機長跑測試框架：每職業多個全新存檔，一律以 GitHub 連結（書籤方式）載入，輔助器全自動遊玩 |
 | `helper/tools/ladder-learn.js` | 排行榜學習：各職業前 50 位不同玩家，同一玩家只取最高恐懼層紀錄 |
 | `docs/game-analysis/` | 遊戲反編譯分析（核心、戰鬥與命中率、物品與掉落、成長與任務、介面、全職業技能），不含遊戲原始碼 |
-| `AI_HANDOFF.md`、`docs/ai/` | 交接紀錄與長期規則、AI 文件索引（遊戲更新後全部重新驗證、子代理成果整合回倉庫） |
+| `AI_HANDOFF.md` | 交接紀錄、長期規則與所有 AI 代理文件（單一檔案） |
 
 ### 專案資料夾結構（網頁版）
 

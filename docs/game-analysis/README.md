@@ -25,6 +25,10 @@
 | [verify-older-builds.md](verify-older-builds.md) | 舊版遊戲辨識、封鎖與有限對照測試 |
 | [news-analysis.md](news-analysis.md) | 官方最新消息（`/changelog.json`）對輔助器的影響、99 級相關機制 |
 | [editor-analysis.md](editor-analysis.md) | 官方最新消息對存檔修改器（合法性、排行榜資格、存檔欄位）的影響 |
+| [bundle-20261105.3-recording-report.md](bundle-20261105.3-recording-report.md) | build 20261105.3 補分析：`record`（排行榜識別與爬層紀錄雜湊鏈）、`report`（錯誤回報）、`whatsNew`（更新日誌） |
+| [bundle-20261105.3-choice-chains.md](bundle-20261105.3-choice-chains.md) | build 20261105.3 補分析：`choice`（檔案來源）、`chains`（等級與數字格式）、`moved`（版面與 service worker）、`Cache`（記憶體資產快取） |
+| [bundle-20261105.3-lang-unique-url.md](bundle-20261105.3-lang-unique-url.md) | build 20261105.3 補分析：語言系統（字典鍵格式與插值）、收藏頁 `uniquesTab`（與修改器解鎖相關）、`d2url`（網址雜湊） |
+| [bundle-20261105.3-infra.md](bundle-20261105.3-infra.md) | build 20261105.3 補分析：初始化與預載（`init`、`preload-helper`、`previewStorage`）、資料打包（`pack`）、DOM 與 surface 層級 |
 
 ## 工具
 

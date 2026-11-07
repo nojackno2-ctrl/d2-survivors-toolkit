@@ -41,6 +41,9 @@ export async function checkGameHook(waitMs = 3500) {
     ...GAME_PROPS.filter((k) => !(k in game)),
     ...(game.hud ? HUD_FUNCS.filter((k) => typeof game.hud[k] !== "function").map((k) => "hud." + k) : []),
   ];
+  if (game.director && typeof game.director === "object") {
+    if (typeof game.director.cloneComes !== "function") missing.push("director.cloneComes");
+  } else issues.push({ level: "info", area: "輔助器", msg: "尚未驗證 director.cloneComes（進入戰局後才可檢查）" });
   if (missing.length) issues.push({ level: "warn", area: "輔助器", msg: "遊戲物件缺少輔助器使用的成員：" + missing.join("、") + "（相關功能可能失效）" });
   return issues;
 }

@@ -76,8 +76,15 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
       return { item: it, legit: false, max };
     }
     if (!max) {
-      const it = seededMake(Math.floor(Math.random() * 4294967296), rarity, name, baseName);
-      return it && { item: it, legit: true };
+      // 隨機（跟掉落一樣）：實測（Insight 批次 8 件）帶 roll 的符文之語讀回時會被遊戲改寫（roll[0] 1→2），造成 seed 故障，
+      // 還有法杖技能超過 3 項（StaffMods）。因此每個種子都去掉 roll 後經遊戲的 __itemFault 檢查，只取通過者。
+      for (let i = 0; i < SEED_TRIES; i++) {
+        const seed = Math.floor(Math.random() * 4294967296), it = seededMake(seed, rarity, name, baseName);
+        if (!it) return null;
+        delete it.roll;
+        if (!G.__itemFault || !G.__itemFault(JSON.parse(JSON.stringify(it)))) return { item: it, legit: true };
+      }
+      return null;
     }
     const best = pinned(() => make(rarity, name, baseName));
     if (!best) return null;

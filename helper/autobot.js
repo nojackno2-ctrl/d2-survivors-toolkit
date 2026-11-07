@@ -38,6 +38,7 @@
       maxMonsterDensity: false,
       monsterDensity10x: false,
       allElites: false,
+      forgeMax: false,
       infiniteRerolls: false,
       maxDropRate: false,
       maxGoldRate: false,
@@ -772,6 +773,10 @@
       stuck = { x: s.p.x, y: s.p.y, at: clock };
     }
   }
+  // 遊戲的關卡切換 Promise 若永不完成，轉場鎖會永遠不解除；加上期限，逾時交給 stop() 停機並釋放鎖。
+  // 不等待的非同步動作（離場、返回選單、推進關卡等）：拒絕時記錄原因，不讓 rejection 無聲消失或留下卡住的狀態。
+  const fire = (p, label) => { Promise.resolve(p).catch((err) => { lastAction = label + "失敗：" + String(err?.message || err); }); };
+  const deadline = (p, ms = 120000) => Promise.race([p, new Promise((_, reject) => setTimeout(() => reject(new Error("等待遊戲回應逾時")), ms))]);
   async function advance(g) {
     if (transition || retreat || !alive || terrorMode() === "off") return;
     const t = settings.terror, record = g.save?.terror?.[g.kit?.id];
@@ -782,7 +787,7 @@
         if (t.targetFarmTier > (record.cleared ?? 0) || typeof g.startReplay !== "function") { stop("固定層數尚未通關，無法重刷"); return; }
         g.tierDone = null;
         lastAction = "重刷恐怖 " + t.targetFarmTier + " 層";
-        await g.startReplay(g.kit, t.targetFarmTier);
+        await deadline(g.startReplay(g.kit, t.targetFarmTier));
       } else {
         if (!Array.isArray(record.offers) || !record.offers.length) return;
         // 超級首領與最終戰選項（offer.uber／offer.finale）會消耗鑰匙或器官（遊戲 itemArt 的 Kl(…, uber)），自動流程優先避開；只剩它時才退回原行為。
@@ -791,7 +796,7 @@
         const offer = plain >= 0 ? plain : record.offers.findIndex(usable);
         g.tierDone = null;
         lastAction = "推進恐怖 " + record.open + " 層";
-        await g.startTerror(g.kit, Math.max(0, offer));
+        await deadline(g.startTerror(g.kit, Math.max(0, offer)));
       }
     } catch (err) { stop("切換關卡失敗：" + String(err.message || err)); }
     finally { transition = false; }
@@ -806,7 +811,7 @@
     try { saved = g.frontend?.actions?.saved?.(g.kit.id); } catch { saved = null; }
     if (!saved) return false;
     actionAt = now; lastAction = "中途離開，自動繼續上次進度";
-    void g.continueRun(g.kit, "hero");
+    fire(g.continueRun(g.kit, "hero"), "續玩");
     return true;
   }
   // 依使用者要求：某難度完整打完五章（擊敗巴爾）等級都沒升，就記住「此職業在此等級以上刷這難度沒用」，之後不再回去刷。
@@ -827,7 +832,7 @@
     const kept = g.save?.heroes?.[g.kit?.id]?.kept, keptLv = kept?.run?.level ?? kept?.build?.level ?? 0, behindKept = keptLv - lv >= 20 && order.indexOf(kept?.difficulty) >= order.indexOf(g.difficulty);
     if (!(lowLevelUseless(g.difficulty, lv) && opened && order.indexOf(opened) > order.indexOf(g.difficulty)) && !behindKept || typeof g.pause !== "function" || typeof g.leaveRun !== "function") return false;
     leftNormalAt = now; runStart = null; lastAction = behindKept ? "這局遠低於保留角色（" + keptLv + " 級）：離開本局，回營地接回保留角色" : (g.difficulty === "normal" ? "75 級以上不刷普通" : "85 級以上不刷惡夢") + "：離開本局，回營地開最高難度";
-    g.pause(); if (g.state === "paused") void g.leaveRun();
+    g.pause(); if (g.state === "paused") fire(g.leaveRun(), "離場");
     return true;
   }
   let runStart = null, noXp = {};
@@ -871,7 +876,7 @@
     const resumeDiff = resume ? resume.difficulty ?? g.save?.heroes?.[g.kit.id]?.kept?.difficulty ?? lastRunDiff : null;
     const lowerResume = resume && opened[0] && resumeDiff && order.indexOf(resumeDiff) < order.indexOf(opened[0].difficulty) && settings.quest.farmDifficulty === "off" && resumeDiff !== questBack?.difficulty;
     const higherResume = questBack && resume && resumeDiff && resumeDiff !== questBack.difficulty;
-    if (resume && !farm && !lowerResume && !higherResume && (settings.quest.farmDifficulty === "off" || resume.difficulty === settings.quest.farmDifficulty) && typeof g.continueRun === "function") { lastAction = "從營地繼續上次進度"; runStart = { diff: resumeDiff, lv: g.world?.player?.level, at: now }; void g.continueRun(g.kit, "hero"); return true; }
+    if (resume && !farm && !lowerResume && !higherResume && (settings.quest.farmDifficulty === "off" || resume.difficulty === settings.quest.farmDifficulty) && typeof g.continueRun === "function") { lastAction = "從營地繼續上次進度"; runStart = { diff: resumeDiff, lv: g.world?.player?.level, at: now }; fire(g.continueRun(g.kit, "hero"), "續玩"); return true; }
     if (!fresh || typeof g.startRun !== "function") return false;
     lastAction = (fixed ? "重複刷難度：" : questBack ? "補完未完成任務，回此難度重打：" : farm ? "最高難度打不上去，回低難度刷：" : "從營地開新局：") + fresh.difficulty; runStart = { diff: fresh.difficulty, lv: g.world?.player?.level, at: now }; void g.startRun(g.kit, fresh.difficulty);
     return true;
@@ -1010,16 +1015,22 @@
     if (!hud || typeof hud.showTown !== "function") return false;
     if (hud.__d2autobotTown === api) return true;
     const own = Object.prototype.hasOwnProperty.call(hud, "showTown"), original = hud.showTown;
-    hud.showTown = keepFunctionName(original, function (...args) { trade = { gold: args[0], wares: args[1] || [], acts: args[2] || {}, gear: args[3] || null }; return Reflect.apply(original, this, args); });
+    const wrapper = keepFunctionName(original, function (...args) { if (alive) trade = { gold: args[0], wares: args[1] || [], acts: args[2] || {}, gear: args[3] || null }; return Reflect.apply(original, this, args); });
+    hud.showTown = wrapper;
     hud.__d2autobotTown = api;
-    restores.push(() => { if (own) hud.showTown = original; else delete hud.showTown; delete hud.__d2autobotTown; });
+    // 只有在目前仍是自己的包裝時才還原；若其他工具之後又包了一層，保留它（還原會把別人的包裝一起刪掉）。包裝本身只記錄狀態並原樣轉交，殘留無副作用。
+    restores.push(() => { if (hud.showTown !== wrapper) return; if (own) hud.showTown = original; else delete hud.showTown; delete hud.__d2autobotTown; });
     return true;
   }
   // 實測：倉庫（only=stash）以角色畫面顯示，leave 後畫面仍留著，需再用原版 closeCharacter 關閉。
   function leaveTrade(g) {
-    if (g.state === "town") trade?.acts?.leave?.();
-    const sheet = document.getElementById("character");
-    if (shop?.open && sheet && !sheet.classList.contains("hidden")) g.hud?.closeCharacter?.();
+    // 離開動作若拋錯（遊戲的商店關閉回呼），不可讓狀態卡住：記錄原因，仍然清掉交易與商店開啟狀態。
+    try { if (g.state === "town") trade?.acts?.leave?.(); }
+    catch (err) { lastAction = "離開商店失敗：" + String(err.message || err); }
+    try {
+      const sheet = document.getElementById("character");
+      if (shop?.open && sheet && !sheet.classList.contains("hidden")) g.hud?.closeCharacter?.();
+    } catch (err) { lastAction = "關閉角色頁失敗：" + String(err.message || err); }
     trade = null; if (shop) shop.open = null;
   }
   function openTrade(g, kind) {
@@ -1028,9 +1039,12 @@
     if (shop.smith) { if (!trade && typeof g.showTown === "function") g.showTown(); return ["store", "stash"].includes(kind) && g.state === "town" && !!trade; }
     if (shop.open === kind && g.state === "town" && trade) return true;
     leaveTrade(g);
-    if (g.state !== "camp") return false;
+    if (g.state !== "camp") { lastAction = "非營地，無法開啟" + (kind === "stash" ? "倉庫" : "商店") + "，略過此步驟"; return false; }
     g.openCampTrade(kind); shop.open = kind;
-    return !!trade && g.state === "town";
+    // 開啟失敗（沒有建立交易）要明確記錄，不可靜默當成已完成。
+    const ok = !!trade && g.state === "town";
+    if (!ok) lastAction = "無法開啟" + (kind === "stash" ? "倉庫" : "商店") + "，略過此步驟";
+    return ok;
   }
   function stashItems(view) {
     // 原版 uniques 為 Map，而非一般物件；直接 Object.values 會漏掉整個收藏庫。
@@ -1164,13 +1178,15 @@
     const wrapOwn = (object, name, factory) => {
       if (typeof object?.[name] !== "function") return;
       const own = Object.prototype.hasOwnProperty.call(object, name), original = object[name];
-      object[name] = factory(original);
-      restores.push(() => { if (own) object[name] = original; else delete object[name]; });
+      const wrapper = factory(original);
+      object[name] = wrapper;
+      // 同上：只還原仍是自己包裝的值，避免覆蓋其他工具後來安裝的包裝。
+      restores.push(() => { if (object[name] !== wrapper) return; if (own) object[name] = original; else delete object[name]; });
     };
     // 實測原版 hud.showLevelUp(cards, build, handlers)：cards 為 {title, subtitle, text, rarity}；showCampMenu(npc, items) 為 {label, disabled, run}。
-    wrapOwn(g, "offerLevelUp", (original) => function (...args) { levelOfferKind = this.slotPicks?.[0] ?? null; return Reflect.apply(original, this, args); });
-    wrapOwn(hud, "showLevelUp", (original) => function (...args) { levelCards = Array.isArray(args[0]) ? args[0] : null; levelHandlers = args[2] && typeof args[2] === "object" ? args[2] : null; return Reflect.apply(original, this, args); });
-    wrapOwn(g, "showCampMenu", (original) => function (...args) { campMenu = { npc: args[0], items: Array.isArray(args[1]) ? args[1] : [] }; return Reflect.apply(original, this, args); });
+    wrapOwn(g, "offerLevelUp", (original) => function (...args) { if (alive) levelOfferKind = this.slotPicks?.[0] ?? null; return Reflect.apply(original, this, args); });
+    wrapOwn(hud, "showLevelUp", (original) => function (...args) { if (alive) { levelCards = Array.isArray(args[0]) ? args[0] : null; levelHandlers = args[2] && typeof args[2] === "object" ? args[2] : null; } return Reflect.apply(original, this, args); });
+    wrapOwn(g, "showCampMenu", (original) => function (...args) { if (alive) campMenu = { npc: args[0], items: Array.isArray(args[1]) ? args[1] : [] }; return Reflect.apply(original, this, args); });
     hud.__d2autobotBuild = api;
     restores.push(() => { delete hud.__d2autobotBuild; });
   }
@@ -1521,7 +1537,7 @@
     const p = QUEST_DIFF[g.difficulty], q = g.save?.cain?.quests?.[g.kit?.id] || {};
     if (!p || q[p + "1"] != null || (g.world?.act ?? 0) !== 0 || !hasItem(g, "bks") || hasItem(g, "bkd")) return false;
     scrollLeftAt = now; lastAction = "撿到伊尼弗斯卷軸：回營地請阿卡拉翻譯";
-    g.pause(); if (g.state === "paused") void g.leaveRun();
+    g.pause(); if (g.state === "paused") fire(g.leaveRun(), "離場");
     return true;
   }
   function progression(g, now) {
@@ -1532,7 +1548,7 @@
     if (terrorMode() === "off") return false;
     const record = g.save?.terror?.[g.kit?.id];
     if (["camp", "select"].includes(g.state) && !g.swapping && record && g.save?.heroes?.[g.kit?.id]?.kept && record.playing === undefined && !record.replay) {
-      void advance(g); return true;
+      fire(advance(g), "推進關卡"); return true;
     }
     if (!g.world?.terror || g.state !== "dead") return false;
     const won = !!g.tierDone;
@@ -1540,7 +1556,7 @@
     if (!won && (!g.runOver || g.deathTime === null || g.deathTime < 3)) return true;
     if (!won && !g.save?.heroes?.[g.kit?.id]?.kept) { stop("沒有可重試的角色"); return true; }
     if (clearWorld !== g.world) { clearWorld = g.world; clearAt = now; }
-    if (now - clearAt >= settings.terror.postClearWaitSec * 1000) void advance(g);
+    if (now - clearAt >= settings.terror.postClearWaitSec * 1000) fire(advance(g), "推進關卡");
     return true;
   }
   function blocked() { return (!settings.enabled && !settings.progressEnabled) || document.hidden || !panel.hidden || window.__d2editIsOpen?.() || performance.now() < manualUntil || paused(); }
@@ -1559,12 +1575,13 @@
   }
   // 子開關還原紀錄（致命一擊 maxCrit、一擊必殺 oneHitKill、掉寶 maxDropRate）：每個子開關記下自己改過的欄位，
   // 第一次寫入前記下原值（含是否為自有屬性），每次寫入記下寫入值。還原時只還原「目前值仍等於自己寫入值」的欄位，
-  // 遊戲後來自行改過的值不蓋掉。玩家物件換了（新的一局）就丟掉舊紀錄。
+  // 遊戲後來自行改過的值不蓋掉。玩家或導演物件更換前先還原舊紀錄。
   const cheatRecs = new Map();
   const CLAMP_PROPS = new Set(["owed", "waveDue"]);
   function cheatField(key, owner, obj, prop, value) {
     let rec = cheatRecs.get(key);
-    if (!rec || rec.owner !== owner) { rec = { owner, fields: [] }; cheatRecs.set(key, rec); }
+    if (rec && rec.owner !== owner) { restoreCheat(key); rec = null; }
+    if (!rec) { rec = { owner, fields: [] }; cheatRecs.set(key, rec); }
     let f = rec.fields.find((x) => x.obj === obj && x.prop === prop);
     if (!f) { f = { obj, prop, own: Object.hasOwn(obj, prop), base: obj[prop], written: undefined }; rec.fields.push(f); }
     else if (obj[prop] !== f.written) { f.own = Object.hasOwn(obj, prop); f.base = obj[prop]; }
@@ -1591,28 +1608,38 @@
   // 做法是把 player.life 換成存取器：寫入較低的值一律忽略，只接受回血與提高。不改網址、不改遊戲旗標，遊戲不會因此標記本局。
   const lifeGuards = new WeakMap();
   function lifeGuard(p, on) {
-    if (!p || typeof p !== "object") return;
+    if (!p || typeof p !== "object") return false;
     const guard = lifeGuards.get(p);
     if (on) {
-      if (guard) return;
-      if (typeof p.life !== "number") return;
-      const state = { value: p.life };
-      Object.defineProperty(p, "life", {
-        configurable: true, enumerable: true,
-        get() { return state.value; },
-        set(v) { if (typeof v === "number" && v < state.value) return; state.value = v; },
-      });
-      lifeGuards.set(p, state);
+      if (guard) return true;
+      try {
+        if (typeof p.life !== "number") return false;
+        const descriptor = Object.getOwnPropertyDescriptor(p, "life");
+        const state = { value: p.life, descriptor };
+        Object.defineProperty(p, "life", {
+          configurable: true, enumerable: descriptor?.enumerable ?? true,
+          get() { return state.value; },
+          set(v) { if (typeof v === "number" && v < state.value) return; state.value = v; },
+        });
+        lifeGuards.set(p, state);
+        return true;
+      } catch { return false; }
     } else if (guard) {
-      const value = guard.value;
-      Object.defineProperty(p, "life", { configurable: true, enumerable: true, writable: true, value });
-      lifeGuards.delete(p);
+      try {
+        if (guard.descriptor) {
+          const descriptor = { ...guard.descriptor };
+          if ("value" in descriptor) descriptor.value = guard.value;
+          Object.defineProperty(p, "life", descriptor);
+        } else delete p.life;
+        lifeGuards.delete(p);
+      } catch { return false; }
     }
+    return true;
   }
-  // 目前套用無敵的玩家物件；子開關關、總開關關、全部關閉、destroy、換了新的一局時都會還原它的 life。
   let invinciblePlayer = null;
   function restoreInvincible() {
-    if (invinciblePlayer) lifeGuard(invinciblePlayer, false);
+    if (invinciblePlayer && !lifeGuard(invinciblePlayer, false)) return;
+    restoreCheat("invincibleDamageTaken");
     invinciblePlayer = null;
   }
   // 經驗值加成：包住遊戲的 gainXp，把獲得的經驗乘上固定倍率。只有自己包過的（xpWrap 記錄的 wrapped 仍是目前值）才會放回原函式；
@@ -1666,6 +1693,15 @@
   }
   function applyCheats(g) {
     if (!g || !settings.cheat?.enabled) { restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); return; }
+    // 補充背包中的恐怖燃燒精華；關閉後保留已寫入的物品。
+    if (settings.cheat.forgeMax) {
+      const cls = g.kit?.id, inv = cls && g.save?.inventoryByClass?.[cls];
+      if (Array.isArray(inv)) {
+        let essence = inv.find((item) => item?.base === "bet");
+        if (!essence) { essence = { base: "bet", count: 99 }; inv.push(essence); }
+        else essence.count = 99;
+      }
+    }
     const currentGold = (Number.isFinite(g.save?.gold) ? g.save.gold : 0) + (Number.isFinite(g.world?.gold) ? g.world.gold : 0);
     if (settings.cheat.maxGoldRate && currentGold >= 9000000000) {
       settings.cheat.maxGoldRate = false;
@@ -1681,16 +1717,20 @@
     if (settings.cheat.invincible) {
       const p = p0;
       if (p) {
-        lifeGuard(p, true);
-        invinciblePlayer = p;
-        if (p.maxLife > 0 && p.life < p.maxLife) p.life = p.maxLife;
-        p.damageTaken = 0;
+        if ((!invinciblePlayer || invinciblePlayer === p) && lifeGuard(p, true)) {
+          invinciblePlayer = p;
+          if (p.maxLife > 0 && p.life < p.maxLife) p.life = p.maxLife;
+          cheatField("invincibleDamageTaken", p, p, "damageTaken", 0);
+        }
       }
       if (g.world?.shield && g.world.shield.max > 0) g.world.shield.mana = g.world.shield.max;
       if (g.world?.mana && g.world.mana.max > 0) g.world.mana.mana = g.world.mana.max;
     }
 
     const p = g.world?.player;
+    if (!p) {
+      for (const key of ["maxCrit", "oneHitKill", "maxDropRate"]) if (!settings.cheat[key]) restoreCheat(key);
+    }
     if (p) {
       // 2. 致命攻擊（機率最高）
       if (settings.cheat.maxCrit) {
@@ -1879,7 +1919,7 @@
         const died = !(g.world?.player?.life > 0) && !g.won;
         if (runStart && g.won) { runStart.complete = true; noteRunEnd(g, now); }
         failStreak[g.difficulty] = died ? (failStreak[g.difficulty] || 0) + 1 : 0;
-        actionAt = now; lastAction = died ? "陣亡，返回營地整備" : "本局通關，返回營地"; void g.toMenu(); return;
+        actionAt = now; lastAction = died ? "陣亡，返回營地整備" : "本局通關，返回營地"; fire(g.toMenu(), "返回選單"); return;
       }
       return;
     }
@@ -1888,7 +1928,7 @@
     if (!state.hp || state.hp.now <= 0) { release(); return; }
     let danger = threats(state);
     let reason = g && deathReason(state, danger, now);
-    if (reason) { void returnToSafety(g, state, reason, now); return; }
+    if (reason) { fire(returnToSafety(g, state, reason, now), "安全離場"); return; }
     const prevHp = state.hp.now;
     const healingFailed = assistOn() ? potions(state, danger, now) : false;
     // 只有喝水成功（血量變動）或喝水失敗時才需重新讀取生命與威脅，省下一般幀重複過濾實體與計算。
@@ -1897,7 +1937,7 @@
     if (drank) danger = threats(after);
     if (drank || healingFailed) {
       reason = g && deathReason(after, danger, now, healingFailed);
-      if (reason) { void returnToSafety(g, after, reason, now); return; }
+      if (reason) { fire(returnToSafety(g, after, reason, now), "安全離場"); return; }
     }
     if (g && state.p) { if (g.hud?.skillsOpen || g.hud?.questLogOpen) release(); else navigate(after, danger, now); }
   }
@@ -1924,16 +1964,16 @@
       if (!signatures.every((re) => re.test(source))) { for (const m of source.matchAll(/["'`]\.\/(Game-[\w-]+\.js)["'`]/g)) queue.push(new URL(m[1], url).href); continue; }
       // 精確沿用頁面模組 URL，讓瀏覽器回傳原模組實例；不加查詢字串、不執行修改版副本。
       const module = await import(url); if (!alive) return;
-      void loadSkillTables(url);
+      fire(loadSkillTables(url), "技能表");
       const proto = module.Game?.prototype;
       if (typeof proto?.tick !== "function" || typeof proto.drinkFrom !== "function" || typeof proto.steer !== "function") continue;
       wrap(proto, "tick", (original) => function (...args) { if (alive) { game = this; guarded(this, performance.now()); } return Reflect.apply(original, this, args); });
       // 原版 steer 會為拾取目標重建 walkTarget，記住該參照才能在停止時完全放手。
       wrap(proto, "steer", (original) => function (...args) { const result = Reflect.apply(original, this, args); if (alive && this === game && ownReach && this.world?.reaching === ownReach) ownWalk = this.walkTarget; return result; });
-      gameplayCompatible = true; hookUrl = url; hookNote = "已掛接原版 Game，等待下一幀"; void checkGameVersion(url); return;
+      gameplayCompatible = true; hookUrl = url; hookNote = "已掛接原版 Game，等待下一幀"; fire(checkGameVersion(url), "版本檢查"); return;
     }
     hookNote = "找不到可掛接的遊戲程式，請重新開啟遊戲";
-    void checkGameVersion("");
+    fire(checkGameVersion(""), "版本檢查");
   }
   let versionNotice = "", versionDismissed = false, checkedGameBuild = false;
   function parseBuild(s) { return String(s || "").trim().split(".").map((n) => Number(n) || 0); }
@@ -2004,8 +2044,8 @@
   // 狀態列顯示輔助器目前在做什麼。
   const statusLine = document.createElement("div");
   statusLine.id = "d2autobot-status";
-  statusLine.style.cssText = "position:fixed;bottom:max(12px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:2147483645;max-width:min(92vw,calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 16px));background:rgba(0,0,0,.75);color:#f0d9a0;border-radius:4px;padding:3px 10px;font:13px sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;display:none";
-  stopButton.style.cssText = "position:fixed;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 28px);left:50%;transform:translateX(-50%);z-index:2147483645;min-height:44px;background:#531b15;color:#fff;border:1px solid #d4a84a;border-radius:6px;padding:6px 14px;display:none;touch-action:manipulation";
+  statusLine.style.cssText = "position:fixed;top:calc(max(12px,env(safe-area-inset-top)) + clamp(100px, calc(22dvh + 14px), 200px));left:50%;transform:translateX(-50%);z-index:2147483645;max-width:min(80vw,300px);background:rgba(0,0,0,.75);color:#f0d9a0;border-radius:4px;padding:3px 10px;font:13px sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;display:none";
+  stopButton.style.cssText = "position:fixed;top:calc(max(12px,env(safe-area-inset-top)) + clamp(50px, calc(22dvh - 36px), 150px));left:50%;transform:translateX(-50%);z-index:2147483645;min-height:44px;background:#531b15;color:#fff;border:1px solid #d4a84a;border-radius:6px;padding:6px 14px;display:none;touch-action:manipulation";
   host.id = "d2autobot-panel"; host.style.cssText = "position:fixed;inset:0;z-index:2147483647;pointer-events:none";
   const root = host.attachShadow({ mode: "open" });
   root.innerHTML = `<style>
@@ -2080,6 +2120,7 @@
   field("cheat.maxMonsterDensity", "怪物數量最大化（地圖怪物生成速度與數量拉滿）");
   field("cheat.allElites", "一般怪物全部變成精英以上等級（全圖小怪升階為金/藍怪）");
   group("流程與掉落修改");
+  field("cheat.forgeMax", "恐怖燃燒精華數量 99（鍛造機率無法修改）");
   field("cheat.infiniteRerolls", "選技能的重抽無限次數（升級選卡無限重抽、跳過與排除）");
   field("cheat.maxDropRate", "掉寶率最高（大幅提升暗金/套裝/稀有尋寶率）");
   field("cheat.maxXp", "經驗值加成最大（擊殺與任務獲得的經驗值乘以 1000 倍，升級極快）");
@@ -2151,5 +2192,5 @@
     get game() { return game; },
   };
   window.__d2autobot = api;
-  connect().catch((err) => { if (alive) hookNote = "無法掛接遊戲程式：" + String(err.message || err); void checkGameVersion(""); });
+  connect().catch((err) => { if (alive) hookNote = "無法掛接遊戲程式：" + String(err.message || err); fire(checkGameVersion(""), "版本檢查"); });
 })();

@@ -154,8 +154,10 @@ const backend = {
     if (typeof save !== "object" || !save || typeof save.version !== "number") throw new Error("存檔格式不正確。");
     const text = await sealText(save);
     // 同一頁第二次寫入時，上一次的防護還在；先清掉，讓修改器自己的這次寫入通過（否則會被擋下、顯示讀回不一致）。
+    const prevGuard = lastText;
     lastText = null;
-    localStorage.setItem(mode(m).key, text);
+    try { localStorage.setItem(mode(m).key, text); }
+    catch (e) { lastText = prevGuard; throw e; } // 寫入失敗時保留上一次成功寫入的防護，避免遊戲以舊記憶體覆寫
     written = true;
     // 遊戲在關卡中會於 pagehide／切到背景時用記憶體裡的舊存檔覆寫（有多個監聽，順序不定）。
     // 寫入後到頁面重新載入前，擋掉遊戲對同一存檔鍵的其他寫入；修改器開著時遊戲無法操作，關閉即重新載入，不會吃掉遊戲進度。

@@ -8,7 +8,7 @@ global.performance = { getEntriesByType: () => [{ name: "https://d2survivors.lol
 global.window = {};
 let changelog = [{ build: TESTED }];
 global.fetch = async () => ({ ok: !!changelog, json: async () => changelog });
-const goodGame = () => Object.fromEntries([...["leaveRun", "continueRun", "startRun", "toMenu", "gainXp", "startTerror", "spendStatPoints", "inventoryOf", "equippedOf", "useQuest", "heroNumbers"].map((k) => [k, () => {}]), ...["state", "camp", "save", "build", "difficulty", "director", "trade", "gearActions", "world", "kit"].map((k) => [k, {}]), ["hud", { showTown() {}, closeLevelUp() {} }]]);
+const goodGame = () => Object.fromEntries([...["leaveRun", "continueRun", "startRun", "toMenu", "gainXp", "startTerror", "spendStatPoints", "inventoryOf", "equippedOf", "useQuest", "heroNumbers"].map((k) => [k, () => {}]), ...["state", "camp", "save", "build", "difficulty", "director", "trade", "gearActions", "world", "kit"].map((k) => [k, {}]), ["director", { cloneComes() {} }], ["hud", { showTown() {}, closeLevelUp() {} }]]);
 const goodCtx = () => ({
   dict: async () => ({ length: 0, ...Object.fromEntries(Array.from({ length: 6000 }, (_, i) => ["k" + i, "v"])) }),
   gamedata: async () => ({ a: 1 }),
@@ -30,6 +30,12 @@ const goodCtx = () => ({
   c = goodCtx(); c.dict = async () => ({ a: 1 }); r = await runSelfCheck(c); assert.ok(find(r, "字典", "warn"));
   c = goodCtx(); c.backend.load = async () => ({ save: {}, seal: "broken" }); r = await runSelfCheck(c); assert.ok(find(r, "存檔", "warn"));
   c = goodCtx(); c.engine = async () => ({ capabilities: () => ({ supported: true, weaponSets: true }), saveFaults: () => ["bad item"] }); r = await runSelfCheck(c); assert.ok(/bad item/.test(find(r, "存檔").msg));
+  { const game = goodGame(); window.__d2autobot.game = game;
+    delete game.director.cloneComes; r = await runSelfCheck(goodCtx());
+    assert.ok(r.issues.some(i => i.level === "warn" && i.msg.includes("director.cloneComes")));
+    game.director = null; r = await runSelfCheck(goodCtx());
+    assert.ok(r.issues.some(i => i.level === "info" && i.msg.includes("director.cloneComes"))); assert.equal(r.ok, true);
+  }
   const g = goodGame(); delete g.gainXp; delete g.hud.closeLevelUp; window.__d2autobot.game = g;
   r = await runSelfCheck(goodCtx()); assert.ok(/gainXp/.test(find(r, "輔助器", "warn").msg) && /hud\.closeLevelUp/.test(find(r, "輔助器", "warn").msg), "缺少成員要列出");
   window.__d2autobot.game = null; r = await runSelfCheck(goodCtx()); assert.ok(find(r, "輔助器", "info") && r.ok, "尚未進遊戲只是提示，不算失敗");
@@ -63,7 +69,7 @@ const goodCtx = () => ({
 {
   const source = require("node:fs").readFileSync(path.join(__dirname, "..", "autobot.js"), "utf8");
   const helpers = source.slice(source.indexOf("  // 子開關還原紀錄"), source.indexOf("  // 遊戲修改：無敵、致命攻擊"));
-  const block = source.slice(source.indexOf("\n    const p = g.world?.player;\n    if (p) {\n      // 2.") + 1, source.indexOf("    // 4. 技能加成"));
+  const block = source.slice(source.indexOf("\n    const p = g.world?.player;\n    if (!p) {") + 1, source.indexOf("    // 4. 技能加成"));
   const build = () => new Function("settings", "g", "let goldOverride = null;" + "const ALL_SKILLS_BONUS = 20;" + helpers + "return { tick: () => {" + block + "}, restoreAllCheats };");
   const mk = () => ({ criticalStrike: 5, deadlyStrike: 1, passiveLevels: { criticalStrike: 3 }, might: 3, weaponDamage: 4, mastery: { physical: 2, fire: 1 }, damageMult: 1, fireDamageMult: 1, magicFind: 10, uniqueBoost: 1, rareBoost: 1, setBoost: 1 });
   const mkSettings = () => ({ cheat: { maxCrit: true, oneHitKill: true, maxDropRate: true } });
@@ -106,6 +112,9 @@ const goodCtx = () => ({
     settings.cheat.maxCrit = false; tick();
     assert.equal(second.criticalStrike, 5); assert.equal(second.passiveLevels.criticalStrike, 3);
     assert.equal(second.might, 100);
+    assert.deepEqual(first, mk());
+    g.world.player = null; settings.cheat.oneHitKill = false; tick();
+    assert.equal(second.might, 3);
   }
   // D. 原本是繼承來的屬性：還原時刪除自己寫入的自有屬性，回到繼承值
   {
@@ -202,6 +211,22 @@ const goodCtx = () => ({
     settings.cheat.invincible = true; h.applyCheats(g); assert.ok(!isPlain(p1));
     const p2 = mk(); g.world.player = p2; h.applyCheats(g);
     assert.ok(isPlain(p1), "換新的一局時舊玩家要還原"); assert.ok(!isPlain(p2));
+  }
+  {
+    const settings = mkSettings({ invincible: true }); const h = harnessFor(settings);
+    const p = { maxLife: 100, damageTaken: 2 }; Object.defineProperty(p, "life", { value: 50, writable: true, enumerable: false, configurable: true });
+    const g = { world: { player: p } }; h.applyCheats(g); settings.cheat.invincible = false; h.applyCheats(g);
+    assert.deepEqual(Object.getOwnPropertyDescriptor(p, "life"), { value: 100, writable: true, enumerable: false, configurable: true }); assert.equal(p.damageTaken, 2);
+    const locked = { maxLife: 100, damageTaken: 3 }; Object.defineProperty(locked, "life", { value: 50, configurable: false });
+    g.world.player = locked; settings.cheat.invincible = true; assert.doesNotThrow(() => h.applyCheats(g)); assert.equal(locked.damageTaken, 3);
+    const getter = function () { return 42; }; const accessor = { maxLife: 0, damageTaken: 1 };
+    Object.defineProperty(accessor, "life", { get: getter, configurable: true }); g.world.player = accessor; h.applyCheats(g); settings.cheat.invincible = false; h.applyCheats(g);
+    assert.equal(Object.getOwnPropertyDescriptor(accessor, "life").get, getter);
+  }
+  {
+    const settings = mkSettings({ maxMonsterDensity: true }); const h = harnessFor(settings);
+    const first = { owed: 0, batchTimer: 5 }, second = { owed: 1, batchTimer: 6 }; const g = { world: {}, director: first };
+    h.applyCheats(g); g.director = second; h.applyCheats(g); assert.equal(first.owed, 0); assert.equal(first.batchTimer, 5);
   }
   console.log("怪物數量／全精英／經驗值加成／無敵還原測試通過");
 }

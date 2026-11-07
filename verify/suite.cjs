@@ -13,6 +13,8 @@ module.exports = [
   { id: "selfcheck",          tier: "static",      kind: "node",     file: "helper/tests/selfcheck.cjs",       timeout: 60 },
   { id: "weapon-sets-ui",     tier: "integration", kind: "electron", file: "modifier/tests/weapon-sets-ui.cjs", timeout: 120 },
   { id: "save-faults-ui",     tier: "integration", kind: "electron", file: "modifier/tests/save-faults-ui.cjs", timeout: 120 },
+  { id: "backup-record",      tier: "static", kind: "node", file: "modifier/tests/backup-record.cjs", timeout: 60 },
+  { id: "write-confirm",       tier: "static", kind: "node", file: "modifier/tests/write-confirm.cjs", timeout: 60 },
   { id: "autobot",            tier: "integration", kind: "electron", file: "helper/tests/autobot.cjs",         timeout: 180 },
   // 舊測試：遊戲版本封鎖已移除（見 AI_HANDOFF），斷言已不成立。檔案已從 editor/ 移除，不再執行。
   { id: "version-gate",       stale: "版本封鎖已移除，斷言過時", file: "（已移除）version-gate.cjs" },

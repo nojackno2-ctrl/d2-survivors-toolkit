@@ -51,7 +51,7 @@ const next = has("bump") ? pkg.version.replace(/\d+$/, (n) => String(Number(n) +
 if (has("desktop") && next === pkg.version) { console.error("桌面版發布需要加 --bump 升版號（同一版號的 Release 不能重複建立）。"); process.exit(1); }
 const RELEASE_PATHS = new Set([
   "AI_HANDOFF.md", "README.md", "d2edit.js", "index.html", "version.json", ".nojekyll",
-  "helper/autobot.js", "helper/selfcheck.js", "helper/AUTOBOT_DESIGN.md", "helper/tests/autobot.cjs", "helper/tests/selfcheck.cjs",
+  "helper/autobot.js", "helper/selfcheck.js", "helper/tests/autobot.cjs", "helper/tests/selfcheck.cjs",
   "lang/lang.js", "lang/d2rfont.js", "lang/zh-TW.json", "lang/locales/zh-TW.json", "lang/tests/test_lang.cjs",
   "modifier/editor.html", "modifier/gamedata.json", "modifier/i18n.js", "modifier/patch.mjs", "modifier/signatures.json", "modifier/webapi.js", "modifier/zh.js", "modifier/engine-page.js",
   "modifier/tests/weapon-sets.cjs", "modifier/tests/weapon-sets-ui.cjs", "modifier/tests/version-gate-web.cjs",

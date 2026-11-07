@@ -1,0 +1,10 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const html = fs.readFileSync(path.join(__dirname, '../editor.html'), 'utf8');
+const match = html.match(/confirm\(window\.api\.web \? "([^"]+)" : "([^"]+)"\)/);
+assert.ok(match, '缺少網頁版寫入確認訊息');
+assert.match(match[1], /瀏覽器 localStorage/);
+assert.match(match[1], /一般與硬核模式各只保留一份/);
+assert.match(match[1], /後續寫入會覆蓋/);
+console.log('網頁版寫入確認說明測試通過');

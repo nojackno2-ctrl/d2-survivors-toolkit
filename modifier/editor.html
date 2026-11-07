@@ -162,7 +162,15 @@
   <section>
     <h2>更新日誌</h2>
     <p class="dim">介紹網頁：<a href="https://d2-survivors-toolkit.nojackno2.workers.dev/#changelog" target="_blank" rel="noopener" style="color:var(--gold)">d2-survivors-toolkit.nojackno2.workers.dev</a></p>
-    <h3>2026-11-06</h3>
+        <h3>2026-11-07</h3>
+    <ul>
+      <li>相容性：針對官方遊戲 20261105.3 的遊戲核心、介面樣式、選卡、物品與技能變動，已執行 10 項自動測試。</li>
+      <li>鍛造後的文字補上翻譯（冰寒專精只限魔法使、每件物品最多淬鍊 10 次、恐怖燃燒精華數量與費用）</li>
+      <li>修正符文之語 Insight 在隨機產生時的故障（物品讀回後不再出現種子與法杖技能錯誤）</li>
+      <li>魔蝠、尺杖等 Fiend／Rule 系列名稱改依韓文官方譯名（惡魔、統御）</li>
+      <li>閃電相關詞彙統一為「閃電」，Jack 系列名稱改為「上衣」</li>
+    </ul>
+<h3>2026-11-06</h3>
     <ul>
       <li>相容性：針對官方遊戲 20261105.3 的遊戲核心、介面樣式、選卡、物品與技能變動，已執行 10 項自動測試。</li>
       <li>修改器「重新產生排行榜與角色識別碼」會同時更換每個角色的識別碼，並清空各角色的爬塔紀錄（寫入存檔後生效）。</li>
@@ -877,8 +885,12 @@ function ownedGear(s) {
 async function unlockAndMax(missing, known) {
   const gear = ownedGear(save).filter(it => known.has(ckey(it)));
   if (!confirm(`將補齊 ${missing.length} 件未收藏的物品，並把 ${gear.length} 件已有的暗金／套裝／符文之語（含角色與傭兵身上）調成最高數值。繼續？`)) return;
+  // 兩段（調高數值、補齊收藏）任一段失敗，整體還原成動手前的存檔，避免留下半套修改。
+  const snap = structuredClone(save);
   try {
-    const a = await maxItemsRaw(gear), b = await unlock(missing);
+    let a, b;
+    try { a = await maxItemsRaw(gear); b = await unlock(missing); }
+    catch (e) { for (const k of Object.keys(save)) delete save[k]; Object.assign(save, snap); throw e; }
     refresh();
     const near = a.near + (b.near ?? 0);
     status(`完成：補齊 ${b.n} 件、調高 ${a.n} 件（含角色與傭兵身上）${near ? `，其中 ${near} 件找不到全滿的合法數值，用最接近最高的` : ""}${a.msg}${b.msg}；記得按「寫入存檔」`, "ok");
@@ -1196,6 +1208,8 @@ async function makePicked() {
   status("製作中…");
   const out = await window.api.engine("generateMany", Array.from({ length: n }, () => ({ rarity: x.rarity, name: x.name, base, max, free: unlocked() })), max);
   if (!Array.isArray(out)) return status(out?.error ?? "製作失敗", "bad");
+  // 固定品質（暗金／套裝／符文之語）以原版 stats 為準，讀檔時遊戲會依 stats 重算 mods，倍率無法保存（2026-11-07 實機確認）
+  if (mul !== 1 && out.some(r => r?.item?.stats)) return status("暗金、套裝、符文之語的數值倍率無法保存（遊戲讀檔會依原版數值重算），已取消製作。請把倍率改回 1，或改用「自訂（限原版範圍）」。", "bad");
   if (mul !== 1) {
     for (const r of out) for (const m of r?.item?.mods ?? []) if (!m.implicit && typeof m.value === "number") m.value = Math.round(m.value * mul * 100) / 100;
     for (const r of out) if (r?.item?.rarity === "magic") {
@@ -1854,6 +1868,21 @@ let BASELINE = new Set();
 const itemKey = (it) => { const { id, at, ...rest } = it; return JSON.stringify(rest); };
 function act(fn) { try { fn(); } catch (e) { status(e.message, "bad"); } }
 async function actAsync(fn) { try { await fn(); } catch (e) { status(e.message, "bad"); } }
+// 物品座標檢查（格子容器）：整數、不超出格子、不與其他物品重疊。套用前檢查，失敗時不改動物品。
+function checkCoordinates(c, it, next, xs, ys) {
+  if (!GRID[c.kind]) return;
+  const x = Number(xs), y = Number(ys);
+  if (String(xs).trim() === "" || String(ys).trim() === "" || !Number.isInteger(x) || !Number.isInteger(y)) throw new Error("座標必須是整數。");
+  const [cols, rows] = GRID[c.kind], [w, h] = sizeOf(next);
+  if (x < 0 || y < 0 || x + w > cols || y + h > rows) throw new Error(`座標超出${c.label}範圍（${cols}×${rows} 格，此物品佔 ${w}×${h}）。`);
+  const occ = new Set();
+  c.arr().forEach((o) => {
+    if (o === it) return;
+    const [ow, oh] = sizeOf(o), p = o.at ?? { x: 0, y: 0 }, ox = Number(p.x) || 0, oy = Number(p.y) || 0;
+    for (let i = 0; i < ow; i++) for (let j = 0; j < oh; j++) occ.add((ox + i) + "," + (oy + j));
+  });
+  for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) if (occ.has((x + i) + "," + (y + j))) throw new Error("此座標與其他物品重疊。");
+}
 async function applyEdit(c, it, quiet) {
   const num = (v) => (v.trim() !== "" && !isNaN(v) ? Number(v) : v);
   const mods = [...document.querySelectorAll("#mods tbody tr")].map(tr => {
@@ -1881,6 +1910,7 @@ async function applyEdit(c, it, quiet) {
   const type = BASES?.find(b => b.name === base)?.type ?? it.type;
   const next = { ...structuredClone(it), base, type, rarity, mods, ...(changed && { name: resolved.name }) };
   if ($("#e-defense")) next.defense = Number($("#e-defense").value);
+  if ($("#e-x")) checkCoordinates(c, it, next, $("#e-x").value, $("#e-y").value);
   if (changed || next.defense !== it.defense) await assertLegal([next]);
   it.base = base; it.rarity = rarity; it.type = type;
   if (changed) {
@@ -1986,6 +2016,8 @@ function collectHero() {
       continue;
     }
     const v = el.type === "number" || el.dataset.num !== undefined ? Number(el.value) : el.value;
+    // 數字欄位只接受有限且不為負的值（HTML min 僅是瀏覽器提示，JS 不會擋）；無效輸入不寫入，還原為原值。
+    if (el.type === "number" && (!Number.isFinite(v) || v < 0)) { el.value = old ?? ""; continue; }
     if (old === undefined && v === 0 && el.dataset.num !== undefined) continue; // 沒動過的 0 不寫進存檔
     if (old !== v) setP(save, p, v);
   }
@@ -2152,12 +2184,13 @@ function renderDetails(list) {
     rows.push({ where: where.get(it) ?? "（位置不明）", what: `「${(it.name && nameZh(it)) || baseZh(it)}」：缺少遊戲需要的隨機種子（roll），遊戲會判定不合法`, fix: "重新產生為合法物品" });
   const lb = save.leaderboard ?? {};
   const edited = rows.length > 0 || lb.edited;
+  const unknown = list.some(x => x.unknown);
   $("#verdict").innerHTML = edited
     ? `<span class="bad">✖ 已編輯／有問題，不會上傳排行榜</span>　共 ${rows.length} 項待處理${lb.off ? "（排行榜上傳目前已關閉）" : "（排行榜上傳目前開啟，建議關閉）"}`
-    : `<span class="ok">✔ 沒有發現問題</span>`;
+    : unknown ? `<span class="dim">未驗證，無法確認存檔是否有問題</span>` : `<span class="ok">✔ 沒有發現問題</span>`;
   $("#lbOff").hidden = !edited || !!lb.off;
   const tr = (r, c = "") => `<tr class="${c}"><td>${esc(r.where)}</td><td>${esc(r.what)}</td><td class="dim">${esc(r.fix)}</td></tr>`;
-  $("#details").innerHTML = (rows.length ? rows.map(r => tr(r)).join("") : `<tr><td colspan="3" class="dim">沒有問題</td></tr>`)
+  $("#details").innerHTML = (rows.length ? rows.map(r => tr(r)).join("") : `<tr><td colspan="3" class="dim">${unknown ? "部分檢查未驗證" : "沒有問題"}</td></tr>`)
     + (notes.length ? `<tr><td colspan="3" class="dim">以下僅供參考（額外規則的提示，不算問題）</td></tr>` + notes.map(r => tr(r, "dim")).join("") : "");
 }
 /* ---------- 遊戲診斷（由遊戲程式碼反編譯，讓玩家知道遊戲看到了什麼） ---------- */
@@ -2377,7 +2410,7 @@ async function write() {
     if (save.gold > 1e10) return fail(new Error("金幣超過原版上限 10,000,000,000，已拒絕寫入（如需強制修改，請到「設定」開啟解除修改限制）。"));
     try { await assertLegal(allItems(save).filter(it => !BASELINE.has(itemKey(it)))); } catch (e) { return fail(e); }
   }
-  if (!confirm("確定寫入？原存檔會先自動備份。")) return;
+  if (!confirm(window.api.web ? "確定寫入？原存檔會先自動備份至瀏覽器 localStorage；一般與硬核模式各只保留一份，後續寫入會覆蓋該模式的備份。" : "確定寫入？原存檔會先自動備份。")) return;
   status("寫入中…");
   const r = await window.api.save($("#mode").value, save);
   if (r.error) return status(r.error, "bad");

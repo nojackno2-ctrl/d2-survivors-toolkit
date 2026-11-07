@@ -44,7 +44,7 @@ app.whenReady().then(async () => {
       await sleep(8000);
       const f = win.webContents.mainFrame.framesInSubtree.find((x) => x.url.includes("editor.html"));
       if (!f) return done({ error: "找不到修改器 iframe" });
-      const [editorPart, mainPart] = code.split("//=====MAIN");
+      const [editorPart, mainPart] = code.split(/^\/\/=====MAIN\s*$/m); // 只認獨立成行的標記，註解裡提到的字樣不切段
       const first = await f.executeJavaScript(`(async()=>{try{return await (async()=>{${editorPart}})()}catch(e){return {error:String(e&&e.stack||e)}}})()`);
       if (mainPart === undefined) return done(first);
       // 第二段：重新載入遊戲頁（同一個隔離設定檔，修改器寫入的存檔還在），在遊戲頁面內檢查
