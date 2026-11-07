@@ -2050,8 +2050,9 @@
   // 狀態列顯示輔助器目前在做什麼。
   const statusLine = document.createElement("div");
   statusLine.id = "d2autobot-status";
-  statusLine.style.cssText = "position:fixed;top:calc(max(12px,env(safe-area-inset-top)) + clamp(100px, calc(22dvh + 14px), 200px));left:50%;transform:translateX(-50%);z-index:2147483645;max-width:min(80vw,300px);background:rgba(0,0,0,.75);color:#f0d9a0;border-radius:4px;padding:3px 10px;font:13px sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;display:none";
-  stopButton.style.cssText = "position:fixed;top:calc(max(12px,env(safe-area-inset-top)) + clamp(50px, calc(22dvh - 36px), 150px));left:50%;transform:translateX(-50%);z-index:2147483645;min-height:44px;background:#531b15;color:#fff;border:1px solid #d4a84a;border-radius:6px;padding:6px 14px;display:none;touch-action:manipulation";
+  // 位置：畫面底部、技能列上方；避開頂部選單與中央的儲物箱／物品欄面板。
+  statusLine.style.cssText = "position:fixed;bottom:calc(max(8px,env(safe-area-inset-bottom)) + 16dvh + 52px);left:50%;transform:translateX(-50%);z-index:2147483645;max-width:min(80vw,300px);background:rgba(0,0,0,.75);color:#f0d9a0;border-radius:4px;padding:3px 10px;font:13px sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;display:none";
+  stopButton.style.cssText = "position:fixed;bottom:calc(max(8px,env(safe-area-inset-bottom)) + 16dvh);left:50%;transform:translateX(-50%);z-index:2147483645;min-height:44px;background:#531b15;color:#fff;border:1px solid #d4a84a;border-radius:6px;padding:6px 14px;display:none;touch-action:manipulation";
   host.id = "d2autobot-panel"; host.style.cssText = "position:fixed;inset:0;z-index:2147483647;pointer-events:none";
   const root = host.attachShadow({ mode: "open" });
   root.innerHTML = `<style>
