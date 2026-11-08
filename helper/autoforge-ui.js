@@ -45,6 +45,8 @@ function rememberTargets(key, targets) { const m = loadMemory(); m[key] = { ...t
 const state = {
   running: false, cls: null, level: 1, msg: "待命", log: [], folded: undefined,
   itemId: null, itemKey: null, itemName: "", lines: [], targets: {}, steps: 0, result: "",
+  // 序列：[{ id, name, status }]，依序放上鐵砧淬鍊。目標設定沿用記憶（同稀有度＋名稱＋底材）。
+  queue: [], queueRunning: false,
 };
 const push = (msg) => { state.msg = msg; state.log.push(msg); if (state.log.length > 60) state.log.shift(); render(); };
 
@@ -92,16 +94,17 @@ async function stepOnce(g, cls) {
 const RETRY_WAIT_MS = [3000, 6000, 12000, 24000];
 const MAX_RETRIES = RETRY_WAIT_MS.length;
 
+// 單件迴圈：回傳 { result, fatal }；fatal 代表整個序列都該停（精華不足、伺服器持續無回應、手動停止）。
 async function loop() {
   const g = game();
-  if (!g) return push("找不到遊戲");
-  let retries = 0;
+  if (!g) { push("找不到遊戲"); return { result: "找不到遊戲", fatal: true }; }
+  let retries = 0, out = { result: "已停止", fatal: true };
   while (state.running) {
     let r;
     try { r = await stepOnce(g, state.cls); } catch (e) { r = { done: true, result: "錯誤：" + String(e?.message || e) }; }
     if (r.retry) {
       retries++;
-      if (retries >= MAX_RETRIES) { state.running = false; push(`伺服器連續 ${MAX_RETRIES} 次無回應，已停止，稍後可再開始`); break; }
+      if (retries >= MAX_RETRIES) { state.running = false; out = { result: "伺服器持續無回應", fatal: true }; push(`伺服器連續 ${MAX_RETRIES} 次無回應，已停止，稍後可再開始`); break; }
       stepGap = Math.min(SLEEP_MAX, stepGap * 2);
       const wait = RETRY_WAIT_MS[retries - 1];
       push(`${r.result}（第 ${retries} 次，${wait / 1000} 秒後重試）`);
@@ -110,12 +113,44 @@ async function loop() {
     }
     retries = 0;
     state.result = r.result;
-    if (r.done) { state.running = false; push("結束：" + r.result); break; }
+    if (r.done) { state.running = false; out = { result: r.result, fatal: /精華不足/.test(r.result) }; push("結束：" + r.result); break; }
     push(`第 ${state.steps} 步 ${r.result}`);
     if (state.steps % 10 === 0) stepGap = Math.max(SLEEP_MIN, Math.round(stepGap * 0.8));
     await sleep(stepGap);
   }
   render();
+  return out;
+}
+
+// 當前職業背包裡可淬鍊的裝備。
+const bagItems = (g, cls) => (g.inventoryOf?.(cls) || []).filter(eligible);
+const hasTarget = (key) => Object.values(loadMemory()[key] || {}).some((v) => v === "X" || Number(v) > 0);
+
+// 序列：一件一件放上鐵砧，跑到該件結束再換下一件。
+async function runQueue() {
+  const g = game();
+  if (!g || state.running) return;
+  const cls = g.kit?.id;
+  state.queueRunning = true;
+  for (const q of state.queue) q.status = q.status === "完成" ? q.status : "等待";
+  for (const q of state.queue) {
+    if (!state.queueRunning) break;
+    if (q.status === "完成") continue;
+    const item = bagItems(g, cls).find((x) => x.id === q.id);
+    if (!item) { q.status = "不在背包，略過"; render(); continue; }
+    if (!hasTarget(itemKey(item))) { q.status = "未設定目標，略過"; render(); continue; }
+    g.anvil = item.id;
+    attach(g, cls, item);
+    lastItemId = item.id;
+    q.status = "淬鍊中";
+    state.running = true; push(`序列：開始 ${q.name}`);
+    const r = await loop();
+    q.status = r.result;
+    if (r.fatal) break;
+    await sleep(stepGap);
+  }
+  state.queueRunning = false; state.running = false;
+  push("序列結束");
 }
 
 // ---- 浮動面板（固定右上，不放在恰西商店裡） ----
@@ -173,7 +208,8 @@ function render() {
       <button id="af-start" type="button"${state.running || !state.itemId ? " disabled" : ""}>開始</button>
       <button id="af-stop" type="button"${state.running ? "" : " disabled"}>停止</button>
       <span style="flex:1;align-self:center;opacity:.9">${esc(state.msg)}</span>
-    </div>`;
+    </div>
+    ${queueHtml(g)}`;
   // 必須阻止冒泡：否則同一次點擊會傳到外框，觸發收合後才掛上的「點圖示展開」而立刻又展開。
   b.querySelector("#af-fold").onclick = (e) => { e.stopPropagation(); state.folded = true; render(); };
   b.querySelectorAll("select[data-key]").forEach((sel) => sel.onchange = () => {
@@ -187,7 +223,46 @@ function render() {
     state.running = true; push("開始");
     loop();
   };
-  b.querySelector("#af-stop").onclick = () => { state.running = false; push("已停止"); };
+  b.querySelector("#af-stop").onclick = () => { state.running = false; state.queueRunning = false; push("已停止"); };
+  b.querySelectorAll("[data-add]").forEach((x) => x.onclick = () => {
+    const it = bagItems(g, g.kit?.id).find((i) => i.id === x.dataset.add);
+    if (it && !state.queue.some((q) => q.id === it.id)) state.queue.push({ id: it.id, name: `${it.name}（${it.base}）`, status: "等待" });
+    render();
+  });
+  b.querySelectorAll("[data-del]").forEach((x) => x.onclick = () => { if (state.queueRunning) return; state.queue = state.queue.filter((q) => q.id !== x.dataset.del); render(); });
+  // 點序列中的名稱：放上鐵砧，方便設定該件的目標。
+  b.querySelectorAll("[data-pick]").forEach((x) => x.onclick = () => { if (!state.running) { g.anvil = x.dataset.pick; render(); } });
+  const qs = b.querySelector("#af-qstart");
+  if (qs) qs.onclick = () => runQueue();
+  const qc = b.querySelector("#af-qclear");
+  if (qc) qc.onclick = () => { if (!state.queueRunning) { state.queue = []; render(); } };
+}
+
+function queueHtml(g) {
+  const cls = g.kit?.id;
+  const inQ = new Set(state.queue.map((q) => q.id));
+  const bag = bagItems(g, cls).filter((i) => !inQ.has(i.id));
+  const btn = "background:#2a241b;color:#e8dcc4;border:1px solid #6a5530;border-radius:4px;padding:0 6px;";
+  const qRows = state.queue.map((q, i) => {
+    const it = bagItems(g, cls).find((x) => x.id === q.id);
+    const warn = it && !hasTarget(itemKey(it)) ? ' <span style="color:#e88">（未設目標）</span>' : "";
+    return `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="opacity:.7">${i + 1}.</span><a data-pick="${esc(q.id)}" style="flex:1;cursor:pointer;text-decoration:underline">${esc(q.name)}</a>${warn}<span style="opacity:.85;font-size:13px">${esc(q.status || "")}</span><button type="button" data-del="${esc(q.id)}" style="${btn}"${state.queueRunning ? " disabled" : ""}>移除</button></div>`;
+  }).join("");
+  const bagRows = bag.map((it) => `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="flex:1">${esc(it.name)}（${esc(it.base)}）</span><button type="button" data-add="${esc(it.id)}" style="${btn}">加入</button></div>`).join("");
+  return `
+    <div style="border-top:1px solid #4a3d25;margin-top:8px;padding-top:6px">
+      <b style="color:#d4a84a">序列（${state.queue.length}）</b>
+      <div style="opacity:.7;font-size:13px">點名稱可放上鐵砧設定目標；未設目標的會略過。</div>
+      ${qRows || '<div style="opacity:.7">尚未加入</div>'}
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button id="af-qstart" type="button"${state.running || !state.queue.length ? " disabled" : ""}>開始序列</button>
+        <button id="af-qclear" type="button"${state.queueRunning || !state.queue.length ? " disabled" : ""}>清空</button>
+      </div>
+    </div>
+    <div style="border-top:1px solid #4a3d25;margin-top:8px;padding-top:6px">
+      <b style="color:#d4a84a">背包可淬鍊（${bag.length}）</b>
+      ${bagRows || '<div style="opacity:.7">背包沒有暗金、套裝或符文之語</div>'}
+    </div>`;
 }
 
 // 每秒檢查：鐵砧選單開啟才顯示；鐵砧上的裝備換了才重新載入（執行中不切換）。
@@ -195,7 +270,7 @@ let lastItemId = undefined;
 function tick() {
   const g = game();
   // 只在恰西鐵砧選單開著時顯示（遊戲 forgeActions.showing 設定 g.forgeUp）；執行中也保留。
-  const ready = !!g && !!g.kit?.id && (!!g.forgeUp || state.running);
+  const ready = !!g && !!g.kit?.id && (!!g.forgeUp || state.running || state.queueRunning);
   if (!ready) { box?.remove(); box = null; return; }
   const item = anvilItem(g, g.kit.id);
   const id = item?.id ?? null;
@@ -228,5 +303,18 @@ window.__d2autoforgeUI = {
     lastItemId = item.id;
     state.running = true; state.log = []; push("開始（測試）"); loop();
   },
-  stop() { state.running = false; },
+  stop() { state.running = false; state.queueRunning = false; },
+  // 序列測試：ids 依序加入，targetsById 寫入記憶後執行。
+  async queueRun(ids, targetsById, cls) {
+    const g = game();
+    state.queue = [];
+    for (const id of ids) {
+      const it = bagItems(g, cls).find((x) => x.id === id);
+      if (!it) continue;
+      if (targetsById?.[id]) rememberTargets(itemKey(it), targetsById[id]);
+      state.queue.push({ id, name: `${it.name}（${it.base}）`, status: "等待" });
+    }
+    state.log = [];
+    await runQueue();
+  },
 };
