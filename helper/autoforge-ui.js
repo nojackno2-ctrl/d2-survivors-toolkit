@@ -122,9 +122,10 @@ function ensureBox() {
   // 窄螢幕（手機）：避開遊戲左上角的輔助／語言／修改器按鈕，寬度跟著螢幕，預設收合。
   const narrow = window.innerWidth < 600;
   box.style.cssText = narrow
-    ? "position:fixed;top:44vh;right:8px;z-index:2147483000;width:calc(100vw - 16px);max-height:30vh;overflow:auto;padding:8px 10px;border:1px solid #d4a84a;border-radius:8px;background:rgba(20,17,13,.94);color:#e8dcc4;font:12px/1.5 sans-serif;"
-    : "position:fixed;top:12px;right:12px;z-index:2147483000;width:340px;max-height:84vh;overflow:auto;padding:10px 12px;border:1px solid #d4a84a;border-radius:8px;background:rgba(20,17,13,.94);color:#e8dcc4;font:12px/1.5 sans-serif;";
-  if (state.folded === undefined) state.folded = narrow;
+    ? "position:fixed;top:8vh;right:8px;z-index:2147483000;width:calc(100vw - 16px);max-height:80vh;overflow:auto;padding:12px 14px;border:1px solid #d4a84a;border-radius:8px;background:rgba(20,17,13,.94);color:#e8dcc4;font:15px/1.6 sans-serif;"
+    : "position:fixed;top:12px;right:12px;z-index:2147483000;width:480px;max-height:88vh;overflow:auto;padding:14px 16px;border:1px solid #d4a84a;border-radius:8px;background:rgba(20,17,13,.94);color:#e8dcc4;font:15px/1.6 sans-serif;";
+  if (state.folded === undefined) state.folded = true;
+  box.dataset.full = box.style.cssText;
   box.addEventListener("pointerdown", (e) => e.stopPropagation());
   box.addEventListener("keydown", (e) => e.stopPropagation());
   document.body.append(box);
@@ -136,11 +137,18 @@ function render() {
   if (!g) return;
   const b = ensureBox();
   const head = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="flex:1;color:#d4a84a">自動淬鍊（鐵砧單件）</b><button id="af-fold" type="button">${state.folded ? "展開" : "收合"}</button></div>`;
+  // 收合：只顯示一個小圖示（執行中會亮綠點），點了才展開成完整面板。
   if (state.folded) {
-    b.innerHTML = head + `<div style="opacity:.9">${esc(state.msg)}</div>`;
-    b.querySelector("#af-fold").onclick = () => { state.folded = false; render(); };
+    const narrow = window.innerWidth < 600;
+    b.style.cssText = `position:fixed;${narrow ? "top:44vh" : "top:12px"};right:8px;z-index:2147483000;width:40px;height:40px;padding:0;border:1px solid #d4a84a;border-radius:50%;background:rgba(20,17,13,.94);color:#d4a84a;font:20px/40px sans-serif;text-align:center;cursor:pointer;`;
+    b.title = "自動淬鍊：" + state.msg;
+    b.innerHTML = `⚒${state.running ? '<span style="position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#5c5"></span>' : ""}`;
+    b.onclick = () => { state.folded = false; render(); };
     return;
   }
+  b.onclick = null;
+  b.title = "";
+  if (b.dataset.full) b.style.cssText = b.dataset.full;
   const lineSel = state.lines.map((l) => {
     const v = state.targets[l.key] ?? 0;
     const opts = ["X", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((o) => `<option value="${o}"${String(o) === String(v) ? " selected" : ""}>${o === "X" ? "X 禁止" : o === 0 ? "0 不限" : o}</option>`).join("");
