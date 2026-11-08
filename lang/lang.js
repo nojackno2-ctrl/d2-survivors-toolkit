@@ -912,9 +912,11 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       if (!f) continue;
       try {
         if (f === "zh-TW.json" && window.__d2zhPromise) {
-          const shared = await window.__d2zhPromise;
+          const shared = await window.__d2zhPromise.catch(() => null);
           if (shared && typeof shared === "object") { Object.assign(out, shared); continue; }
         }
+        // 書籤入口提供的重試讀取（手機網路不穩時 fetch 會 Load failed）
+        if (window.__d2hostFetch) { Object.assign(out, await window.__d2hostFetch(new URL(f, BASE_URL).href + "?v=" + Date.now())); continue; }
         const res = await fetch(new URL(f, BASE_URL).href);
         if (res.ok) Object.assign(out, await res.json());
         else console.warn("[d2lang] 載入語言檔失敗: " + f, res.status);

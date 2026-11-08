@@ -5,6 +5,23 @@ const HOST = new URL(".", import.meta.url).href;
 // 書籤每次帶不同的 v，這裡載入的其他檔案也帶同一個 v，避免手機瀏覽器用舊的快取
 const VER = new URL(import.meta.url).searchParams.get("v") || String(Date.now());
 const at = (f) => HOST + f + (f.includes("?") ? "&" : "?") + "v=" + VER;
+// 依使用者 iPhone 截圖（2026-11-08）：同一次載入中 import() 腳本都成功，但 fetch() 字典、遊戲資料、修改器頁面、特徵碼全部「Load failed」（網路層錯誤）。
+// 工具網站的檔案改用這裡讀取：失敗時重試 3 次（第 2 次起略過快取），JSON 最後再用 import(…, { with: { type: "json" } }) 備援。
+async function hostFetch(url, as = "json") {
+  let last;
+  for (let i = 0; i < 4; i++) {
+    try {
+      const r = await fetch(i ? url + (url.includes("?") ? "&" : "?") + "r=" + i : url, i ? { cache: "reload" } : undefined);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return await r[as]();
+    } catch (e) { last = e; if (i < 3) await new Promise((ok) => setTimeout(ok, 600 * (i + 1))); }
+  }
+  if (as === "json") {
+    try { return (await import(url + (url.includes("?") ? "&" : "?") + "j=1", { with: { type: "json" } })).default; } catch (e) { console.warn("JSON import 備援也失敗：" + url, e); }
+  }
+  throw last;
+}
+window.__d2hostFetch = hostFetch;
 const MODES = {
   softcore: { key: "d2-survivors/save/v1", seal: "d2s/save-seal/1:Rakanishu-Bishibosh-Coldcrow-Griswold-Pindleskin", traces: ["d2-survivors/save/before-import"] },
   hardcore: { key: "d2-survivors/hc/v1", seal: "d2s/save-seal/hc/1:Blood-Raven-Treehead-Woodfist-Coldworm-Andariel", traces: ["d2-survivors/hc/before-import"] },
@@ -106,7 +123,7 @@ async function startEngine() {
     return fetch(statsUrl).then((r) => { engineInfo.itemstats = r.status; if (!r.ok) throw new Error("讀不到遊戲物品資料（請先進入過遊戲一次）。"); return r.text(); });
   })();
   itemstatsP.catch(() => {});
-  const [{ patch }, signatures] = await Promise.all([import(at("modifier/patch.mjs")), fetch(at("modifier/signatures.json")).then((r) => r.json())]);
+  const [{ patch }, signatures] = await Promise.all([import(at("modifier/patch.mjs")), hostFetch(at("modifier/signatures.json"))]);
   // 從頁面已載入的腳本開始，順著 "./xxx.js" 參照把同資料夾的區塊都抓下來
   const base = new URL("/assets/", location.origin).href;
   const seen = new Set(), files = {};
@@ -236,7 +253,7 @@ const backend = {
   },
   // 中文：與遊戲語言模組共用內建繁體字典。
   async i18n() {
-    const game = structuredClone(await (window.__d2gamedataPromise || fetch(at("modifier/gamedata.json")).then((r) => r.json())));
+    const game = structuredClone(await (window.__d2gamedataPromise || loadGameData()));
     let dict = {};
     if (window.__d2zhPromise) {
       const shared = await window.__d2zhPromise;
@@ -366,8 +383,8 @@ window.__d2editStopWatch = () => { observer.disconnect(); clearInterval(timer); 
 sync();
 // 輔助器狀態列與語言模組共用同一份繁中字典與遊戲資料 Promise，避免重複下載與解析 891KB 字典。
 window.__d2zhUrl = at("lang/zh-TW.json");
-const loadZhDict = () => (window.__d2zhPromise ??= fetch(window.__d2zhUrl).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch((e) => { window.__d2zhPromise = null; throw e; }));
-const loadGameData = () => (window.__d2gamedataPromise ??= fetch(at("modifier/gamedata.json")).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch((e) => { window.__d2gamedataPromise = null; throw e; }));
+const loadZhDict = () => (window.__d2zhPromise ??= hostFetch(window.__d2zhUrl).catch((e) => { window.__d2zhPromise = null; throw e; }));
+const loadGameData = () => (window.__d2gamedataPromise ??= hostFetch(at("modifier/gamedata.json")).catch((e) => { window.__d2gamedataPromise = null; throw e; }));
 // 依使用者要求：點書籤後預先讀完輔助器、字典、遊戲資料、物品引擎與修改器頁面，畫面中央顯示進度條；
 // 各模組改為並行載入以縮短等待時間，單一步驟失敗不卡住（標示警告後繼續），全部結束才開放「修改器」按鈕。
 (async () => {
@@ -385,7 +402,7 @@ const loadGameData = () => (window.__d2gamedataPromise ??= fetch(at("modifier/ga
     [zhUI ? "輔助器" : "Assistant", () => import(at("helper/autobot.js"))],
     [zhUI ? "自動淬鍊" : "Auto forge", async () => { await import(at("helper/autoforge.js")); await import(at("helper/autoforge-ui.js")); }],
     [zhUI ? "物品引擎（遊戲裝備產生器）" : "Item engine", () => engine()],
-    [zhUI ? "修改器頁面" : "Editor page", () => fetch(editorUrl()).then((r) => r.text())],
+    [zhUI ? "修改器頁面" : "Editor page", () => hostFetch(editorUrl(), "text")],
     // 自檢與其他步驟並行：載入進度條跑的同時檢查工具包與當前遊戲是否相符；問題只輸出，不阻擋遊玩。
     [zhUI ? "相容性自檢" : "Compatibility self-check", async () => {
       const { runSelfCheck } = await import(at("helper/selfcheck.js"));
