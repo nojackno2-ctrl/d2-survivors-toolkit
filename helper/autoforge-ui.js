@@ -2,7 +2,10 @@
 // 直接讀取遊戲的鐵砧（g.anvil）上的裝備，用 g.forgeTry 執行淬鍊／清除／熔爐；不寫入存檔、不複製、不生成。
 // 屬性目標依「稀有度＋名稱＋底材」記住，同一件暗金／套裝／符文之語再次放上鐵砧時自動帶入。
 // 只要進入遊戲（有職業）就顯示面板。仰賴 window.__d2autoforge（決策）與 window.__d2autobot.game（遊戲）。
-const SLEEP = 350;
+// 每步間隔：先用最短間隔衝速度；遇到伺服器限流（無回應）就自動放慢，之後連續成功再慢慢加快。
+const SLEEP_MIN = 60;
+const SLEEP_MAX = 600;
+let stepGap = SLEEP_MIN;
 const ESSENCE_NAME = "Burning Essence of Terror";
 const MEM_KEY = "d2autoforge.memory";
 const KNOWN_RESULT = /Raised|temper failed|removed|doubled|lost/i;
@@ -74,6 +77,8 @@ async function stepOnce(g, cls) {
   // 連線失敗時遊戲不會扣精華但也沒有結果，必須停止，避免無限重試。
   // 伺服器暫時無回應（實測多為 429 速率限制）：精華已暫存、不會遺失，改為等待後重試。
   if (/No reply|No connection/i.test(text)) return { done: false, retry: true, result: "伺服器暫時無回應，等待後重試" };
+  // 伺服器與本地紀錄不同步時，遊戲會先把裝備改成伺服器上的最新結果（不扣精華），重新判斷即可。
+  if (/updated to its last Forge result/i.test(text)) return { done: false, result: "已同步伺服器上的淬鍊紀錄" };
   // 只接受遊戲已知的鍛造結果；其他文字（例如「此裝備已鎖定」）代表遊戲拒絕，必須停止，否則會無限重試。
   if (!KNOWN_RESULT.test(text)) return { done: true, result: "遊戲拒絕或異常，已停止：" + text };
   if (d.action === "hellforge") {
@@ -83,8 +88,9 @@ async function stepOnce(g, cls) {
   return { done: false, result: `${d.action === "temper" ? "淬鍊" : "清除"}：${text || "（無回應）"}` };
 }
 
-const RETRY_WAIT_MS = 15000;
-const MAX_RETRIES = 3;
+// 限流重試等待：3、6、12、24 秒遞增，比固定 15 秒更快恢復。
+const RETRY_WAIT_MS = [3000, 6000, 12000, 24000];
+const MAX_RETRIES = RETRY_WAIT_MS.length;
 
 async function loop() {
   const g = game();
@@ -96,15 +102,18 @@ async function loop() {
     if (r.retry) {
       retries++;
       if (retries >= MAX_RETRIES) { state.running = false; push(`伺服器連續 ${MAX_RETRIES} 次無回應，已停止，稍後可再開始`); break; }
-      push(`${r.result}（第 ${retries} 次，${RETRY_WAIT_MS / 1000} 秒後重試）`);
-      await sleep(RETRY_WAIT_MS);
+      stepGap = Math.min(SLEEP_MAX, stepGap * 2);
+      const wait = RETRY_WAIT_MS[retries - 1];
+      push(`${r.result}（第 ${retries} 次，${wait / 1000} 秒後重試）`);
+      await sleep(wait);
       continue;
     }
     retries = 0;
     state.result = r.result;
     if (r.done) { state.running = false; push("結束：" + r.result); break; }
     push(`第 ${state.steps} 步 ${r.result}`);
-    await sleep(SLEEP);
+    if (state.steps % 10 === 0) stepGap = Math.max(SLEEP_MIN, Math.round(stepGap * 0.8));
+    await sleep(stepGap);
   }
   render();
 }

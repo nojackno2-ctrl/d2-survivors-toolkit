@@ -75,7 +75,9 @@ app.whenReady().then(async () => {
       });
       const trace = { cls, essencesBefore: essences(), slots: slots.map(s => ({ name: s.name, targets: s.targets, lines: s.lines })) };
       window.__d2autoforgeUI.start(slots.map(({ id, name, targets }) => ({ id, name, targets })), cls);
-      for (let i = 0; i < 1200 && window.__d2autoforgeUI.state.running; i++) await sleep(500);
+      const t0 = Date.now();
+      for (let i = 0; i < 1200 && window.__d2autoforgeUI.state.running; i++) await sleep(100);
+      trace.elapsedSec = (Date.now() - t0) / 1000; trace.steps = window.__d2autoforgeUI.state.steps;
       const st = window.__d2autoforgeUI.state;
       trace.log = st.log.slice(-60);
       trace.running = st.running;
