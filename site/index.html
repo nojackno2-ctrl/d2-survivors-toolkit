@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>D2倖存者工具包</title>
-  <meta name="description" content="專為《D2 Survivors》(d2survivors.lol) 打造的強大非官方存檔修改器與遊戲輔助工具。支援合法詞綴製作、裝備庫、排行榜合規檢查、遊戲繁體中文化，以及全自動走位喝水、任務升級與天梯推關。">
+  <meta name="description" content="專為《D2 Survivors》(d2survivors.lol) 打造的強大非官方存檔修改器與遊戲輔助工具。單機爽玩定位（排行榜上傳強制關閉），支援合法詞綴製作、裝備庫、存檔合規檢查、遊戲繁體中文化，以及全自動走位喝水、任務升級與天梯推關。">
   <meta name="color-scheme" content="dark">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <style>
@@ -1839,7 +1839,7 @@
             </ul>
           </div>
         </div>
-        <p class="card-foot" style="margin-top:16px">⚠️ 部分已寫入遊戲的修改在關閉後仍可能持續到重新開始遊戲。使用後的存檔不建議上傳排行榜。</p>
+        <p class="card-foot" style="margin-top:16px">⚠️ 部分已寫入遊戲的修改在關閉後仍可能持續到重新開始遊戲。載入工具包期間排行榜上傳強制關閉。</p>
       </div>
 
       <h3 class="sub-title">停止與關閉：四種方式的差別</h3>
@@ -2031,7 +2031,7 @@
         <p class="section-desc">網頁版是書籤小程式（Bookmarklet），電腦與手機瀏覽器皆免安裝；Windows 另有可攜版</p>
       </div>
 
-      <p class="section-desc" style="margin-bottom:24px">⚠️ 排行榜注意：遊戲頁診斷會偵測書籤與被替換的函式；伺服器端的排行榜處理前端無法確認，詳見 <a href="#known-issues">已知問題</a>。</p>
+      <p class="section-desc" style="margin-bottom:24px">⚠️ 單機模式：載入工具包後排行榜上傳強制關閉、無法打開，詳見 <a href="#known-issues">已知問題</a>。</p>
       <div class="steps-grid">
         <div class="step-box">
           <div class="step-num">01</div>
@@ -2104,9 +2104,8 @@
         <h2 class="section-title">已知問題</h2>
       </div>
       <div class="alert-card">
-        <h3>排行榜：上榜結果由官方伺服器決定</h3>
-<p><b>工具包的「存檔檢查」與遊戲本身的檢查相同。</b>遊戲標示為「存檔被改過」「穿戴遊戲尚未出現的物品」等的紀錄，不會上榜。但實際是否上榜由官方伺服器判定，工具包無法得知伺服器的規則，因此檢查通過不代表一定上榜。</p>
-        <p>遊戲頁的環境診斷會顯示是否載入書籤、內建函式是否被替換。依遊戲程式碼，這項診斷不參與上傳判定，但伺服器端如何處理，前端無法確認。想提交排行榜成績，請關閉已載入工具的分頁，另開乾淨的新分頁直接進入<a href="https://d2survivors.lol/play/" target="_blank" rel="noopener">原版遊戲頁面</a>，全程不要載入任何書籤工具。環境診斷只顯示在「存檔檢查」頁。</p>
+        <h3>單機模式：排行榜上傳強制關閉</h3>
+        <p><b>工具包定位為單機爽玩：載入工具包後，排行榜上傳一律強制關閉，遊戲選項中也無法再打開，正在等待上傳的排行榜紀錄也會一併刪除；修改器寫入的存檔同樣關閉上傳。想上排行榜，請關閉已載入工具的分頁，另開乾淨的新分頁直接進入原版遊戲頁面，全程不要載入任何書籤工具。</b></p>
       </div>
       <div class="alert-card">
         <h3>手機：暫停選單點擊可能沒有反應</h3>
@@ -2152,7 +2151,7 @@
         </details>
         <details>
           <summary>為什麼不能製作暗金、套裝或符文之語？</summary>
-          <div class="answer"><p>預設模式會依原版規則限制裝備製作。請注意，遊戲頁診斷會偵測書籤與被替換的函式；依遊戲程式碼這不影響排行榜上傳判定，伺服器端的處理前端無法確認。解除限制只供單機遊玩。</p></div>
+          <div class="answer"><p>預設模式會依原版規則限制裝備製作。工具包為單機爽玩定位，載入後排行榜上傳強制關閉。</p></div>
         </details>
         <details>
           <summary>製作裝備時提示「可能配套」或要我確認？</summary>
@@ -2192,6 +2191,12 @@
         .log-entry b{color:#e6edf3}
       </style>
       <div class="log">
+        <div class="log-entry">
+          <div class="log-date">2026-11-08</div>
+          <ul>
+            <li>排行榜：工具包改為單機爽玩定位，載入後強制關閉排行榜上傳，遊戲選項無法再打開，正在等待上傳的紀錄一併刪除；修改器寫入的存檔一律關閉上傳。</li>
+          </ul>
+        </div>
         <div class="log-entry">
           <div class="log-date">2026-11-07</div>
           <ul>
@@ -2274,12 +2279,12 @@
               <li>屬性點不超過等級應得上限；屬性下拉選單只列出依規則還能加入的屬性。</li>
               <li>金幣與恰西單次升級花費不超過 100 億。</li>
             </ul>
-            <p style="color:#f59e0b;margin-top:12px"><strong>⚠️ 重要：合規模式不代表成績一定會被排行榜接受。</strong>遊戲頁診斷會偵測書籤與被替換的函式；依遊戲程式碼這不影響上傳判定，伺服器端的處理前端無法確認。「解除修改限制」開啟或關閉皆相同。修改器不提供繞過遊戲檢查的功能。</p>
+            <p style="color:#f59e0b;margin-top:12px"><strong>⚠️ 單機模式：</strong>載入工具包後排行榜上傳強制關閉，合規模式只用來維持原版規則的遊玩體驗。</p>
           </div>
           <div class="comp-col">
             <h4>解除限制模式（單機爽玩）</h4>
             <p>
-              若你只想在單人模式體驗毀天滅地的爽快感，可以在修改器「設定」打開「解除修改限制」。解除後裝備製作不再受原版詞綴、數量、數值與品質限制，可製作任何屬性、任何數量、超越原版數值的裝備。請注意：排行榜是否接受成績還取決於存檔是否被外部修改（簽章）等因素；解除限制並非唯一原因。
+              若你只想在單人模式體驗毀天滅地的爽快感，可以在修改器「設定」打開「解除修改限制」。解除後裝備製作不再受原版詞綴、數量、數值與品質限制，可製作任何屬性、任何數量、超越原版數值的裝備。載入工具包後排行榜上傳一律關閉，可以放心爽玩。
             </p>
           </div>
         </div>

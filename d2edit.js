@@ -10,6 +10,47 @@ const MODES = {
   hardcore: { key: "d2-survivors/hc/v1", seal: "d2s/save-seal/hc/1:Blood-Raven-Treehead-Woodfist-Coldworm-Andariel", traces: ["d2-survivors/hc/before-import"] },
 };
 const mode = (m) => MODES[m === "hardcore" ? "hardcore" : "softcore"];
+// 工具包定位為單機爽玩：載入後強制關閉排行榜上傳，玩家無法再打開。
+// 1. 擋下所有送往 /api/leaderboard 的非 GET 請求（仍可瀏覽排行榜）。
+// 2. 遊戲記憶體中的存檔 leaderboard.off 鎖成不可改、不可刪的 true；遊戲選項的「上傳」開關按下時會失敗、維持關閉。
+(() => {
+  if (window.__d2noUpload) return;
+  window.__d2noUpload = true;
+  const isUpload = (url, method) => /\/api\/leaderboard/.test(String(url)) && String(method || "GET").toUpperCase() !== "GET";
+  const blocked = () => console.info("[D2 工具包] 單機模式：已擋下排行榜上傳");
+  const origFetch = window.fetch;
+  window.fetch = function (input, init) {
+    const url = input instanceof Request ? input.url : input, method = init?.method ?? (input instanceof Request ? input.method : "GET");
+    if (isUpload(url, method)) { blocked(); return Promise.reject(new TypeError("D2 工具包單機模式：排行榜上傳已關閉")); }
+    return origFetch.apply(this, arguments);
+  };
+  const origBeacon = navigator.sendBeacon?.bind(navigator);
+  if (origBeacon) navigator.sendBeacon = (url, data) => (isUpload(url, "POST") ? (blocked(), false) : origBeacon(url, data));
+  const xo = XMLHttpRequest.prototype.open, xs = XMLHttpRequest.prototype.send, flag = Symbol("d2noUpload");
+  XMLHttpRequest.prototype.open = function (method, url) { this[flag] = isUpload(url, method); return xo.apply(this, arguments); };
+  XMLHttpRequest.prototype.send = function () { if (this[flag]) { blocked(); this.abort(); return; } return xs.apply(this, arguments); };
+  const lock = (save) => {
+    if (!save || typeof save !== "object") return;
+    let lb = save.leaderboard;
+    if (!lb || typeof lb !== "object") lb = save.leaderboard = {};
+    const d = Object.getOwnPropertyDescriptor(lb, "off");
+    if (d && d.value === true && !d.writable && !d.configurable) return;
+    if (d && !d.configurable) { save.leaderboard = lb = { ...lb }; }
+    else delete lb.off;
+    Object.defineProperty(lb, "off", { value: true, enumerable: true, writable: false, configurable: false });
+  };
+  // 3. 刪除遊戲正在等待上傳的排行榜紀錄（佇列鍵見遊戲 saveTransfer：d2s:leaderboard-queue），之後也不再寫入。
+  const QUEUE = "d2s:leaderboard-queue";
+  try { localStorage.removeItem(QUEUE); } catch {}
+  const qSet = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (k, v) {
+    if (this === localStorage && k === QUEUE) { try { localStorage.removeItem(QUEUE); } catch {} return; }
+    return qSet.call(this, k, v);
+  };
+  const tick = () => { try { lock(window.__d2autobot?.game?.save); } catch {} try { if (localStorage.getItem(QUEUE) !== null) localStorage.removeItem(QUEUE); } catch {} };
+  tick(); setInterval(tick, 300);
+  window.__d2lockLeaderboard = lock;
+})();
 
 /* ---------- 簽章（與遊戲相同：HMAC-SHA256） ---------- */
 async function hmac(key, text) {
@@ -152,6 +193,7 @@ const backend = {
   },
   async save(m, save) {
     if (typeof save !== "object" || !save || typeof save.version !== "number") throw new Error("存檔格式不正確。");
+    save = { ...save, leaderboard: { ...save.leaderboard, off: true } }; // 單機模式：修改器寫入的存檔一律關閉排行榜上傳
     const text = await sealText(save);
     // 同一頁第二次寫入時，上一次的防護還在；先清掉，讓修改器自己的這次寫入通過（否則會被擋下、顯示讀回不一致）。
     const prevGuard = lastText;
