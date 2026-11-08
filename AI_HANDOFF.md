@@ -10,6 +10,7 @@
   - `modifier/editor.html`：存檔修改器介面。
 - **桌面版**：位於 `editor/`，已改為固定啟動器架構，介面與引擎線上載入，桌面端僅負責存檔本機讀寫。
 - **發布環境**：GitHub Pages（main 分支託管網頁版）；公告站 `site/` 由 Cloudflare 自動連動 GitHub 部署（`wrangler.jsonc`），無須 API Token。
+- **單機定位（2026-11-08 起）**：工具包讓玩家單機爽玩。`d2edit.js` 載入即擋下所有送往 `/api/leaderboard` 的非 GET 請求（fetch／XHR／sendBeacon），並把遊戲記憶體存檔（`__d2autobot.game.save`）的 `leaderboard.off` 鎖成不可改、不可刪的 `true`（遊戲選項按「上傳」時 `delete` 會失敗，維持關閉）；修改器寫入的存檔也一律 `off: true`；載入時刪除等待上傳佇列 `localStorage["d2s:leaderboard-queue"]`，之後攔下對該鍵的寫入。修改器「關閉排行榜上傳」按鈕已隱藏。文件不再說明「如何讓成績上榜」，只說明上傳強制關閉。
 - **最新相容版本**：`TESTED_GAME_BUILD = "20261105.3"`（`helper/autobot.js`、`modifier/editor.html`、`helper/selfcheck.js` 同步）。
 
 ## 反覆發生的問題（必讀）
@@ -73,6 +74,34 @@
 5. **手機版比較框排版**：`lang/lang.js` 已新增 `planTipLayout`（避免裝備框蓋住操作按鈕），純函式單元測試已過，尚待真實觸控手機或官方實機驗證。
 6. **鍛造精華作弊與實機接受度**：`cheat.forgeMax` 已改為遊戲真實格式（`type: "essence"`、`base: "Burning Essence of Terror"`、`count` 99）；官方 /play/ 實機（`tests/live-harness/forge-essence-live.cjs`）確認存檔內出現精華堆疊且 count=99。尚未驗證：鍛造面板顯示數量、實際鍛造是否被遊戲接受、重新整理後是否保留。
 7. **桌面版封裝**：網頁端修改已同步至啟動器程式碼，但尚未執行正式桌面 exe 重新打包（`publish.cjs --desktop`）。
+8. **淬鍊機率實測（單次，2026-11-08）**：暗金 The Stone of Jordan（5 條屬性，由修改器引擎產生），官方 /play/ 隔離存檔，`H_PLAN=hellforge` 連續淬鍊 25 次（成功 11、失敗 14，精華 98→74）。
+   - 成功淬鍊的分布：s1（最大魔力 %）4 次、s3（+技能）2 次、s2（閃電傷害）1 次、s0（+魔力）3 次；s4 從未被選中。
+   - 失敗率隨總次數上升（total 9 之後連續失敗）。失敗同樣扣精華。
+   - 總數達 10 後執行熔爐：結果 `All tempers lost`，全部淬鍊清空，寫入 `hf: 1`，精華扣 1。本次未見倍增。
+   - **批次實測（10 個平行隔離存檔，同款裝備，各跑至總數 10 再熔爐）**：淬鍊 228 次，成功 100、失敗 128（約 56%）。成功分布：s2 28、s1 27、s0 25、s3 20；s4 在 100 次成功中從未出現，推測為不可淬鍊。熔爐 10 次：「All tempers doubled」2 次（約 20%）、「All tempers lost」8 次。
+   - **未確認**：s4 不可淬鍊的推論需確認；失敗率是否隨總次數上升尚未分析；倍增與清空的條件未知。
+   - **第二批（8 件，皆由收藏庫解鎖流程生成，隔離存檔）**：暗金 Nagelring（4 條）、Tarnhelm（4）、Biggin's Bonnet（6）、Treads of Cthon（6）；套裝 Civerb's Ward（3）、Hsarus' Iron Heel（3）、Hsarus' Iron Fist（3）、Civerb's Icon（2）。淬鍊 14～36 次，失敗率約 25%～60%（依件而異）。熔爐：倍增 3 件（Biggin's Bonnet、Treads of Cthon、Hsarus' Iron Heel），其餘 5 件清空。6 條屬性的裝備淬鍊到 s4、s5，4 條以下的裝備只見 s0～s2，故可淬鍊屬性不是單純依序號決定，須以實際屬性種類判斷。
+   - **需求更新**：使用者要求屬性等級可設為 X（禁止淬鍊）。X 的命中視為失敗，須清除；0 為不限，命中不算失敗。
+   - 測試腳本：`tests/live-harness/temper-game-flow-live.cjs`（`H_ITEM` 指定裝備 JSON、`H_PLAN=hellforge`，已記錄每次淬鍊的 `forge.t`）。
+9. **恰西自動淬鍊（開發中，2026-11-08）**：決策 `helper/autoforge.js`（X／0／數字目標、補足 10 次淬鍊後才熔爐、熔爐一次性）與迴圈面板 `helper/autoforge-ui.js`（精華 99 且恰西商店開著時顯示；載入後由遊戲 `forgeTry` 執行）。單元測試 `helper/tests/autoforge.cjs` 全部通過。實機（官方 /play/，隔離存檔，The Stone of Jordan，目標 s0≥2、s1≥1）：完整跑通一次，淬鍊 19 次、熔爐「All tempers doubled」、結束，精華 99→79。
+   - **未驗證**：恰西商店面板的實際畫面與位置；X 命中後清除的實機流程；熔爐清空後停止的實機流程；精華不足的停止條件。
+   - **已知限制**：無備份機制，熔爐清空後裝備無法再熔爐，自動模式只能停止。
+   - 測試腳本：`tests/live-harness/autoforge-live.cjs`（H_ITEM 指定裝備 JSON）。
+
+## 修改器淬鍊／地獄熔爐：已撤回（2026-11-08）
+- **決定**：使用者表示遊戲本身就能淬鍊與清除，修改器版本沒有實際用途，因此撤回修改器的淬鍊功能（editor.html、d2edit.js、webapi.js 還原；temper.js 與其測試刪除）。
+- **保留的研究結論**（若日後要重做）：直接寫入 forge 會被伺服器紀錄覆蓋（不可行）；唯一的合法路徑是遊戲自己的 `Game.forgeTry`（需 `game.anvil` 設為物品 ID）。實機測試腳本保留在 `tests/live-harness/temper-game-flow-live.cjs` 與 `temper-editor-ui-live.cjs`。熔爐 UI 點擊未測。
+- **正確路徑（已實機驗證）**：不直接寫 forge，改呼叫遊戲自己的鍛造流程 `Game.forgeTry(cls, level, act, refresh)`（`window.__d2autobot.game`），前提是 `game.anvil` 設為物品 ID。遊戲自己扣精華、呼叫 `/forge`、套用伺服器回傳的 forge（含伺服器發的 `h`）。
+- **實機結果（官方 /play/，全新隔離存檔＋你的存檔之副本，已換新 ID、去掉舊淬鍊）**：
+  - 淬鍊：正常，每次扣 1 顆精華；可能失敗（「The temper failed」），失敗也扣精華。
+  - 連續淬鍊到 10 次後，熔爐可用；結果隨機（本次測試一次「All tempers doubled」總數 10→20，另一次「清空」）。兩者都寫入 `hf: 1`。
+  - 重新整理後：熔爐結果保留，無「存檔在遊戲外被修改」紅字。
+- **先前失敗的原因**：直接改 JSON 的 forge 會被伺服器紀錄覆蓋（`syncForgeNow`→`settleForge`→`zF`），這條路不可行。
+- **已實作（待 UI 實機驗證）**：`d2edit.js` 後端 `backend.forgeItem(mode, itemId, act)` 呼叫 `game.forgeTry`（已驗證：淬鍊、熔爐經後端路徑回傳遊戲結果、精華扣除、forge 寫回）；`modifier/webapi.js` 加入 `forgeItem` 包裝；`modifier/editor.html` 物品修改的淬鍊／清除／熔爐按鈕改為呼叫後端，啟用狀態依 `temper.js` 規則；製作裝備頁已移除淬鍊設定，改為提示到物品修改處理。
+- **修改器 UI 實機點擊（已驗證）**：`tests/live-harness/temper-editor-ui-live.cjs`，官方 /play/、全新隔離存檔。開啟修改器、選到物品，點「淬鍊」兩次（forge 寫入、狀態列顯示遊戲文字、精華扣除），點「清除淬鍊」（狀態列「All tempers removed」，forge 剩 `h`，為遊戲回傳格式；按鈕啟用狀態正確）。遊戲 localStorage 與介面一致。
+- **尚未驗證**：熔爐按鈕的 UI 點擊（後端路徑已驗證，UI 路徑只差按鈕呼叫同一函式）；生命 68→67 的原因未明（可能是點陣字判讀）。
+- **測試工具**：`tests/live-harness/temper-game-flow-live.cjs`（H_PLAN=hellforge、H_ITEM、H_RELOAD 參數）。
+- **未確認**：清除淬鍊（`clean`）是否由遊戲接受；生命 68→67 的原因仍未明（可能是點陣字判讀）。
 
 ## 已解決摘要
 - **2026-10-31～11-04**：建立修改器原版規則檢查、中英切換、手機響應版面；建立輔助器自動戰鬥、走位規劃、天梯學習與死亡保護；完成 20261101～20261104.2 各版適配；完成資料夾結構解耦與 Cloudflare 自動部署。

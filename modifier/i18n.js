@@ -162,7 +162,7 @@
     "硬核角色被標記不計排名：": "Hardcore characters marked unranked: ", "瀏覽器存放區留有遊戲匯入前的舊存檔": "Browser storage still holds the pre-import save",
     "立即刪除": "Delete now", "瀏覽器存放區沒有匯入痕跡": "No import traces in browser storage", "✔ 安全": "✔ Safe", "✖ 會被偵測": "✖ Detectable",
     "已規避（記得寫入存檔）": "Fixed (remember to write the save)", "已全部規避（記得寫入存檔）": "All fixed (remember to write the save)",
-    "排行榜識別碼": "Leaderboard ID", "排行榜名稱": "Leaderboard name", "排行榜": "Leaderboard", "已關閉（不上傳）": "Off (no upload)", "開啟": "On",
+    "排行榜識別碼": "Leaderboard ID", "排行榜名稱": "Leaderboard name", "排行榜": "Leaderboard", "已關閉（不上傳）": "Off (no upload)", "已關閉（工具包單機模式，無法開啟）": "Off (toolkit single-player mode, cannot be enabled)", "（工具包單機模式，排行榜上傳一律關閉）": " (toolkit single-player mode: leaderboard upload is always off)", "開啟": "On",
     " 角色識別碼": " character ID", "存檔建立時間": "Save created", "已產生新的排行榜識別碼（記得寫入存檔）": "New leaderboard ID generated (remember to write the save)",
     // 存檔管理
     "目前存檔": "Current save", "快照名稱，例如：打巴爾前": "Snapshot name, e.g. before Baal", "建立快照": "Create snapshot", "匯出成檔案": "Export to file",
