@@ -1,2 +1,5 @@
-2026/11/05-19:46:32.438 6178 Creating DB D:\D2倖存者\tests\live-harness\out\profile\Local Storage\leveldb since it was missing.
-2026/11/05-19:46:32.444 6178 Reusing MANIFEST D:\D2倖存者\tests\live-harness\out\profile\Local Storage\leveldb/MANIFEST-000001
+2026/11/06-22:59:41.841 bec Reusing MANIFEST D:\D2倖存者\tests\live-harness\out\profile\Local Storage\leveldb/MANIFEST-000001
+2026/11/06-22:59:41.849 bec Recovering log #3
+2026/11/06-22:59:41.850 bec Level-0 table #3: started
+2026/11/06-22:59:41.853 bec Level-0 table #3: 141767 bytes OK
+2026/11/06-22:59:41.854 bec Delete type=0 #3

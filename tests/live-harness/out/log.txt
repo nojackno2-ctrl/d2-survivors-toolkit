@@ -17,3 +17,21 @@ https://
 For more information and help, consult
 https://
 11:46:45 boot err The "path" argument must be of type string or an instance of Buffer or URL. Received undefined
+14:59:45 nav https://d2survivors.lol/play/
+14:59:46 loaded
+14:59:46 console %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://
+14:59:46 nav https://d2survivors.lol/play/setup.html
+14:59:46 console %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://
+14:59:54 boot err The "path" argument must be of type string or an instance of Buffer or URL. Received undefined
+14:59:54 boot err The "path" argument must be of type string or an instance of Buffer or URL. Received undefined
+15:02:25 GONE {"reason":"crashed","exitCode":143}
