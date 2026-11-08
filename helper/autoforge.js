@@ -39,6 +39,8 @@ function totalTempers(counts) {
 // 回傳 { action: "temper" | "clean" | "hellforge" | "done" | "failed", reason }
 function decideNext(targets, state) {
   const counts = state.counts || {};
+  // 熔爐已成功（倍增）的裝備不得再淬鍊或清除，否則會把倍增結果洗掉。
+  if (state.hellforgeUsed && totalTempers(counts) > 0) return { action: "done", reason: "熔爐已成功，不進入自動淬鍊" };
   for (const [key, t] of Object.entries(targets)) {
     if (t.kind === "x" && (counts[key] || 0) > 0) return { action: "clean", reason: `命中禁止屬性 ${key}` };
   }
@@ -67,6 +69,77 @@ function hellforgeFailed(forge) {
   return !!forge?.hf && totalTempers(forge.t) === 0;
 }
 
-const AUTOFORGE = { TEMPER_CAP, normalizeTargets, totalTempers, decideNext, afterHellforge, hellforgeFailed };
+// 熔爐成功（倍增）：遊戲寫入 hf 且仍有淬鍊。這類裝備不得再進入自動淬鍊。
+function hellforgeSucceeded(forge) {
+  return !!forge?.hf && totalTempers(forge.t) > 0;
+}
+
+// 實測樣本（AI_HANDOFF.md，僅供機率估計）：
+//   淬鍊 228 次、成功 100 次；熔爐 18 次、倍增 5 次（第一批 10 次倍增 2、第二批 8 次倍增 3）。
+// 不同裝備的屬性分布不同，故只用於「單次成功率」與「熔爐倍增率」的總體估計。
+const TEMPER_SAMPLE = { attempts: 228, successes: 100 };
+const HELLFORGE_SAMPLE = { attempts: 18, doubled: 5 };
+
+// 可重現的亂數（mulberry32），讓同一組設定每次算出的數字一致。
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 蒙地卡羅模擬：依真實決策函式 decideNext 跑整個流程，估算當前目標下的結果。
+// 模型假設：淬鍊成功率 p；成功時從遊戲給的屬性列中均勻選一條；熔爐倍增率 q；每次淬鍊與熔爐各耗 1 顆精華；清除不耗精華。
+// 回傳 { successRate, hellforgeRate, essencesPerRun, essencesPerSuccess, runs }。
+//   successRate：熔爐倍增且目標達成的比例（自動淬鍊的成功）。
+//   hellforgeRate：流程中實際執行到熔爐的比例。
+function simulateOdds(targets, lineKeys, opts = {}) {
+  const runs = opts.runs ?? 20000;
+  const p = opts.temperRate ?? TEMPER_SAMPLE.successes / TEMPER_SAMPLE.attempts;
+  const q = opts.hellforgeRate ?? HELLFORGE_SAMPLE.doubled / HELLFORGE_SAMPLE.attempts;
+  const maxSteps = 2000;
+  const rng = mulberry32(opts.seed ?? 1);
+  const keys = (lineKeys || []).filter(Boolean);
+  let success = 0, reachedHf = 0, essTotal = 0, essSuccess = 0, nSuccess = 0;
+  for (let run = 0; run < runs; run++) {
+    let counts = {}, hf = false, ess = 0, outcome = null;
+    for (let step = 0; step < maxSteps && outcome === null; step++) {
+      const d = decideNext(targets, { counts, hellforgeUsed: hf });
+      if (d.action === "done") { outcome = "done"; break; }
+      if (d.action === "clean") { counts = {}; continue; }
+      if (d.action === "hellforge") {
+        ess += 1; reachedHf++; hf = true;
+        if (rng() < q) { // 倍增：淬鍊數翻倍，達成判定由下一輪 decideNext 決定
+          const doubled = {};
+          for (const [k, v] of Object.entries(counts)) doubled[k] = v * 2;
+          counts = doubled;
+          outcome = "success";
+        } else { counts = {}; outcome = "lost"; }
+        break;
+      }
+      // temper
+      ess += 1;
+      if (keys.length && rng() < p) {
+        const k = keys[Math.floor(rng() * keys.length)];
+        counts[k] = (counts[k] || 0) + 1;
+      }
+    }
+    if (outcome === "success") { success++; essSuccess += ess; nSuccess++; }
+    essTotal += ess;
+  }
+  return {
+    successRate: success / runs,
+    hellforgeRate: reachedHf / runs,
+    essencesPerRun: essTotal / runs,
+    essencesPerSuccess: nSuccess ? essSuccess / nSuccess : null,
+    runs,
+  };
+}
+
+const AUTOFORGE = { TEMPER_CAP, normalizeTargets, totalTempers, decideNext, afterHellforge, hellforgeFailed, hellforgeSucceeded, simulateOdds, TEMPER_SAMPLE, HELLFORGE_SAMPLE };
 if (typeof module !== "undefined" && module.exports) module.exports = AUTOFORGE;
 else if (typeof window !== "undefined") window.__d2autoforge = AUTOFORGE;

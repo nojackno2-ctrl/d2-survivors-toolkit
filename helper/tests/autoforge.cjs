@@ -29,5 +29,26 @@ ok(A.hellforgeFailed({ hf: 1, t: {} }) === true, "hf 且 t 為空物件 → 熔�
 ok(A.hellforgeFailed({ hf: 1, t: { s0: 20 } }) === false, "熔爐倍增後仍有淬鍊 → 非失敗");
 ok(A.hellforgeFailed({ t: {} }) === false, "未熔爐（無 hf）→ 非失敗");
 ok(A.hellforgeFailed(undefined) === false, "無 forge 紀錄 → 非失敗");
+
+// 熔爐成功（倍增）的裝備不得再進入自動淬鍊
+ok(A.hellforgeSucceeded({ hf: 1, t: { s0: 20 } }) === true, "hf 且仍有淬鍊 → 熔爐成功");
+ok(A.hellforgeSucceeded({ hf: 1, t: {} }) === false, "hf 且清空 → 不是成功");
+ok(A.hellforgeSucceeded({ t: { s0: 3 } }) === false, "未熔爐 → 不是成功");
+ok(A.decideNext(T, { counts: { s0: 6, s1: 4, s2: 4 }, hellforgeUsed: true }).action === "done", "熔爐成功且未達成 → done，不 clean");
+ok(A.decideNext(T, { counts: { s0: 10, s1: 6, s2: 4 }, hellforgeUsed: true }).action === "done", "熔爐成功且達成 → done");
+ok(A.decideNext(T, { counts: { s3: 1 }, hellforgeUsed: true }).action === "done", "熔爐成功且命中 X → done，不 clean");
+ok(A.decideNext(T, { counts: {}, hellforgeUsed: true }).action !== "done", "熔爐已用但清空（失敗）不被保護擋住");
+
+// 模擬：邊界值
+const sim0 = A.simulateOdds({ s0: { kind: "min", min: 2 } }, ["s0", "s1"], { runs: 2000, hellforgeRate: 0, seed: 7 });
+ok(sim0.successRate === 0, "熔爐倍增率 0 → 成功率 0");
+ok(sim0.hellforgeRate > 0.9, "熔爐倍增率 0 仍會跑到熔爐");
+const sim1 = A.simulateOdds({ s0: { kind: "min", min: 1 } }, ["s0"], { runs: 2000, hellforgeRate: 1, seed: 7 });
+ok(sim1.successRate > 0.99, "只需 s0≥1 且倍增率 1 → 幾乎必定成功");
+const simA = A.simulateOdds({ s0: { kind: "min", min: 2 } }, ["s0", "s1"], { runs: 3000, seed: 3 });
+const simB = A.simulateOdds({ s0: { kind: "min", min: 2 } }, ["s0", "s1"], { runs: 3000, seed: 3 });
+ok(simA.successRate === simB.successRate && simA.essencesPerRun === simB.essencesPerRun, "同一種子結果一致（面板不會抖動）");
+const simNone = A.simulateOdds({ s0: { kind: "any", min: 0 } }, ["s0"], { runs: 500, seed: 1 });
+ok(simNone.successRate === 0, "沒有需達成的目標 → 不視為成功");
 if (fail) { console.error(fail + " 項失敗"); process.exit(1); }
 console.log("✔ 全部通過");

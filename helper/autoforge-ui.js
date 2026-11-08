@@ -51,7 +51,7 @@ const state = {
   // 序列：[{ id, name, status }]，依序放上鐵砧淬鍊。目標設定沿用記憶（同稀有度＋名稱＋底材）。
   queue: [], queueRunning: false,
   // 地獄熔爐失敗：目前裝備的熔爐是否已失敗（遊戲寫入 hf 且淬鍊清空）；autoSell 為「失敗就自動售出」開關。
-  hfFailed: false, autoSell: loadAutoSell(),
+  hfFailed: false, hfSucceeded: false, autoSell: loadAutoSell(),
 };
 const push = (msg) => { state.msg = msg; state.log.push(msg); if (state.log.length > 60) state.log.shift(); render(); };
 
@@ -68,6 +68,7 @@ function attach(g, cls, item) {
   state.steps = 0;
   state.result = "";
   state.hfFailed = AF().hellforgeFailed(item.forge);
+  state.hfSucceeded = AF().hellforgeSucceeded(item.forge);
 }
 
 // 把鐵砧上的裝備賣給商人（遊戲 gearActions.sell）。鐵砧開著時 sell 會被改成「放上鐵砧」，故暫時關閉鐵砧狀態再賣，失敗則還原。
@@ -153,7 +154,8 @@ async function loop() {
 }
 
 // 當前職業背包裡可淬鍊的裝備。
-const bagItems = (g, cls) => (g.inventoryOf?.(cls) || []).filter(eligible);
+// 熔爐已成功（倍增）的裝備不得進入自動淬鍊清單。
+const bagItems = (g, cls) => (g.inventoryOf?.(cls) || []).filter((x) => eligible(x) && !AF().hellforgeSucceeded(x.forge));
 const hasTarget = (key) => Object.values(loadMemory()[key] || {}).some((v) => v === "X" || Number(v) > 0);
 
 // 序列：一件一件放上鐵砧，跑到該件結束再換下一件。
@@ -166,6 +168,8 @@ async function runQueue() {
   for (const q of state.queue) {
     if (!state.queueRunning) break;
     if (q.status === "完成") continue;
+    const raw = (g.inventoryOf?.(cls) || []).find((x) => x.id === q.id);
+    if (raw && AF().hellforgeSucceeded(raw.forge)) { q.status = "熔爐已成功，略過"; render(); continue; }
     const item = bagItems(g, cls).find((x) => x.id === q.id);
     if (!item) { q.status = "不在背包，略過"; render(); continue; }
     if (!hasTarget(itemKey(item))) { q.status = "未設定目標，略過"; render(); continue; }
@@ -181,6 +185,21 @@ async function runQueue() {
   }
   state.queueRunning = false; state.running = false;
   push("序列結束");
+}
+
+// ---- 掛機：整個畫面蓋上全黑遮罩，自動淬鍊照常執行；點畫面即喚醒。 ----
+let afkEl = null;
+function setAfk(on) {
+  if (!on) { afkEl?.remove(); afkEl = null; return; }
+  if (afkEl?.isConnected) return;
+  afkEl = document.createElement("div");
+  afkEl.id = "d2autoforge-afk";
+  afkEl.title = "點擊畫面喚醒";
+  afkEl.style.cssText = "position:fixed;inset:0;z-index:2147483600;background:#000;cursor:pointer;color:#111;font:12px sans-serif;display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;user-select:none;";
+  afkEl.textContent = "掛機中（點擊畫面喚醒）";
+  // 遮罩吃掉點擊，避免穿透到遊戲；點擊即喚醒。
+  afkEl.addEventListener("pointerdown", (e) => { e.stopPropagation(); e.preventDefault(); setAfk(false); });
+  document.body.append(afkEl);
 }
 
 // ---- 浮動面板（固定右上，不放在恰西商店裡） ----
@@ -202,6 +221,30 @@ function ensureBox() {
   box.addEventListener("keydown", (e) => e.stopPropagation());
   document.body.append(box);
   return box;
+}
+
+// 依目前目標與屬性列做蒙地卡羅模擬（結果依設定快取，避免每次重繪都重算）。
+let oddsCache = { sig: null, r: null };
+function oddsHtml() {
+  let targets;
+  try { targets = AF().normalizeTargets(state.targets); } catch (e) { return `<div style="color:#e88">${esc(e.message || String(e))}</div>`; }
+  if (!Object.values(targets).some((t) => t.kind === "min")) {
+    return '<div style="opacity:.8;font-size:13px">目前沒有要達成的屬性（都是 0 或 X），自動淬鍊不會執行熔爐。</div>';
+  }
+  const keys = state.lines.map((l) => l.key);
+  const sig = JSON.stringify([targets, keys]);
+  if (oddsCache.sig !== sig) oddsCache = { sig, r: AF().simulateOdds(targets, keys, { runs: 20000, seed: 1 }) };
+  const r = oddsCache.r;
+  const pct = (x) => `${(x * 100).toFixed(1)}%`;
+  const { attempts: ta, successes: ts } = AF().TEMPER_SAMPLE;
+  const { attempts: ha, doubled: hd } = AF().HELLFORGE_SAMPLE;
+  const essSucc = r.essencesPerSuccess == null ? "—" : r.essencesPerSuccess.toFixed(1);
+  return `<div style="background:#2a241b;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:13px">
+    <div>依目前設定估算（模擬 ${r.runs.toLocaleString()} 次）：</div>
+    <div>・熔爐倍增且達標（自動淬鍊成功）：<b>${pct(r.successRate)}</b></div>
+    <div>・平均每次耗精華 ${r.essencesPerRun.toFixed(1)}（成功時約 ${essSucc}）</div>
+    <div style="opacity:.75;margin-top:2px">依實測：單次淬鍊成功率約 ${pct(ts / ta)}（${ta} 次淬鍊）、熔爐倍增率約 ${pct(hd / ha)}（${ha} 次熔爐）。屬性分布以平均估計，實際依裝備而異。不含官方升級（基底升級）機率，自動淬鍊不會執行升級。</div>
+  </div>`;
 }
 
 function render() {
@@ -226,7 +269,9 @@ function render() {
     const opts = ["X", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((o) => `<option value="${o}"${String(o) === String(v) ? " selected" : ""}>${o === "X" ? "X 禁止" : o === 0 ? "0 不限" : o}</option>`).join("");
     return `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="flex:1">${esc(l.text)}</span><select data-key="${esc(l.key)}" style="background:#2a241b;color:#e8dcc4">${opts}</select></div>`;
   }).join("");
-  const hfNotice = state.hfFailed ? '<div style="color:#f08070;font-weight:bold">⚠ 地獄熔爐已失敗（裝備已清空）</div>' : "";
+  const oddsLine = state.itemId ? oddsHtml() : "";
+  const hfNotice = state.hfFailed ? '<div style="color:#f08070;font-weight:bold">⚠ 地獄熔爐已失敗（裝備已清空）</div>'
+    : state.hfSucceeded ? '<div style="color:#d4a84a;font-weight:bold">✔ 地獄熔爐已成功（倍增），不進入自動淬鍊</div>' : "";
   const autoSellBox = `<label style="display:flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input id="af-autosell" type="checkbox"${state.autoSell ? " checked" : ""}> 地獄熔爐失敗就自動售出</label>`;
   const itemLine = state.itemId
     ? `<div><b>${esc(state.itemName)}</b> <span style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85">${esc(state.result || "")}</div>`
@@ -234,12 +279,13 @@ function render() {
   b.innerHTML = `
     ${head}
     ${itemLine}
-    <div style="border-top:1px solid #4a3d25;margin-top:6px;padding-top:6px">${lineSel || ""}</div>
+    <div style="border-top:1px solid #4a3d25;margin-top:6px;padding-top:6px">${oddsLine}${lineSel || ""}</div>
     ${autoSellBox}
     ${state.itemId ? '<div style="opacity:.7;margin-top:4px">設定會自動記住（同稀有度、名稱與底材共用）。</div>' : ""}
     <div style="display:flex;gap:6px;margin-top:8px">
-      <button id="af-start" type="button"${state.running || !state.itemId ? " disabled" : ""}>開始</button>
+      <button id="af-start" type="button"${state.running || !state.itemId || state.hfSucceeded ? " disabled" : ""}>開始</button>
       <button id="af-stop" type="button"${state.running ? "" : " disabled"}>停止</button>
+      <button id="af-afk" type="button" title="畫面變全黑，自動淬鍊照常執行，點畫面喚醒">掛機</button>
       <span style="flex:1;align-self:center;opacity:.9">${esc(state.msg)}</span>
     </div>
     ${queueHtml(g)}`;
@@ -249,6 +295,7 @@ function render() {
     const v = sel.value;
     state.targets[sel.dataset.key] = v === "X" ? "X" : Number(v);
     rememberTargets(state.itemKey, state.targets);
+    render();
   });
   b.querySelector("#af-autosell").onchange = (e) => {
     state.autoSell = !!e.target.checked; saveAutoSell(state.autoSell);
@@ -266,6 +313,7 @@ function render() {
     loop();
   };
   b.querySelector("#af-stop").onclick = () => { state.running = false; state.queueRunning = false; push("已停止"); };
+  b.querySelector("#af-afk").onclick = () => setAfk(true);
   b.querySelectorAll("[data-add]").forEach((x) => x.onclick = () => {
     const it = bagItems(g, g.kit?.id).find((i) => i.id === x.dataset.add);
     if (it && !state.queue.some((q) => q.id === it.id)) state.queue.push({ id: it.id, name: `${it.name}（${it.base}）`, status: "等待" });
@@ -321,7 +369,7 @@ function tick() {
     if (item && eligible(item)) {
       attach(g, g.kit.id, item);
       if (state.hfFailed && state.autoSell) { const ok = sellItem(g, g.kit.id, item); state.result = ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功"; push(state.result); }
-    } else { state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemName = ""; state.hfFailed = false; }
+    } else { state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemName = ""; state.hfFailed = false; state.hfSucceeded = false; }
     render();
   } else if (!box?.isConnected) {
     state.cls = g.kit.id;
