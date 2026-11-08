@@ -6,7 +6,6 @@ const SLEEP = 350;
 const ESSENCE_NAME = "Burning Essence of Terror";
 const MEM_KEY = "d2autoforge.memory";
 const KNOWN_RESULT = /Raised|temper failed|removed|doubled|lost/i;
-const MAX_STEPS = 300; // 安全上限，避免任何未預期的狀況無限執行。
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const AF = () => window.__d2autoforge;
 const game = () => window.__d2autobot?.game ?? null;
@@ -103,7 +102,6 @@ async function loop() {
     }
     retries = 0;
     state.result = r.result;
-    if (!r.done && state.steps >= MAX_STEPS) r = { done: true, result: "已達安全上限 " + MAX_STEPS + " 步，已停止" };
     if (r.done) { state.running = false; push("結束：" + r.result); break; }
     push(`第 ${state.steps} 步 ${r.result}`);
     await sleep(SLEEP);
