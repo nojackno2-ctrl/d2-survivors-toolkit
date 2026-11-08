@@ -174,7 +174,8 @@ function render() {
       <button id="af-stop" type="button"${state.running ? "" : " disabled"}>停止</button>
       <span style="flex:1;align-self:center;opacity:.9">${esc(state.msg)}</span>
     </div>`;
-  b.querySelector("#af-fold").onclick = () => { state.folded = true; render(); };
+  // 必須阻止冒泡：否則同一次點擊會傳到外框，觸發收合後才掛上的「點圖示展開」而立刻又展開。
+  b.querySelector("#af-fold").onclick = (e) => { e.stopPropagation(); state.folded = true; render(); };
   b.querySelectorAll("select[data-key]").forEach((sel) => sel.onchange = () => {
     const v = sel.value;
     state.targets[sel.dataset.key] = v === "X" ? "X" : Number(v);

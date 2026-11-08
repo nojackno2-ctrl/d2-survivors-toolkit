@@ -71,6 +71,11 @@ app.whenReady().then(async () => {
       // 1) 放上鐵砧，等面板對準
       g.anvil = item.id; await sleep(1800);
       const st = window.__d2autoforgeUI.state;
+      // 收合／展開按鈕：用真實點擊驗證（收合後不可被同一次點擊又展開）
+      { if (!g.forgeUp) g.forgeUp = true; await sleep(800); const p = () => document.querySelector("#d2autoforge-panel");
+        const f = []; f.push(st.folded); p()?.click(); await sleep(400); f.push(st.folded);
+        p()?.querySelector("#af-fold")?.click(); await sleep(400); f.push(st.folded, p()?.offsetWidth);
+        p()?.click(); await sleep(400); f.push(st.folded); trace.foldSeq = f; }
       trace.attachedName = st.itemName; trace.attachedTargetsBefore = { ...st.targets };
       // 2) 以第一條屬性 ≥1 執行到結束（hook 會寫入記憶）
       const lines = window.__d2autoforgeUI.lines(item.id);
