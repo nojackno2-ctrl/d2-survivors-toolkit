@@ -50,6 +50,8 @@ const state = {
   itemId: null, itemKey: null, itemName: "", lines: [], targets: {}, steps: 0, result: "",
   // 序列：[{ id, name, status }]，依序放上鐵砧淬鍊。目標設定沿用記憶（同稀有度＋名稱＋底材）。
   queue: [], queueRunning: false,
+  // 工具包手動開啟：不必在恰西鐵砧選單，從背包選裝備即可淬鍊。遊戲恢復執行（未暫停）且未在淬鍊時自動關閉。
+  manual: false,
   // 地獄熔爐失敗：目前裝備的熔爐是否已失敗（遊戲寫入 hf 且淬鍊清空）；autoSell 為「失敗就自動售出」開關。
   hfFailed: false, hfSucceeded: false, autoSell: loadAutoSell(),
 };
@@ -275,7 +277,7 @@ function render() {
   const autoSellBox = `<label style="display:flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input id="af-autosell" type="checkbox"${state.autoSell ? " checked" : ""}> 地獄熔爐失敗就自動售出</label>`;
   const itemLine = state.itemId
     ? `<div><b>${esc(state.itemName)}</b> <span style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85">${esc(state.result || "")}</div>`
-    : `<div style="opacity:.8">請把暗金、套裝或符文之語放到恰西的鐵砧上。</div>`;
+    : `<div style="opacity:.8">${g.forgeUp ? "請把暗金、套裝或符文之語放到恰西的鐵砧上。" : "請在下方「背包可淬鍊」點「選取」，挑一件暗金、套裝或符文之語。"}</div>`;
   b.innerHTML = `
     ${head}
     ${itemLine}
@@ -290,7 +292,8 @@ function render() {
     </div>
     ${queueHtml(g)}`;
   // 必須阻止冒泡：否則同一次點擊會傳到外框，觸發收合後才掛上的「點圖示展開」而立刻又展開。
-  b.querySelector("#af-fold").onclick = (e) => { e.stopPropagation(); state.folded = true; render(); };
+  // 手動開啟的面板收合即關閉（之後由工具包再開）；鐵砧選單開著時仍只是收成圖示。
+  b.querySelector("#af-fold").onclick = (e) => { e.stopPropagation(); state.folded = true; if (state.manual && !g.forgeUp) state.manual = false; render(); };
   b.querySelectorAll("select[data-key]").forEach((sel) => sel.onchange = () => {
     const v = sel.value;
     state.targets[sel.dataset.key] = v === "X" ? "X" : Number(v);
@@ -314,6 +317,8 @@ function render() {
   };
   b.querySelector("#af-stop").onclick = () => { state.running = false; state.queueRunning = false; push("已停止"); };
   b.querySelector("#af-afk").onclick = () => setAfk(true);
+  // 選取：把背包裡的裝備放上「鐵砧」（遊戲內部狀態），tick 會自動載入它的屬性與記住的目標。
+  b.querySelectorAll("[data-select]").forEach((x) => x.onclick = () => { if (!state.running) { g.anvil = x.dataset.select; lastItemId = undefined; render(); } });
   b.querySelectorAll("[data-add]").forEach((x) => x.onclick = () => {
     const it = bagItems(g, g.kit?.id).find((i) => i.id === x.dataset.add);
     if (it && !state.queue.some((q) => q.id === it.id)) state.queue.push({ id: it.id, name: `${it.name}（${it.base}）`, status: "等待" });
@@ -338,7 +343,7 @@ function queueHtml(g) {
     const warn = it && !hasTarget(itemKey(it)) ? ' <span style="color:#e88">（未設目標）</span>' : "";
     return `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="opacity:.7">${i + 1}.</span><a data-pick="${esc(q.id)}" style="flex:1;cursor:pointer;text-decoration:underline">${esc(q.name)}</a>${warn}<span style="opacity:.85;font-size:13px">${esc(q.status || "")}</span><button type="button" data-del="${esc(q.id)}" style="${btn}"${state.queueRunning ? " disabled" : ""}>移除</button></div>`;
   }).join("");
-  const bagRows = bag.map((it) => `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="flex:1">${esc(it.name)}（${esc(it.base)}）</span><button type="button" data-add="${esc(it.id)}" style="${btn}">加入</button></div>`).join("");
+  const bagRows = bag.map((it) => `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="flex:1">${esc(it.name)}（${esc(it.base)}）</span><button type="button" data-select="${esc(it.id)}" style="${btn}"${state.running ? " disabled" : ""}>選取</button><button type="button" data-add="${esc(it.id)}" style="${btn}">加入</button></div>`).join("");
   return `
     <div style="border-top:1px solid #4a3d25;margin-top:8px;padding-top:6px">
       <b style="color:#d4a84a">序列（${state.queue.length}）</b>
@@ -357,10 +362,15 @@ function queueHtml(g) {
 
 // 每秒檢查：鐵砧選單開啟才顯示；鐵砧上的裝備換了才重新載入（執行中不切換）。
 let lastItemId = undefined;
+// 遊戲暫停中（與輔助器、語言相同的判定）。
+const pausedNow = () => document.body.classList.contains("frontend-over-run") || document.body.classList.contains("frontend-open")
+  || (() => { const p = document.getElementById("paused"); return !!p && !p.classList.contains("hidden") && getComputedStyle(p).display !== "none"; })();
 function tick() {
   const g = game();
-  // 只在恰西鐵砧選單開著時顯示（遊戲 forgeActions.showing 設定 g.forgeUp）；執行中也保留。
-  const ready = !!g && !!g.kit?.id && (!!g.forgeUp || state.running || state.queueRunning);
+  // 手動開啟：遊戲恢復執行、且沒有在淬鍊時，自動關閉，避免面板擋住遊戲畫面。
+  if (state.manual && !state.running && !state.queueRunning && !pausedNow()) state.manual = false;
+  // 顯示條件：恰西鐵砧選單開著（g.forgeUp），或由工具包手動開啟；執行中也保留。
+  const ready = !!g && !!g.kit?.id && (!!g.forgeUp || state.manual || state.running || state.queueRunning);
   if (!ready) { box?.remove(); box = null; return; }
   const item = anvilItem(g, g.kit.id);
   const id = item?.id ?? null;
@@ -381,6 +391,14 @@ setInterval(tick, 300);
 // 測試掛鉤（實機腳本）：把指定裝備放上鐵砧並啟動。slots: [{ id, targets }]，只取第一件。
 window.__d2autoforgeUI = {
   state,
+  // 工具包呼叫：不必在恰西鐵砧，直接開啟面板（需已進入遊戲）。回傳是否成功開啟。
+  open() {
+    const g = game();
+    if (!g?.kit?.id) return false;
+    state.manual = true; state.folded = false; lastItemId = undefined;
+    tick();
+    return true;
+  },
   lines(id) { const g = game(); return g ? lineList(g, state.cls || g.kit?.id, state.level, id) : []; },
   start(slots, cls) {
     const g = game();

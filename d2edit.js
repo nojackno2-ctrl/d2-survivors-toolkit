@@ -335,6 +335,7 @@ window.__d2editBackend = backend; // 方便除錯（同一頁面本來就能讀�
 const prevClose = window.__d2editClose;
 if (prevClose) prevClose(true);
 window.__d2editLauncher?.remove();
+window.__d2toolkitMenu?.remove();
 window.__d2editStopWatch?.();
 window.__d2editClose = (quiet) => { if (frame) { frame.remove(); frame = null; window.removeEventListener("message", onMessage); } if (!quiet && written) location.reload(); };
 window.__d2editIsOpen = () => !!frame;
@@ -349,16 +350,53 @@ function openEditor() {
 }
 // 點書籤後不直接開啟：留在遊戲中，按暫停時畫面左上角才出現「修改器」按鈕
 const zhUI = String((navigator.languages && navigator.languages[0]) || navigator.language || "").toLowerCase().startsWith("zh");
+// 工具包單一按鈕：把「輔助器」「語言」「修改器」收進同一個下拉選單。
+// 輔助器與語言仍由各自模組建立與處理，這裡只隱藏它們原本的浮動按鈕，點選單項目時代為觸發。
+const toolkitStyle = document.getElementById("d2toolkit-style") || document.head.appendChild(Object.assign(document.createElement("style"), { id: "d2toolkit-style" }));
+toolkitStyle.textContent = "#d2autobot-launcher,#d2lang-btn{display:none!important}";
 const launcher = document.createElement("button");
 launcher.type = "button";
-launcher.textContent = zhUI ? "修改器" : "Editor";
-launcher.title = zhUI ? "開啟 D2 倖存者存檔修改器" : "Open the D2 Survivors save editor";
-launcher.style.cssText = "position:fixed;top:calc(max(12px, env(safe-area-inset-top)) + 100px);left:max(12px, env(safe-area-inset-left));z-index:2147483646;display:none;"
+launcher.id = "d2toolkit-launcher";
+launcher.textContent = zhUI ? "工具包" : "Toolkit";
+launcher.title = zhUI ? "D2 倖存者工具包：輔助器、語言、修改器" : "D2 Survivors toolkit: assistant, language, editor";
+launcher.style.cssText = "position:fixed;top:max(12px, env(safe-area-inset-top));left:max(12px, env(safe-area-inset-left));z-index:2147483646;display:none;"
   + "padding:8px 14px;min-height:44px;border:1px solid #d4a84a;border-radius:6px;background:rgba(20,17,13,.92);color:#d4a84a;font:bold 15px 'Microsoft JhengHei',system-ui,sans-serif;cursor:pointer;touch-action:manipulation";
-launcher.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openEditor(); };
-for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) launcher.addEventListener(ev, (e) => e.stopPropagation());
-document.body.appendChild(launcher);
+const toolkitMenu = document.createElement("div");
+toolkitMenu.id = "d2toolkit-menu";
+toolkitMenu.style.cssText = "position:fixed;top:calc(max(12px, env(safe-area-inset-top)) + 50px);left:max(12px, env(safe-area-inset-left));z-index:2147483647;display:none;"
+  + "min-width:170px;max-height:calc(100dvh - 80px);overflow:auto;padding:4px 0;background:rgba(20,17,13,.98);border:1px solid #d4a84a;border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,.6);touch-action:manipulation";
+// 工具包功能登錄表：之後新增的功能呼叫 window.__d2toolkit.register({ id, label, open }) 即可出現在選單裡。
+// 面板每次開啟時重新排列，同一個 id 重複登錄會覆蓋舊的。
+const toolkitFeatures = new Map();
+function registerToolkitFeature({ id, label, open, order = 100 }) {
+  if (!id || typeof open !== "function") throw new TypeError("toolkit feature needs id and open()");
+  toolkitFeatures.set(id, { id, label, open, order });
+}
+window.__d2toolkit = { register: registerToolkitFeature, features: () => [...toolkitFeatures.values()].map(({ id, label, order }) => ({ id, label, order })) };
+registerToolkitFeature({ id: "autobot", label: zhUI ? "輔助器" : "Assistant", order: 10, open: () => document.getElementById("d2autobot-launcher")?.click() });
+registerToolkitFeature({ id: "autoforge", label: zhUI ? "自動淬鍊" : "Auto forge", order: 15, open: () => { if (!window.__d2autoforgeUI?.open()) alert(zhUI ? "請先進入遊戲（選好職業）再開啟自動淬鍊" : "Enter the game (pick a class) first"); } });
+registerToolkitFeature({ id: "lang", label: zhUI ? "語言" : "Language", order: 20, open: () => document.getElementById("d2lang-btn")?.click() });
+registerToolkitFeature({ id: "editor", label: zhUI ? "修改器" : "Editor", order: 30, open: () => openEditor() });
+function renderToolkitMenu() {
+  toolkitMenu.textContent = "";
+  const list = [...toolkitFeatures.values()].sort((a, b) => a.order - b.order);
+  for (const f of list) {
+    const item = document.createElement("div");
+    item.textContent = f.label;
+    item.style.cssText = "padding:10px 16px;min-height:44px;color:#f2e5c6;font:14px 'Microsoft JhengHei',system-ui,sans-serif;cursor:pointer;";
+    item.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toolkitMenu.style.display = "none"; try { f.open(); } catch (err) { console.warn("[D2 工具包] 功能失敗：" + f.id, err); } };
+    for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) item.addEventListener(ev, (e) => e.stopPropagation());
+    toolkitMenu.append(item);
+  }
+}
+launcher.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (toolkitMenu.style.display === "block") { toolkitMenu.style.display = "none"; return; } renderToolkitMenu(); toolkitMenu.style.display = "block"; };
+for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) {
+  launcher.addEventListener(ev, (e) => e.stopPropagation());
+  toolkitMenu.addEventListener(ev, (e) => e.stopPropagation());
+}
+document.body.append(launcher, toolkitMenu);
 window.__d2editLauncher = launcher;
+window.__d2toolkitMenu = toolkitMenu;
 // 遊戲的暫停選單畫在 canvas 上：暫停時 body 會加上 frontend-over-run（實測 d2survivors.lol 營地與冒險中皆同）；舊版或其他畫面用 #paused
 const pausedNow = () => {
   if (document.body.classList.contains("frontend-over-run") || document.body.classList.contains("frontend-open")) return true;
@@ -368,7 +406,7 @@ const pausedNow = () => {
 // 依使用者要求：整個工具讀取完畢前不讓玩家使用，「修改器」按鈕等載入完成才出現。
 let toolsReady = false;
 // 每 500 毫秒及畫面變動時執行：值相同時不寫入 style，避免無謂的樣式重算
-const sync = () => { const v = toolsReady && pausedNow() && !frame ? "block" : "none"; if (launcher.style.display !== v) launcher.style.display = v; };
+const sync = () => { const v = toolsReady && pausedNow() && !frame ? "block" : "none"; if (launcher.style.display !== v) launcher.style.display = v; if (v === "none" && toolkitMenu.style.display !== "none") toolkitMenu.style.display = "none"; };
 let watched = null;
 const observer = new MutationObserver(() => {
   const p = document.getElementById("paused");
