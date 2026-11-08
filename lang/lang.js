@@ -1114,10 +1114,26 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     tipTouched.clear();
   }
 
+  let cachedSafeTop = null;
+  if (typeof addEventListener === "function") {
+    addEventListener("resize", () => { cachedSafeTop = null; }, { passive: true });
+    addEventListener("orientationchange", () => { cachedSafeTop = null; }, { passive: true });
+  }
+  function getSafeTop() {
+    if (cachedSafeTop !== null || !document.body) return cachedSafeTop || 0;
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top);";
+    document.body.appendChild(probe);
+    cachedSafeTop = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+    probe.remove();
+    return cachedSafeTop;
+  }
+
   function applyTipLayout() {
     // 只在觸控裝置（遊戲手機版的物品框是點擊後顯示）套用；桌機的滑鼠提示框維持原樣
+    if (tipLayout !== "top") { if (tipTouched.size) restoreTipLayout(); return; }
     const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
-    const boxes = tipLayout === "top" && touch ? tipVisibleBoxes() : [];
+    const boxes = touch ? tipVisibleBoxes() : [];
     if (!boxes.length) { if (tipTouched.size) restoreTipLayout(); return; }
 
     const vw = document.documentElement.clientWidth || innerWidth;
@@ -1132,12 +1148,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     // 共用縮放取各框原始縮放的最小值，避免並列時大小不一
     const base = Math.min(1, ...boxes.map((el) => tipNatural.get(el) || 1));
     // 安全區：頂部取 env(safe-area-inset-top)，底部下限為「丟下／出售／移動」鍵的上緣
-    const probe = document.createElement("div");
-    probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top);";
-    document.body.appendChild(probe);
-    const safeTop = parseFloat(getComputedStyle(probe).paddingTop) || 0;
-    probe.remove();
-    const top = safeTop + 8;
+    const top = getSafeTop() + 8;
     const btnTops = ["drop-held", "sell-held", "move-held"]
       .map((id) => document.getElementById(id))
       .filter((b) => b && b.offsetWidth > 0 && getComputedStyle(b).display !== "none")

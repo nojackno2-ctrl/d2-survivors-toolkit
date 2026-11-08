@@ -2150,7 +2150,7 @@ function detect() {
     : { ok: true, text: "遊戲存檔總檢查通過（saveFaults）", note: "遊戲檢查" });
   return out;
 }
-let faultyItems = null, ruleBad = null, gameSaveFaults = null;
+let faultyItems = null, faultyReasons = new WeakMap(), ruleBad = null, gameSaveFaults = null;
 async function renderGuard() {
   const items = allItems(save), f = await window.api.engine("faults", items);
   // 遊戲自己的存檔總檢查（saveFaults，與排行榜合規性校驗同一套規則）；引擎不可用時為 null
@@ -2159,7 +2159,13 @@ async function renderGuard() {
   // 賭博商店清單是遊戲自己以普通品質底材展示（含戒指、護身符），買下時才決定品質，不算玩家物品
   const gamble = new Set(Object.values(save.gambleByClass ?? {}).flatMap(v => v ?? []));
   ruleBad = null; // 已移除原版規則檢查（依使用者要求），不再計算額外的詞綴規則提示
-  faultyItems = Array.isArray(f) ? items.filter((_, i) => f[i]) : null;
+  faultyReasons = new WeakMap();
+  faultyItems = Array.isArray(f) ? items.filter((it, i) => {
+    if (!f[i]) return false;
+    const why = typeof f[i] === "string" ? f[i] : (f[i].why ?? f[i].fault ?? JSON.stringify(f[i]));
+    if (why) faultyReasons.set(it, String(why));
+    return true;
+  }) : null;
   const t = await window.api.traces($("#mode").value, false);
   traceKeys = Array.isArray(t) ? t : [];
   const list = detect();
@@ -2184,8 +2190,10 @@ function renderDetails(list) {
     if (gamble.has(x.item)) continue;
     for (const p of x.problems) notes.push({ where: where.get(x.item) ?? "（位置不明）", what: `「${(x.item.name && nameZh(x.item)) || baseZh(x.item)}」：${problemText(p)}`, fix: "額外規則的提示，以遊戲本身的檢查為準，不必修正" });
   }
-  for (const it of faultyItems ?? []) if (!(ruleBad ?? []).some(x => x.item === it))
-    rows.push({ where: where.get(it) ?? "（位置不明）", what: `「${(it.name && nameZh(it)) || baseZh(it)}」：缺少遊戲需要的隨機種子（roll），遊戲會判定不合法`, fix: "重新產生為合法物品" });
+  for (const it of faultyItems ?? []) if (!(ruleBad ?? []).some(x => x.item === it)) {
+    const why = faultyReasons.get(it);
+    rows.push({ where: where.get(it) ?? "（位置不明）", what: `「${(it.name && nameZh(it)) || baseZh(it)}」：${why ? `遊戲判定：${why}` : "缺少遊戲需要的隨機種子（roll），遊戲會判定不合法"}`, fix: "重新產生為合法物品" });
+  }
   const lb = save.leaderboard ?? {};
   const edited = rows.length > 0 || lb.edited;
   const unknown = list.some(x => x.unknown);

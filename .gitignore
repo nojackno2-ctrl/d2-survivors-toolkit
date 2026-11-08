@@ -15,7 +15,9 @@ temp_*.html
 # 實機測試的瀏覽器設定檔、截圖與執行紀錄
 **/live-harness/run-*/
 **/live-harness/profile*/
+**/live-harness/out*/
 shots/
+.vs/
 
 # 本機工具狀態
 .claude/scheduled_tasks.lock

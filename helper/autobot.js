@@ -580,15 +580,24 @@
     // 實測（女巫面對精英越跑越遠）：鎖定的王／精英不計入往外推的威脅場，只由近戰範圍＋移動緩衝的禁區處理；
     // 其他怪照常計入。
     const threat = (pt) => { let a = 0; for (const f of near) { if (boss && f.e === boss) continue; const d = Math.max(0, dist(pt, f) - f.r); a += f.w / (1 + (d / scale) ** 2); } return a; };
+    const shotPre = shots.map((sh) => {
+      const rr = (sh.radius || 5) + pr + settings.movement.projectileSafetyRadius;
+      return { x: sh.x, y: sh.y, vx: sh.vx || 0, vy: sh.vy || 0, rrSq: rr * rr, w: Math.max(0.5, Math.max(0, sh.damage || 0) * taken / hpNow * 10) };
+    });
     const shotHit = (pt) => {
       let a = 0;
-      for (const sh of shots) {
-        const vx = sh.vx || 0, vy = sh.vy || 0, rr = (sh.radius || 5) + pr + settings.movement.projectileSafetyRadius;
-        for (let t = 0; t <= 0.6; t += 0.1) if (Math.hypot(sh.x + vx * t - pt.x, sh.y + vy * t - pt.y) < rr) { a += Math.max(0.5, Math.max(0, sh.damage || 0) * taken / hpNow * 10); break; }
+      for (const sh of shotPre) {
+        for (let t = 0; t <= 0.6; t += 0.1) {
+          const dx = sh.x + sh.vx * t - pt.x, dy = sh.y + sh.vy * t - pt.y;
+          if (dx * dx + dy * dy < sh.rrSq) { a += sh.w; break; }
+        }
       }
       return a;
     };
     const danger = threat(p);
+    const focusWant = focus ? wantFor(focus) : 0;
+    const goalDistP = goal ? dist(goal, p) : 0;
+    const goalWeight = boss && looting ? 0.3 : pursue ? 5 : danger < 0.6 ? 2.5 : 0.8;
     let best = null;
     for (let i = 0; i < 24; i++) {
       const dir = DIRS_24[i];
@@ -621,12 +630,12 @@
         }
         let score = -threatScore * 2 - shotHit(pt) * 6 - crowd * 0.4 - meleePenalty;
         if (focus) {
-          const want = wantFor(focus), d = dist(pt, focus);
-          score -= Math.abs(d - want) / want * (boss ? 3 : 2.5);
+          const d = dist(pt, focus);
+          score -= Math.abs(d - focusWant) / focusWant * (boss ? 3 : 2.5);
           // 超出自己攻擊距離九成就重扣，避免跑出打得到的範圍。
           if (d > reach * 0.9) score -= (d - reach * 0.9) / 40 * 3;
         }
-        if (goal && dist(goal, p) > 5) score += (dist(p, goal) - dist(pt, goal)) / step * (boss && looting ? 0.3 : pursue ? 5 : danger < 0.6 ? 2.5 : 0.8);
+        if (goalDistP > 5) score += (goalDistP - dist(pt, goal)) / step * goalWeight;
         score += (dir.x * planHeading.x + dir.y * planHeading.y) * 0.5;
         if (!best || score > best.score) best = { score, dir, pt };
       }

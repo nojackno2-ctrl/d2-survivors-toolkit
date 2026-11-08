@@ -101,6 +101,11 @@ function activeGameScript() {
 }
 async function startEngine() {
   engineInfo.step = "讀取程式清單";
+  const itemstatsP = (async () => {
+    const statsUrl = window.__D2EDIT_ITEMSTATS || (await d2url("itemstats.json"));
+    return fetch(statsUrl).then((r) => { engineInfo.itemstats = r.status; if (!r.ok) throw new Error("讀不到遊戲物品資料（請先進入過遊戲一次）。"); return r.text(); });
+  })();
+  itemstatsP.catch(() => {});
   const [{ patch }, signatures] = await Promise.all([import(at("modifier/patch.mjs")), fetch(at("modifier/signatures.json")).then((r) => r.json())]);
   // 從頁面已載入的腳本開始，順著 "./xxx.js" 參照把同資料夾的區塊都抓下來
   const base = new URL("/assets/", location.origin).href;
@@ -113,6 +118,7 @@ async function startEngine() {
   const t0 = performance.now(), mark = (k) => { (engineInfo.ms ??= {})[k] = Math.round(performance.now() - t0); };
   // iPhone 實測抓取 3.3 秒：程式區塊檔名帶雜湊（遊戲更新檔名就變），直接用瀏覽器快取（force-cache），不再逐一向伺服器確認；/play/ 已有清單就不抓首頁。
   for (const page of ["/play/", "/"]) {
+    if (page === "/play/" && location.pathname.startsWith("/play") && queue.length) break;
     const html = await fetch(new URL(page, location.origin), { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")).catch(() => "");
     const found = [...html.matchAll(/\/assets\/([\w.-]+\.js)/g)].map((m) => m[1]);
     queue.push(...found);
@@ -138,10 +144,9 @@ async function startEngine() {
     const abs = src.replace(/(["'`])\.\/([\w.-]+\.js)\1/g, (_, q, d) => q + base + d + q);
     map[base + f] = URL.createObjectURL(new Blob([abs], { type: "text/javascript" }));
   }
-  const statsUrl = window.__D2EDIT_ITEMSTATS || (await d2url("itemstats.json"));
   engineInfo.step = "讀取物品資料";
   mark("建立模組");
-  const itemstats = await fetch(statsUrl).then((r) => { engineInfo.itemstats = r.status; if (!r.ok) throw new Error("讀不到遊戲物品資料（請先進入過遊戲一次）。"); return r.text(); });
+  const itemstats = await itemstatsP;
   engineInfo.step = "載入產生器";
   // 遊戲本身已經載入同一批程式，再載一次會重複註冊；所以放進隱藏的同源 iframe，用它自己的模組環境執行
   const box = document.createElement("iframe");

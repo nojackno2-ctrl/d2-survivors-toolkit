@@ -5,15 +5,16 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'd2-savefaults-ui-'));
 app.setPath('userData', path.join(temp, 'profile'));
 const preload = path.join(temp, 'preload.cjs');
 // engine：faults 不使用；saveFaults 依測試設定的 window.__sf 回傳（null 代表引擎不可用）
-fs.writeFileSync(preload, `window.__sf = undefined;
-window.api={web:false,assets:async()=>({dir:'',uniques:{},sets:{},bases:{},quest:{},runes:{},gems:{}}),i18n:async()=>({dict:{},game:{stats:{},classes:{}}}),load:async()=>({save:{version:6,gold:1,stashTabs:{},equippedByClass:{},unlocked:{}},source:'fixture'}),traces:()=>[],
-engine:async(fn)=> fn==='saveFaults' ? window.__sf : null};`);
+fs.writeFileSync(preload, `window.__sf = undefined; window.__if = null;
+window.api={web:false,assets:async()=>({dir:'',uniques:{},sets:{},bases:{},quest:{},runes:{},gems:{}}),i18n:async()=>({dict:{},game:{stats:{},classes:{}}}),load:async()=>({save:{version:6,gold:1,stashTabs:{shared1:[{id:'i1',name:'Enigma',base:'Mage Plate',rarity:'runeword'}]},equippedByClass:{},unlocked:{}},source:'fixture'}),traces:()=>[],
+engine:async(fn)=> fn==='saveFaults' ? window.__sf : fn==='faults' ? window.__if : null};`);
 const watchdog = setTimeout(() => { console.error('存檔檢查測試逾時'); app.exit(1); }, 30000);
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, webPreferences: { preload, contextIsolation: false, nodeIntegration: false } });
   await win.loadFile(path.join(__dirname, '..', 'editor.html'));
-  const run = (sf) => win.webContents.executeJavaScript(`(async()=>{
+  const run = (sf, itemFaults = null) => win.webContents.executeJavaScript(`(async()=>{
     window.__sf = ${JSON.stringify(sf)};
+    window.__if = ${JSON.stringify(itemFaults)};
     await renderGuard();
     const txt = (id) => document.getElementById(id).textContent;
     const rows = [...document.querySelectorAll('#details tr')].map(r => r.textContent);
@@ -21,11 +22,12 @@ app.whenReady().then(async () => {
     return { verdict: txt('verdict'), issues, rows };
   })()`);
 
-  // 1. 遊戲判定有問題：摘要列＋逐條明細
-  const bad = await run(['gold 2e10 exceeds limit', 'Item not what its roll makes']);
+  // 1. 遊戲判定有問題：摘要列＋逐條明細（含單件物品遊戲判定原文）
+  const bad = await run(['gold 2e10 exceeds limit', 'Item not what its roll makes'], [{ fault: 'roll', why: 'Item not what its roll makes' }]);
   assert.ok(bad.issues.some(t => t.includes('遊戲存檔檢查判定 2 項問題')), 'summary row missing: ' + bad.issues.join(' | '));
   assert.ok(bad.rows.some(t => t.includes('遊戲判定：gold 2e10 exceeds limit')), 'detail 1 missing');
   assert.ok(bad.rows.some(t => t.includes('遊戲判定：Item not what its roll makes')), 'detail 2 missing');
+  assert.ok(bad.rows.some(t => t.includes('「Enigma」：遊戲判定：Item not what its roll makes')), 'item fault原文 missing: ' + bad.rows.join(' | '));
   assert.equal(bad.rows.filter(t => t.includes('遊戲存檔檢查（saveFaults）')).length, 2, 'detail rows duplicated');
   assert.ok(bad.verdict.includes('已編輯／有問題'), 'verdict should flag problems: ' + bad.verdict);
 

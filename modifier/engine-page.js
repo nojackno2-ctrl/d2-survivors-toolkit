@@ -116,11 +116,14 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
     for (let i = 0; i < n; i++) { const it = seededMake(Math.floor(Math.random() * 4294967296), rarity, name, baseName, eth); if (it) out.push(it); }
     return out;
   }
+  const fixedCache = new Map();
   function fixedInfo(rarity, name, baseName, eth = false) {
     if (!defs[rarity]?.has(name)) return { error: "找不到這件固定物品" };
     const def = defs[rarity].get(name);
     const base = rarity === "runeword" ? (baseName && bases.get(baseName)) || runewordBase(def) : bases.get(def.base);
     if (!base) return { error: "找不到可用的底材" };
+    const cacheKey = `${rarity}\0${name}\0${base.name}\0${eth ? 1 : 0}`;
+    if (fixedCache.has(cacheKey)) return clone(fixedCache.get(cacheKey));
     const lo = pinned(() => make(rarity, name, base.name, eth), 0), hi = pinned(() => make(rarity, name, base.name, eth));
     if (!lo || !hi || !Array.isArray(hi.stats)) return { error: "這件物品沒有可自訂的原始屬性" };
     const n = hi.stats.length, probe = samples(rarity, name, base.name, 16, eth).filter((x) => x.stats?.length === n);
@@ -141,7 +144,8 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
       g.at = hi.stats[g.idx[0]].value;
     }
     // 隨機項目一：stats 的參數每次掉落不同（例如奧瑪斯長袍的隨機技能、地獄火炬的職業）
-    const wide = samples(rarity, name, base.name, 500, eth).filter((x) => x.stats?.length === n), params = [];
+    const needWide = rarity === "runeword" || hi.stats.some((s) => s.param !== undefined) || probe.some((p) => p.stats.some((s) => s.param !== undefined) || staffOf(p).length > 0);
+    const wide = needWide ? samples(rarity, name, base.name, 500, eth).filter((x) => x.stats?.length === n) : [], params = [];
     for (let i = 0; i < n; i++) {
       const set = new Map();
       for (const p of wide) if (p.stats[i].param !== undefined && !set.has(p.stats[i].param)) set.set(p.stats[i].param, p);
@@ -167,7 +171,9 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
       }
       if (best.size > 1) autos = [...best.values()].map((x) => ({ mods: x.mods }));
     }
-    return { base: base.name, rarity, name, groups, params, staff, autos, canEth: rarity === "runeword", eth: !!eth };
+    const res = { base: base.name, rarity, name, groups, params, staff, autos, canEth: rarity === "runeword", eth: !!eth };
+    fixedCache.set(cacheKey, res);
+    return clone(res);
   }
   // spec: { rarity, name, base, eth, values: [{ idx:[...], value }], params: { 索引: 參數 }, staff: [{ stat, value }] }
   function fixedBuild(spec) {
@@ -253,7 +259,7 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
     return dfs() ? pick.map(x => x.affix) : null;
   }
   // 底材固有屬性：以遊戲產生器取樣
-  const implicitCache = new Map();
+  const implicitCache = new Map(), affixInfoCache = new Map();
   function baseImplicits(base) {
     if (implicitCache.has(base.name)) return implicitCache.get(base.name);
     const r = {};
@@ -606,6 +612,8 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
     affixInfo(baseName, rarity, mods = []) {
       const base = bases.get(baseName);
       if (!base || !G.__affixes || !G.__affixApplies) return null;
+      const cacheKey = `${base.name}\0${rarity}`;
+      if (affixInfoCache.has(cacheKey)) return affixInfoCache.get(cacheKey);
       const affixes = G.__affixes.filter(a => G.__affixApplies(a, base, a.cls) && !(rarity === "rare" && a.d2?.magicOnly));
       const ranges = {}, byKind = { prefix: {}, suffix: {} };
       const add = (stat, min, max, kind) => {
@@ -619,7 +627,9 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
         if (a.d2?.also) add(a.d2.also.stat, a.d2.also.min, a.d2.also.max, a.kind);
       }
       const combinations = affixes.map(a => ({ kind: a.kind, stat: a.stat, min: a.min, max: a.max, alike: a.d2?.alike ?? [], also: a.d2?.also ?? null }));
-      return { ranges, byKind, combinations };
+      const out = { ranges, byKind, combinations };
+      affixInfoCache.set(cacheKey, out);
+      return out;
     },
     // 統一的屬性範圍資料庫：固定品質物品用遊戲產生器的上下限，其餘依底材可用詞綴。
     // 回傳 { fixed: { "implicit:stat": [[min,max],...] } | null, affix: { stat: [[min,max],...] } }

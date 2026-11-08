@@ -117,7 +117,12 @@
   - **翻譯與排版全面核對**：字典大規模審查，修正閃電（Lightning）、女巫（the Witch）、上衣（Jack）、嘔吐（Puke）等譯名；技能樹多段協同加成（synergyList）分段翻譯與標點修復。
 - **2026-11-08**：淬鍊屬性句未翻譯。原因：遊戲以不換行空白接上 `×N`（`saveTransfer` 的 `va`），整句查不到字典。修法：`lang/lang.js` 的 `translateString` 先剝掉尾端 `×N` 只翻核心句再接回；補 `+# to Fire / Lightning Mastery (Sorceress Only)` 字典。官方 `/play/` 實機（`tests/live-harness/temper-translate-live.cjs`）7 條樣本全譯出；再以使用者提供的存檔（法師 `Tal Rasha's Lidless Eye`，`forge.t` 有淬鍊）在隔離設定檔實機開角色畫面、移滑鼠看提示框（`tests/live-harness/temper-tooltip-live.cjs`），淬鍊行全數譯出並保留 `×N`。`[1-2]` 為數字範圍（`e.range`）不含英文，無需處理。尚未驗證：其他職業的淬鍊行、手機版提示框。
 - **2026-11-08（符文之語存檔檢查紅字）**：修改器一鍵解鎖後，存檔檢查出現「not what its roll makes」（遊戲 saveFaults）。修正：`modifier/engine-page.js` 最高數值路徑產生的符文之語不再附 roll（stats 保留）。實機（官方 `/play/`，隔離設定檔，11-04 存檔副本，`tests/live-harness/craft-live.cjs` 攔截本機修改）：修正前遊戲判定 10 項、修正後 0 項，符文之語 roll 數 79→0。
-  - **未驗證**：已損壞存檔透過「依同名重新產生」修復的實機流程；存檔檢查頁按鈕的實機點擊；`editor.html` 缺少 roll 的文字標示（對遊戲判定不合法的物品仍寫成「缺少 roll」，待改為顯示遊戲原文）。
+  - **未驗證**：存檔檢查頁按鈕的實機點擊。
+- **2026-11-08（Antigravity：專案最佳化與存檔檢查物品原文顯示）**：
+  - **物品引擎快取與取樣最佳化**（`modifier/engine-page.js`）：`fixedInfo` 加入記憶快取（`fixedCache`），並對無隨機 `param` 與法杖技能的非符文之語略過 500 次重複取樣；`affixInfo` 加入快取（`affixInfoCache`）。官方 `/play/` 實機驗證（`craft-live.cjs`）：Harlequin Crest 首次 `fixedInfo` 降至 1.5ms、快取 0.5ms；Ormus' Robes 首次 5.2ms（保留隨機技能 `params`）、快取 0.5ms；`affixInfo` 快取 0.3ms。
+  - **存檔檢查顯示單件物品遊戲判定原文**（`modifier/editor.html`）：`renderGuard` 保留 `faults` 回傳的 `why`／`fault` 原文至 `faultyReasons`，`renderDetails` 改顯示 `遊戲判定：<原文>`（僅在近似檢查時退回缺少 `roll` 提示）。已通過 `modifier/tests/save-faults-ui.cjs` 與官方 `/play/` 實機驗證。
+  - **啟動、排版與走位最佳化**（`d2edit.js`、`lang/lang.js`、`helper/autobot.js`）：`startEngine` 提前並行抓取 `itemstats.json` 且位於 `/play/` 時省去重複抓取主頁 HTML；`applyTipLayout` 快取 `env(safe-area-inset-top)` 避免每影格建立與移除 DOM 探針；`planMove` 預先計算飛彈平方距離並外提迴圈不變量。
+  - **建置與測試套件補齊**（`verify/suite.cjs`、`tools/build-web.js`、`tools/tests/build-web.cjs`、`.gitignore`）：將 `autoforge` 納入 `verify/suite.cjs`，`helper/autoforge.js` 與 `helper/autoforge-ui.js` 納入建置來源檢查。執行 `node verify/verify.cjs --quick` 通過 13／13 項測試，`node verify/live-smoke.cjs --build 20261105.3` 官方實機煙霧測試通過。
 
 ---
 
