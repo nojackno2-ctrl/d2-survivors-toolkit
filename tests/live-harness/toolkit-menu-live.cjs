@@ -31,7 +31,8 @@ app.whenReady().then(async () => {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try {
     // 工具包網址攔截到本機檔案（等同玩家書籤載入待測版本）；遊戲本身仍是官方 d2survivors.lol/play/
-    session.defaultSession.protocol.handle("https", (req) => {
+    // H_PUBLISHED=1：不攔截，直接載入 GitHub Pages 上已發布的工具包（等同玩家書籤）
+    if (!process.env.H_PUBLISHED) session.defaultSession.protocol.handle("https", (req) => {
       if (!req.url.startsWith(PAGES)) return net.fetch(req, { bypassCustomProtocolHandlers: true });
       const rel = decodeURIComponent(new URL(req.url).pathname.slice("/d2-survivors-toolkit/".length));
       const file = path.resolve(ROOT, rel);
