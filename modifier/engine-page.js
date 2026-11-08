@@ -96,7 +96,8 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
       for (let i = 0; i < SEED_TRIES; i++) {
         const seed = Math.floor(Math.random() * 4294967296), it = seededMake(seed, rarity, name, baseName);
         if (!it) break;
-        if (key(it) === want) return { item: it, legit: true, max: true };
+        // 符文之語不附 roll：遊戲讀檔會改寫帶 roll 的符文之語（roll[0] 1→2），導致「not what its roll makes」
+        if (key(it) === want) { if (rarity === "runeword") delete it.roll; return { item: it, legit: true, max: true }; }
       }
     }
     best.id = newId();
