@@ -11,12 +11,13 @@ const MODES = {
 };
 const mode = (m) => MODES[m === "hardcore" ? "hardcore" : "softcore"];
 // 工具包定位為單機爽玩：載入後強制關閉排行榜上傳，玩家無法再打開。
-// 1. 擋下所有送往 /api/leaderboard 的非 GET 請求（仍可瀏覽排行榜）。
+// 1. 擋下所有送往 /api/leaderboard 的非 GET 請求（仍可瀏覽排行榜；僅放行 /api/leaderboard/forge 鍛造請求）。
 // 2. 遊戲記憶體中的存檔 leaderboard.off 鎖成不可改、不可刪的 true；遊戲選項的「上傳」開關按下時會失敗、維持關閉。
 (() => {
   if (window.__d2noUpload) return;
   window.__d2noUpload = true;
-  const isUpload = (url, method) => /\/api\/leaderboard/.test(String(url)) && String(method || "GET").toUpperCase() !== "GET";
+  // 鍛造請求的路徑也是 /api/leaderboard/forge（遊戲的 wi 常數即 /api/leaderboard），必須放行，否則淬鍊會「No reply」。
+  const isUpload = (url, method) => /\/api\/leaderboard/.test(String(url)) && !/\/api\/leaderboard\/forge(\?|$)/.test(String(url)) && String(method || "GET").toUpperCase() !== "GET";
   const blocked = () => console.info("[D2 工具包] 單機模式：已擋下排行榜上傳");
   const origFetch = window.fetch;
   window.fetch = function (input, init) {
@@ -377,6 +378,7 @@ const loadGameData = () => (window.__d2gamedataPromise ??= fetch(at("modifier/ga
     [zhUI ? "遊戲資料" : "Game data", loadGameData],
     [zhUI ? "語言模組" : "Language module", () => import(at("lang/lang.js"))],
     [zhUI ? "輔助器" : "Assistant", () => import(at("helper/autobot.js"))],
+    [zhUI ? "自動淬鍊" : "Auto forge", async () => { await import(at("helper/autoforge.js")); await import(at("helper/autoforge-ui.js")); }],
     [zhUI ? "物品引擎（遊戲裝備產生器）" : "Item engine", () => engine()],
     [zhUI ? "修改器頁面" : "Editor page", () => fetch(editorUrl()).then((r) => r.text())],
     // 自檢與其他步驟並行：載入進度條跑的同時檢查工具包與當前遊戲是否相符；問題只輸出，不阻擋遊玩。
