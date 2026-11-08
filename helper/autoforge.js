@@ -62,6 +62,11 @@ function afterHellforge(text) {
   return { status: "unknown", counts: null };
 }
 
-const AUTOFORGE = { TEMPER_CAP, normalizeTargets, totalTempers, decideNext, afterHellforge };
+// 地獄熔爐是否已失敗：遊戲寫入 hf:1 且淬鍊清空（"All tempers lost"）。熔爐倍增後仍有淬鍊，不算失敗。
+function hellforgeFailed(forge) {
+  return !!forge?.hf && totalTempers(forge.t) === 0;
+}
+
+const AUTOFORGE = { TEMPER_CAP, normalizeTargets, totalTempers, decideNext, afterHellforge, hellforgeFailed };
 if (typeof module !== "undefined" && module.exports) module.exports = AUTOFORGE;
 else if (typeof window !== "undefined") window.__d2autoforge = AUTOFORGE;

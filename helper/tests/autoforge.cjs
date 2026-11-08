@@ -24,5 +24,10 @@ ok(A.decideNext({ s0: { kind: "any", min: 0 } }, { counts: {} }).action === "don
 ok(A.afterHellforge("All tempers doubled").status === "done", "倍增 → done");
 ok(A.afterHellforge("All tempers lost").status === "failed", "清空 → failed");
 ok(A.afterHellforge("???").status === "unknown", "未知文字 → unknown");
+ok(A.hellforgeFailed({ hf: 1 }) === true, "hf 且淬鍊清空 → 熔爐失敗");
+ok(A.hellforgeFailed({ hf: 1, t: {} }) === true, "hf 且 t 為空物件 → 熔爐失敗");
+ok(A.hellforgeFailed({ hf: 1, t: { s0: 20 } }) === false, "熔爐倍增後仍有淬鍊 → 非失敗");
+ok(A.hellforgeFailed({ t: {} }) === false, "未熔爐（無 hf）→ 非失敗");
+ok(A.hellforgeFailed(undefined) === false, "無 forge 紀錄 → 非失敗");
 if (fail) { console.error(fail + " 項失敗"); process.exit(1); }
 console.log("✔ 全部通過");

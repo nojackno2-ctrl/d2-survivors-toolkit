@@ -8,6 +8,9 @@ const SLEEP_MAX = 600;
 let stepGap = SLEEP_MIN;
 const ESSENCE_NAME = "Burning Essence of Terror";
 const MEM_KEY = "d2autoforge.memory";
+const AUTOSELL_KEY = "d2autoforge.autosell";
+const loadAutoSell = () => { try { return localStorage.getItem(AUTOSELL_KEY) === "1"; } catch (e) { return false; } };
+const saveAutoSell = (v) => { try { localStorage.setItem(AUTOSELL_KEY, v ? "1" : "0"); } catch (e) { /* 無法寫入時只是不會記住 */ } };
 const KNOWN_RESULT = /Raised|temper failed|removed|doubled|lost/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const AF = () => window.__d2autoforge;
@@ -47,6 +50,8 @@ const state = {
   itemId: null, itemKey: null, itemName: "", lines: [], targets: {}, steps: 0, result: "",
   // 序列：[{ id, name, status }]，依序放上鐵砧淬鍊。目標設定沿用記憶（同稀有度＋名稱＋底材）。
   queue: [], queueRunning: false,
+  // 地獄熔爐失敗：目前裝備的熔爐是否已失敗（遊戲寫入 hf 且淬鍊清空）；autoSell 為「失敗就自動售出」開關。
+  hfFailed: false, autoSell: loadAutoSell(),
 };
 const push = (msg) => { state.msg = msg; state.log.push(msg); if (state.log.length > 60) state.log.shift(); render(); };
 
@@ -62,6 +67,23 @@ function attach(g, cls, item) {
   for (const l of state.lines) state.targets[l.key] = saved[l.key] ?? 0;
   state.steps = 0;
   state.result = "";
+  state.hfFailed = AF().hellforgeFailed(item.forge);
+}
+
+// 把鐵砧上的裝備賣給商人（遊戲 gearActions.sell）。鐵砧開著時 sell 會被改成「放上鐵砧」，故暫時關閉鐵砧狀態再賣，失敗則還原。
+function sellItem(g, cls, item) {
+  const prevUp = g.forgeUp, prevAnvil = g.anvil;
+  const held = () => (g.inventoryOf?.(cls) || []).includes(item) || Object.values(g.save?.equippedByClass?.[cls] || {}).includes(item);
+  try {
+    g.forgeUp = false;
+    g.anvil = null;
+    g.gearActions(cls, () => {}, false).sell(item);
+  } catch (e) { /* 由下方檢查判斷是否成功 */ }
+  finally { g.forgeUp = prevUp; }
+  if (held()) { g.anvil = prevAnvil; return false; }
+  state.hfFailed = false;
+  state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemName = "";
+  return true;
 }
 
 // 一步：依目前紀錄決定淬鍊／清除／熔爐，或結束。回傳 { done, result }。
@@ -85,7 +107,7 @@ async function stepOnce(g, cls) {
   if (!KNOWN_RESULT.test(text)) return { done: true, result: "遊戲拒絕或異常，已停止：" + text };
   if (d.action === "hellforge") {
     const h = AF().afterHellforge(text);
-    return { done: true, result: h.status === "done" ? "熔爐倍增，達成" : h.status === "failed" ? "熔爐清空，失敗" : "熔爐結果：" + text };
+    return { done: true, failed: h.status === "failed", item, result: h.status === "done" ? "熔爐倍增，達成" : h.status === "failed" ? "熔爐清空，失敗" : "熔爐結果：" + text };
   }
   return { done: false, result: `${d.action === "temper" ? "淬鍊" : "清除"}：${text || "（無回應）"}` };
 }
@@ -113,7 +135,15 @@ async function loop() {
     }
     retries = 0;
     state.result = r.result;
-    if (r.done) { state.running = false; out = { result: r.result, fatal: /精華不足/.test(r.result) }; push("結束：" + r.result); break; }
+    if (r.done) {
+      state.running = false;
+      if (r.failed && state.autoSell && r.item) {
+        const ok = sellItem(g, state.cls, r.item);
+        r.result = ok ? "熔爐失敗，已自動售出" : "熔爐失敗，自動售出未成功（遊戲拒絕或商人不收）";
+      }
+      state.result = r.result;
+      out = { result: r.result, fatal: /精華不足/.test(r.result) }; push("結束：" + r.result); break;
+    }
     push(`第 ${state.steps} 步 ${r.result}`);
     if (state.steps % 10 === 0) stepGap = Math.max(SLEEP_MIN, Math.round(stepGap * 0.8));
     await sleep(stepGap);
@@ -196,13 +226,16 @@ function render() {
     const opts = ["X", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((o) => `<option value="${o}"${String(o) === String(v) ? " selected" : ""}>${o === "X" ? "X 禁止" : o === 0 ? "0 不限" : o}</option>`).join("");
     return `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="flex:1">${esc(l.text)}</span><select data-key="${esc(l.key)}" style="background:#2a241b;color:#e8dcc4">${opts}</select></div>`;
   }).join("");
+  const hfNotice = state.hfFailed ? '<div style="color:#f08070;font-weight:bold">⚠ 地獄熔爐已失敗（裝備已清空）</div>' : "";
+  const autoSellBox = `<label style="display:flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input id="af-autosell" type="checkbox"${state.autoSell ? " checked" : ""}> 地獄熔爐失敗就自動售出</label>`;
   const itemLine = state.itemId
-    ? `<div><b>${esc(state.itemName)}</b> <span style="opacity:.85">${state.steps} 步</span></div><div style="opacity:.85">${esc(state.result || "")}</div>`
+    ? `<div><b>${esc(state.itemName)}</b> <span style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85">${esc(state.result || "")}</div>`
     : `<div style="opacity:.8">請把暗金、套裝或符文之語放到恰西的鐵砧上。</div>`;
   b.innerHTML = `
     ${head}
     ${itemLine}
     <div style="border-top:1px solid #4a3d25;margin-top:6px;padding-top:6px">${lineSel || ""}</div>
+    ${autoSellBox}
     ${state.itemId ? '<div style="opacity:.7;margin-top:4px">設定會自動記住（同稀有度、名稱與底材共用）。</div>' : ""}
     <div style="display:flex;gap:6px;margin-top:8px">
       <button id="af-start" type="button"${state.running || !state.itemId ? " disabled" : ""}>開始</button>
@@ -217,6 +250,15 @@ function render() {
     state.targets[sel.dataset.key] = v === "X" ? "X" : Number(v);
     rememberTargets(state.itemKey, state.targets);
   });
+  b.querySelector("#af-autosell").onchange = (e) => {
+    state.autoSell = !!e.target.checked; saveAutoSell(state.autoSell);
+    // 開關打開時，若鐵砧上已是熔爐失敗的裝備，立刻售出（不必等下一次開啟鐵砧）。
+    if (state.autoSell && state.hfFailed && !state.running && g.kit?.id) {
+      const it = anvilItem(g, g.kit.id);
+      if (it) { const ok = sellItem(g, g.kit.id, it); push(ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功（遊戲拒絕或商人不收）"); }
+    }
+    render();
+  };
   b.querySelector("#af-start").onclick = () => {
     if (state.running || !state.itemId) return;
     try { AF().normalizeTargets(state.targets); } catch (e) { return push(e.message || String(e)); }
@@ -276,8 +318,10 @@ function tick() {
   const id = item?.id ?? null;
   if (!state.running && id !== lastItemId) {
     lastItemId = id;
-    if (item && eligible(item)) attach(g, g.kit.id, item);
-    else { state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemName = ""; }
+    if (item && eligible(item)) {
+      attach(g, g.kit.id, item);
+      if (state.hfFailed && state.autoSell) { const ok = sellItem(g, g.kit.id, item); state.result = ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功"; push(state.result); }
+    } else { state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemName = ""; state.hfFailed = false; }
     render();
   } else if (!box?.isConnected) {
     state.cls = g.kit.id;

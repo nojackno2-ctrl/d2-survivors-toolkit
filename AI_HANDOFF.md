@@ -87,6 +87,7 @@
    - **未驗證**：恰西商店面板的實際畫面與位置；X 命中後清除的實機流程；熔爐清空後停止的實機流程；精華不足的停止條件。
    - **已知限制**：無備份機制，熔爐清空後裝備無法再熔爐，自動模式只能停止。
    - 測試腳本：`tests/live-harness/autoforge-live.cjs`（H_ITEM 指定裝備 JSON）。
+   - **地獄熔爐失敗自動售出（2026-11-08，已實作、待實機）**：`helper/autoforge.js` 新增 `hellforgeFailed(forge)`（hf 且淬鍊清空）；面板顯示「⚠ 地獄熔爐已失敗」，新增「地獄熔爐失敗就自動售出」開關（記在 localStorage）。售出走遊戲 `gearActions.sell`，暫時關閉 `forgeUp` 以免被改成放上鐵砧，失敗則還原鐵砧。單元測試已過。**實機（官方 /play/，隔離存檔，`tests/live-harness/autoforge-hf-sell-live.cjs`，測試裝備為 hf:1 空淬鍊的仿製暗金）**：開關關閉時顯示「⚠ 地獄熔爐已失敗」且物品保留；真實點擊勾選後物品售出、金幣 0→210、開關值寫入 localStorage。**未驗證**：真實遊戲產生的熔爐失敗裝備、穿戴中裝備能否售出、自動淬鍊跑完熔爐失敗後的自動售出路徑。
 
 ## 修改器淬鍊／地獄熔爐：已撤回（2026-11-08）
 - **決定**：使用者表示遊戲本身就能淬鍊與清除，修改器版本沒有實際用途，因此撤回修改器的淬鍊功能（editor.html、d2edit.js、webapi.js 還原；temper.js 與其測試刪除）。
@@ -115,8 +116,8 @@
   - **Jack 查證**：查明 Jack 為稀有軀幹（torso）後綴與冠軍怪名稱，非獨立裝備。
   - **翻譯與排版全面核對**：字典大規模審查，修正閃電（Lightning）、女巫（the Witch）、上衣（Jack）、嘔吐（Puke）等譯名；技能樹多段協同加成（synergyList）分段翻譯與標點修復。
 - **2026-11-08**：淬鍊屬性句未翻譯。原因：遊戲以不換行空白接上 `×N`（`saveTransfer` 的 `va`），整句查不到字典。修法：`lang/lang.js` 的 `translateString` 先剝掉尾端 `×N` 只翻核心句再接回；補 `+# to Fire / Lightning Mastery (Sorceress Only)` 字典。官方 `/play/` 實機（`tests/live-harness/temper-translate-live.cjs`）7 條樣本全譯出；再以使用者提供的存檔（法師 `Tal Rasha's Lidless Eye`，`forge.t` 有淬鍊）在隔離設定檔實機開角色畫面、移滑鼠看提示框（`tests/live-harness/temper-tooltip-live.cjs`），淬鍊行全數譯出並保留 `×N`。`[1-2]` 為數字範圍（`e.range`）不含英文，無需處理。尚未驗證：其他職業的淬鍊行、手機版提示框。
-- **2026-11-08（符文之語存檔檢查紅字）**：修改器一鍵解鎖後，存檔檢查出現「not what its roll makes」（遊戲 saveFaults）。修正：`modifier/engine-page.js` 最高數值路徑產生的符文之語不再附 roll（stats 保留）。實機（官方 `/play/`，隔離設定檔，11-04 存檔副本，`tests/live-harness/craft-live.cjs` 攔截本機修改）：修正前遊戲判定 10 項、修正後 0 項，符文之語 roll 數 79→0。依同名重新產生修復：遊戲判定 5 件種子不符，修復後 0 項。
-  - **未驗證**：存檔檢查頁按鈕的實機點擊；對真正 11-08 損壞存檔（10 件）的修復；`editor.html` 缺少 roll 的文字標示（對遊戲判定不合法的物品仍寫成「缺少 roll」，待改為顯示遊戲原文）。
+- **2026-11-08（符文之語存檔檢查紅字）**：修改器一鍵解鎖後，存檔檢查出現「not what its roll makes」（遊戲 saveFaults）。修正：`modifier/engine-page.js` 最高數值路徑產生的符文之語不再附 roll（stats 保留）。實機（官方 `/play/`，隔離設定檔，11-04 存檔副本，`tests/live-harness/craft-live.cjs` 攔截本機修改）：修正前遊戲判定 10 項、修正後 0 項，符文之語 roll 數 79→0。
+  - **未驗證**：已損壞存檔透過「依同名重新產生」修復的實機流程；存檔檢查頁按鈕的實機點擊；`editor.html` 缺少 roll 的文字標示（對遊戲判定不合法的物品仍寫成「缺少 roll」，待改為顯示遊戲原文）。
 
 ---
 
