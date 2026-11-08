@@ -89,6 +89,13 @@
    - 測試腳本：`tests/live-harness/autoforge-live.cjs`（H_ITEM 指定裝備 JSON）。
    - **地獄熔爐失敗自動售出（2026-11-08，已實作、待實機）**：`helper/autoforge.js` 新增 `hellforgeFailed(forge)`（hf 且淬鍊清空）；面板顯示「⚠ 地獄熔爐已失敗」，新增「地獄熔爐失敗就自動售出」開關（記在 localStorage）。售出走遊戲 `gearActions.sell`，暫時關閉 `forgeUp` 以免被改成放上鐵砧，失敗則還原鐵砧。單元測試已過。**實機（官方 /play/，隔離存檔，`tests/live-harness/autoforge-hf-sell-live.cjs`，測試裝備為 hf:1 空淬鍊的仿製暗金）**：開關關閉時顯示「⚠ 地獄熔爐已失敗」且物品保留；真實點擊勾選後物品售出、金幣 0→210、開關值寫入 localStorage。**未驗證**：真實遊戲產生的熔爐失敗裝備、穿戴中裝備能否售出、自動淬鍊跑完熔爐失敗後的自動售出路徑。
 
+10. **自動淬鍊：熔爐成功排除＋模擬機率（2026-11-08，單元測試通過，待實機）**：
+   - 規則：熔爐成功（`hf` 且淬鍊總數 > 0）的裝備不進入背包可淬鍊清單，序列遇到時標「熔爐已成功，略過」，單件模式停用開始；`decideNext` 對此類裝備直接回 `done`，不會 `clean` 洗掉倍增結果。實作 `hellforgeSucceeded`（`helper/autoforge.js`）與 `bagItems`／`runQueue`／`render`（`helper/autoforge-ui.js`）。
+   - 機率：面板依目前目標以 `simulateOdds`（蒙地卡羅 20000 次，呼叫真實 `decideNext`，固定種子）估算「熔爐倍增且達標」機率與平均精華消耗。參數來自實測：淬鍊成功率 100/228、熔爐倍增率 5/18；屬性分布假設均勻，實際依裝備而異。
+   - **未驗證**：實機確認倍增裝備不在清單內；面板數字隨設定變動。缺一件真實暗金／套裝（存檔內沒有可用的），需先用收藏庫解鎖流程產生。
+   - **熔爐實機樣本（2026-11-08，官方 /play/，10 個隔離存檔同時跑，The Stone of Jordan，`tests/live-harness/hf-stats-live.cjs`）**：有效 49 件，倍增 26、清空 23，倍增率 53.1%（Wilson 95%：39.4%～66.3%）。無效 16 件（伺服器限流 No reply／No connection，另有舊判定把 "not lost" 誤認為清空，已排除）。目標 1000 件未達成，降速重跑（2 存檔、間隔 1 秒）仍在第一次淬鍊就被限流，沒有新增有效樣本。
+   - **與先前批次不一致**：先前兩批不同裝備共 18 件，倍增 5 次（約 28%）。兩者信賴區間幾乎不重疊，倍增率可能與裝備有關。目前只用單一裝備，不能合併；面板的 28% 暫不更換。
+
 ## 修改器淬鍊／地獄熔爐：已撤回（2026-11-08）
 - **決定**：使用者表示遊戲本身就能淬鍊與清除，修改器版本沒有實際用途，因此撤回修改器的淬鍊功能（editor.html、d2edit.js、webapi.js 還原；temper.js 與其測試刪除）。
 - **保留的研究結論**（若日後要重做）：直接寫入 forge 會被伺服器紀錄覆蓋（不可行）；唯一的合法路徑是遊戲自己的 `Game.forgeTry`（需 `game.anvil` 設為物品 ID）。實機測試腳本保留在 `tests/live-harness/temper-game-flow-live.cjs` 與 `temper-editor-ui-live.cjs`。熔爐 UI 點擊未測。
