@@ -322,9 +322,10 @@
     <h2>訂製裝備</h2>
     <p class="dim">自選底材、品質與屬性。魔法名稱依詞綴組合，稀有名稱由遊戲隨機產生，固定品質依物品定義命名；詞綴或固定物品無法唯一判定時會提示。物品等級為 99，穿戴需求由遊戲依屬性計算。屬性範圍列出此底材可用的詞綴，並非所有詞綴都能同時出現。未解除修改限制時，屬性必須符合原版規則（固定物品依原版定義，魔法／稀有依原版詞綴組合），否則無法製作。</p>
     <div class="craftform">
-      <span>裝備分類</span><select id="xCategory"></select>
-      <span>底材</span><select id="xBase"></select>
-      <span>品質</span><select id="xRar"></select>
+      <span>裝備類型</span><select id="xCategory"></select>
+      <span id="xRarLabel" hidden>品質</span><select id="xRar" hidden></select>
+      <span id="xKindLabel" hidden>武器種類</span><select id="xKind" hidden></select>
+      <span id="xBaseLabel" hidden>底材</span><select id="xBase" hidden></select>
     </div>
     <p id="c-companion-note" class="note" hidden></p>
     <div id="c-sec-fixed" style="margin-top:10px" hidden>
@@ -364,7 +365,7 @@
       <h3 style="margin:0 0 4px;font-size:1rem">孔數與珠寶</h3>
       <div id="xSock"></div>
     </div>
-    <div class="bar" style="margin-top:12px"><span class="dim">放到</span><select id="xDest"></select><button class="primary" id="xMake">製作</button><button id="xDiagnose">輸出裝備設定</button></div>
+    <div class="bar" id="xMakeBar" style="margin-top:12px" hidden><span class="dim">放到</span><select id="xDest"></select><button class="primary" id="xMake">製作</button><button id="xDiagnose">輸出裝備設定</button></div>
     <div id="xDiagPanel" hidden><p class="dim">複製下列內容貼給協助除錯的人；不包含存檔內容。</p><textarea id="xDiagText" rows="12" readonly style="width:100%;box-sizing:border-box"></textarea><div class="bar"><button id="xDiagCopy">複製裝備設定</button><span id="xDiagMsg" class="dim"></span></div></div>
   </section>
 </div>
@@ -730,6 +731,8 @@ function renderKeys(v) {
 
 /* ---------- 暗金收藏（分類、一鍵解鎖、一鍵數值最高） ---------- */
 const TYPE_ZH = { weapon: "武器", head: "頭盔", body: "盔甲", shield: "盾牌／副手", gloves: "手套", belt: "腰帶", boots: "鞋子", ring: "戒指", amulet: "項鍊", charm: "護身符", other: "其他" };
+// 武器種類（底材 itype 代碼 → 中文）
+const WEAPON_KIND_ZH = { swor: "劍", axe: "斧", taxe: "投斧", mace: "錘", hamm: "鎚", club: "棍棒", staf: "法杖", wand: "魔杖", scep: "權杖", orb: "法球", bow: "弓", abow: "亞馬遜弓", xbow: "弩", spea: "矛", pole: "長柄武器", aspe: "亞馬遜矛", jave: "標槍", ajav: "亞馬遜標槍", knif: "匕首", tkni: "飛刀", h2h: "爪", h2h2: "刺客爪" };
 let CATALOG = null, colF = { rarity: "all", type: "all", owned: "all", q: "" };
 let KIND = {};  // 底材名稱 → 底材類型（符文之語依類型各收一次）
 async function catalog() {
@@ -998,6 +1001,9 @@ async function makeDiag() {
 
 /* ---------- 製作裝備 ---------- */
 let BASES = null, craftSel = null;
+// 製作裝備逐步選單的狀態：init 只做一次；chainReq 用來丟棄過期的非同步結果
+let craftChainInited = false, craftChainReq = 0;
+const craftNameCache = new Map(); // "裝備類型|品質" → Set(底材名稱)，與解除限制無關，可快取
 const destOptions = () => containers().filter(x => !x.grp).map(x => `<option value="${x.id}">${esc(x.label)}${x.id.includes(":") && !x.id.startsWith("st:shared") ? "（" + (CLASS_ZH[x.id.split(":")[1]] ?? "") + "）" : ""}</option>`).join("");
 async function ensureBases() {
   if (!BASES) {
@@ -1018,21 +1024,11 @@ function updateCraftRarities() {
     if (cOpts.some(([k]) => k === prevC)) cRar.value = prevC;
     else cRar.value = cOpts[0][0];
   }
-  // #xRar 選項（未解除限制時排除暗金、套裝、符文之語，預設為可用的第一個品質）
-  const xRar = $("#xRar");
-  if (xRar) {
-    const prevX = xRar.value;
-    const xOpts = Object.entries(RARITY_ZH);
-    // 未解除限制時預設稀有（普通品質不能有詞綴，當預設會讓加上的屬性全被標成不符合規則）
-    const defX = unlocked() ? "unique" : "rare";
-    const targetX = xOpts.some(([k]) => k === prevX) ? prevX : defX;
-    xRar.innerHTML = xOpts.map(([k, v]) => `<option value="${k}" ${k === targetX ? "selected" : ""}>${v}</option>`).join("");
-    if (targetX) xRar.value = targetX;
-  }
+  // 製作頁的品質／底材選單由 refreshCraftChain 依序重建（解除限制變動時也需重算）
   // 底材與目錄資料已載入時重繪清單與相關介面
   if (typeof BASES !== "undefined" && BASES) {
     if (typeof CATALOG !== "undefined" && CATALOG && typeof renderCraftList === "function") renderCraftList();
-    if (typeof updateCraftRanges === "function" && $("#xBase")?.options.length) updateCraftRanges();
+    if (craftChainInited) refreshCraftChain();
     if (page === "library" && craftSel && typeof renderCraftPick === "function") renderCraftPick();
   }
 }
@@ -1048,24 +1044,88 @@ async function renderLibrary() {
   renderCraftList();
   if (craftSel) await renderCraftPick();
 }
+// ---------- 製作裝備：逐步選單（裝備類型 → 品質 → 武器種類（僅武器）→ 底材） ----------
+// 每一步選完才顯示下一步；品質與底材只列出該組合真的有的項目。
+const craftPh = (t) => `<option value="" disabled selected>${t}</option>`;
+const craftTypeOf = (b) => b.type !== "quest" && (TYPE_ZH[b.type] ? b.type : "other");
+async function ensureRwBases() {
+  await catalog();
+  return RW_BASES ??= Object.fromEntries(await Promise.all(CATALOG.filter(c => c.rarity === "runeword" && !c.unavailable).map(async c => [c.name, await window.api.engine("runewordBases", c.name)])));
+}
+// 此裝備類型、此品質有哪些底材（暗金／套裝看目錄，符文之語看原版允許的底材，魔法／稀有／普通為該類型全部底材）
+async function craftBaseNames(category, rarity) {
+  const key = category + "|" + rarity;
+  if (craftNameCache.has(key)) return craftNameCache.get(key);
+  await ensureBases(); await catalog();
+  const inCat = new Set(BASES.filter(b => craftTypeOf(b) === category).map(b => b.name));
+  let names;
+  if (rarity === "runeword") {
+    const rw = await ensureRwBases();
+    names = new Set(Object.values(rw).flatMap(v => Array.isArray(v) ? v : []).filter(n => inCat.has(n)));
+  } else if (rarity === "unique" || rarity === "set") {
+    names = new Set(CATALOG.filter(c => c.rarity === rarity && !c.unavailable && inCat.has(c.base)).map(c => c.base));
+  } else names = inCat;
+  craftNameCache.set(key, names);
+  return names;
+}
+// reset：哪一步被改動，其後的選擇清空（"cat"／"rar"／"kind"）；undefined 表示只重繪並保留選擇（例如切換解除限制）
+async function refreshCraftChain(reset) {
+  const req = ++craftChainReq;
+  const catSel = $("#xCategory"), rarSel = $("#xRar"), kindSel = $("#xKind"), baseSel = $("#xBase");
+  const cat = catSel.value, weapon = cat === "weapon";
+  const prevRar = reset === "cat" ? "" : rarSel.value;
+  const prevKind = reset === "cat" || reset === "rar" ? "" : kindSel.value;
+  const prevBase = reset ? "" : baseSel.value;
+  // 1. 品質：只列出此裝備類型至少有一個底材的品質；未解除限制時排除暗金、套裝、符文之語
+  const rars = [];
+  if (cat) for (const r of Object.keys(RARITY_ZH)) {
+    if (!unlocked() && FORBIDDEN_CRAFT_RARITIES.has(r)) continue;
+    if ((await craftBaseNames(cat, r)).size) rars.push(r);
+  }
+  if (req !== craftChainReq) return;
+  rarSel.innerHTML = craftPh("請選擇品質") + rars.map(r => `<option value="${r}">${RARITY_ZH[r]}</option>`).join("");
+  rarSel.value = rars.includes(prevRar) ? prevRar : "";
+  const rar = rarSel.value;
+  const names = cat && rar ? await craftBaseNames(cat, rar) : new Set();
+  if (req !== craftChainReq) return;
+  // 2. 武器種類（僅武器，且品質已選）：只列出此品質有底材的種類
+  const showKind = weapon && !!rar;
+  let kinds = [];
+  if (showKind) {
+    const order = Object.keys(WEAPON_KIND_ZH);
+    kinds = [...new Set(BASES.filter(b => names.has(b.name)).map(b => b.itype))]
+      .sort((a, b) => (order.indexOf(a) + 1 || 999) - (order.indexOf(b) + 1 || 999));
+  }
+  kindSel.innerHTML = showKind ? craftPh("請選擇武器種類") + `<option value="all">全部武器</option>` + kinds.map(k => `<option value="${esc(k)}">${esc(WEAPON_KIND_ZH[k] ?? k)}</option>`).join("") : "";
+  kindSel.value = showKind && (prevKind === "all" || kinds.includes(prevKind)) ? prevKind : "";
+  const kind = kindSel.value;
+  // 3. 底材：前面的選擇都完成後才列出
+  const ready = !!cat && !!rar && (!weapon || !!kind);
+  const list = ready
+    ? BASES.filter(b => names.has(b.name) && (!weapon || kind === "all" || b.itype === kind)).sort((a, b) => a.level - b.level)
+    : [];
+  baseSel.innerHTML = ready ? craftPh("請選擇底材") + list.map(b => `<option value="${esc(b.name)}">${esc(baseZh({ base: b.name }))}（需求 ${b.level}）</option>`).join("") : "";
+  baseSel.value = list.some(b => b.name === prevBase) ? prevBase : "";
+  $("#xRarLabel").hidden = rarSel.hidden = !cat;
+  $("#xKindLabel").hidden = kindSel.hidden = !showKind;
+  $("#xBaseLabel").hidden = baseSel.hidden = !ready;
+  updateCraftRanges();
+}
 async function renderCraft() {
   try { await ensureBases(); }
   catch (e) { status(e.message, "bad"); return; }
-  if (!$("#xBase").options.length) {
-    const categories = [...new Set(BASES.filter(b => b.type !== "quest").map(b => TYPE_ZH[b.type] ? b.type : "other"))];
-    $("#xCategory").innerHTML = categories.map(t => `<option value="${esc(t)}">${esc(TYPE_ZH[t])}</option>`).join("");
-    const updateBases = () => {
-      const type = $("#xCategory").value;
-      const list = BASES.filter(b => b.type !== "quest" && (TYPE_ZH[b.type] ? b.type : "other") === type);
-      $("#xBase").innerHTML = list.sort((a, b) => a.level - b.level).map(b => `<option value="${esc(b.name)}">${esc(baseZh({ base: b.name }))}（需求 ${b.level}）</option>`).join("");
-    };
-    updateBases();
-    $("#xCategory").onchange = () => { updateBases(); updateCraftRanges(); };
+  if (!craftChainInited) {
+    craftChainInited = true;
+    const categories = [...new Set(BASES.filter(b => craftTypeOf(b)).map(b => craftTypeOf(b)))];
+    $("#xCategory").innerHTML = craftPh("請選擇裝備類型") + categories.map(t => `<option value="${esc(t)}">${esc(TYPE_ZH[t])}</option>`).join("");
+    $("#xCategory").onchange = () => refreshCraftChain("cat");
+    $("#xRar").onchange = () => refreshCraftChain("rar");
+    $("#xKind").onchange = () => refreshCraftChain("kind");
+    $("#xBase").onchange = () => updateCraftRanges();
     $("#xAdd").onclick = () => { $("#cmods tbody").insertAdjacentHTML("beforeend", craftModRow()); updateCraftRanges(); };
     $("#xAddPre").onclick = () => { $("#cmods-pre tbody").insertAdjacentHTML("beforeend", craftModRow("prefix")); updateCraftRanges(); };
     $("#xAddSuf").onclick = () => { $("#cmods-suf tbody").insertAdjacentHTML("beforeend", craftModRow("suffix")); updateCraftRanges(); };
     $("#xAddImp").onclick = () => { $("#cmods-imp tbody").insertAdjacentHTML("beforeend", craftModRow("imp")); updateCraftRanges(); };
-    $("#xBase").onchange = $("#xRar").onchange = updateCraftRanges;
     $("#xName").onchange = () => renderCraftFixed();
     const onCraftInput = async (e) => {
       const tr = e.target.closest("tr"); if (!tr) return;
@@ -1090,6 +1150,7 @@ async function renderCraft() {
       }
     }
     $("#xMake").onclick = async () => {
+      if (!$("#xBase").value || !$("#xRar").value) return status("請依序選擇裝備類型、品質、底材", "bad");
       const before = JSON.stringify(craftSnapshot());
       await makeCustom();
       lastCraftAttempt = { 設定: before, 結果: $("#status").textContent };
@@ -1103,8 +1164,8 @@ async function renderCraft() {
     };
   }
   updateCraftRarities();
-  // 品質選單重建後重新檢查各列屬性與刷新欄位數量顯示
-  updateCraftRanges();
+  // 逐步選單依目前選擇重建（已選的項目若仍有效則保留）
+  refreshCraftChain();
   const dest = $("#xDest").value;
   $("#xDest").innerHTML = destOptions();
   if ([...$("#xDest").options].some(o => o.value === dest)) $("#xDest").value = dest;
@@ -1445,6 +1506,13 @@ async function renderCraftFixed() {
 let craftRangeRequest = 0;
 async function updateCraftRanges() {
   const request = ++craftRangeRequest;
+  // 類型、品質、底材尚未選完時不顯示任何屬性區塊與製作按鈕
+  if (!$("#xBase").value || !$("#xRar").value) {
+    for (const id of ["#c-sec-fixed", "#c-affix-total", "#c-sec-pre", "#c-sec-suf", "#c-sec-imp", "#c-sec-flat", "#c-sec-sock"]) $(id).hidden = true;
+    $("#xMakeBar").hidden = true;
+    return;
+  }
+  $("#xMakeBar").hidden = false;
   const item = { base: $("#xBase").value, rarity: $("#xRar").value };
   const fixedKind = !unlocked() && FORBIDDEN_CRAFT_RARITIES.has(item.rarity);
   $("#c-sec-fixed").hidden = !fixedKind;
