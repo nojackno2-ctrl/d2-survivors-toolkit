@@ -60,7 +60,8 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
     const it = G.__seeded(seed, () => G.__makeAffix(base, rarity, ILVL, ILVL));
     if (!it) return null;
     if (free) return { item: it, legit: false };
-    it.roll = [1, seed, ILVL];
+    // roll 版本與遊戲掉落（Y8）相同：遊戲資料有法杖技能時為 2，否則為 1（否則含法杖技能的詞綴讀檔時會被判定 seed 不符）
+    it.roll = [(stats.staffMods && stats.classSkills) ? 2 : 1, seed, ILVL];
     return { item: it, legit: true };
   }
 
@@ -525,7 +526,11 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
       else if (r.auto ? !(m.value > 0 && m.value <= Math.ceil(r[1] * 1.05)) : !(m.value >= r[0] && m.value <= r[1])) out.push({ code: "range", stat: m.stat, value: m.value, min: r[0], max: r[1] });
       seen.add(m.stat);
     }
-    const free = mods.filter(m => !m.implicit && !m.auto);
+    // 法杖技能（staff:true，遊戲 O8 依底材的 StaffMods 加上）不是詞綴：另外檢查數量與數值，不列入詞綴比對
+    const staffList = mods.filter(m => m.staff);
+    if (staffList.length > 3) out.push({ code: "error", why: "法杖技能超過 3 項" });
+    for (const m of staffList) if (!/^skill:[A-Za-z]+$/.test(m.stat) || !Number.isInteger(m.value) || m.value < 1 || m.value > 3) out.push({ code: "range", stat: m.stat, value: m.value, min: 1, max: 3 });
+    const free = mods.filter(m => !m.implicit && !m.auto && !m.staff);
     if (item.rarity === "normal") { if (free.length) out.push({ code: "normalMods" }); return out; }
     if (!affixPlan(base, item.rarity, free)) {
       const ranges = this?.affixInfo?.(base.name, item.rarity)?.ranges ?? {};

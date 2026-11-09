@@ -5,7 +5,7 @@
   "makeSet": "function (N)\\(e,t,n\\)\\{let r=N\\.get\\(e\\.base\\),i=N\\(e\\.name,n\\);return N\\(\\{id:N\\(\\),base:r\\.name,type:r\\.type,rarity:`set`",
   "makeRuneword": "function (N)\\(e,t,n,r,i\\)\\{let a=N\\(e\\.name,e\\.runes,N\\(t\\),i\\)",
   "affixes": "(N)=\\[\\.\\.\\.N\\(\\),\\.\\.\\.N\\(\\),\\{name:`of Attraction`",
-  "affixApplies": "function (N)\\(e,t,n\\)\\{return e\\.cls&&e\\.cls!==\\(t\\.cls\\?\\?n\\)",
+  "affixApplies": "function (N)\\(e,t,n\\)\\{(?:return e\\.cls&&e\\.cls!==\\(t\\.cls\\?\\?n\\)|if\\(e\\.cls&&e\\.cls!==\\(t\\.cls\\?\\?n\\)\\)return!1)",
   "makeAffix": "function (N)\\(e,t,n,r,i(?:,a=2)?\\)\\{t===`normal`&&\\(e\\.type===`ring`",
   "classKits": "function N\\(e\\)\\{return Object\\.hasOwn\\((N),e\\)\\?N\\[e\\]\\?\\?null:null\\}",
   "modDefs": "(N)=\\{fireBolt:\\[\\{id:`split`,name:`Split`,describe:",
