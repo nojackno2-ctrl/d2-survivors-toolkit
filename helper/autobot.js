@@ -39,6 +39,9 @@
       monsterDensity10x: false,
       allElites: false,
       forgeMax: false,
+      larzukMax: false,
+      pauseStageTime: false,
+      summonAllBosses: false,
       infiniteRerolls: false,
       maxDropRate: false,
       maxGoldRate: false,
@@ -329,6 +332,8 @@
   const cleanupReady = (g) => autoMode() === "quest" && (g?.world?.player?.level ?? 0) >= 99 && !!g?.save && !!hellClearedSaves.get(g.save)?.has(g.kit?.id);
   function deathReason(s, danger, now, healingFailed = false) {
     if (!assistOn() || !settings.deathProtection.enabled || !s.p || !s.hp || s.hp.now <= 0 || s.w === protectedWorld) return "";
+    // 無敵實際生效時（遊戲修改總開關開啟且無敵開啟）傷害會被攔截，不需要因預估傷害離場。
+    if (settings.cheat?.enabled && settings.cheat.invincible) return "";
     if (danger.damage > 0 && danger.damage >= s.hp.now && (healingFailed || !healingAvailable(s, now))) return "預估致命傷害且無可用回血藥水";
     if (s.hp.now / s.hp.max * 100 <= settings.deathProtection.emergencyHpPercent && now - lastHp < settings.potion.hpCooldownMs) return "生命低於緊急門檻且回血藥水冷卻中";
     // 依使用者要求：死亡保護只看「預判接下來的傷害會不會致死」，不再以被包圍判定
@@ -395,10 +400,10 @@
     if (!item) return false;
     // 烏伯鑰匙與器官（Pandemonium 材料，遊戲 itemArt 的 Iv 名單）即使關閉任務自動推進也要撿，否則 Terror 首領掉落會被略過。
     if (item.type === "quest") return questOn() || PANDEMONIUM_BASES.includes(item.base);
-    // 交由遊戲原版判斷保留、隱藏與自動販售，避免輔助器再套用另一套品質規則。
+    // 交由遊戲原版判斷保留、隱藏與自動販售，避免輔助器再套用另一套品質規則。遊戲 20261105.3 新增 hidesell。
     let decision = drop.loot;
     try { if (typeof game?.loot === "function") decision = game.loot(item); } catch { return false; }
-    return decision === "pick" || decision === "sell";
+    return decision === "pick" || decision === "sell" || decision === "hidesell";
   }
 
   // 撿拾距離（原版 player.pickupRadius，基礎 70）：開啟「全圖撿寶」時放大到全圖，原版自己把掉落物吸過來；撿哪些仍由遊戲過濾器決定。
@@ -1697,26 +1702,104 @@
     if (!cloneAutoSince.has(w)) cloneAutoSince.set(w, w.time);
     const since = cloneAutoSince.get(w);
     if (since === "done" || !(w.time - since >= 1.5)) return;
+    const result = summonClone();
+    lastAction = result;
+    // 場上仍有首領時先不算用掉機會，等首領死亡後下一次檢查再召喚；其他結果（成功、已召喚過、不相容）則結束本局的自動召喚。
+    if (result === "場上已有首領，待首領死亡後再召喚") return;
     cloneAutoSince.set(w, "done");
-    lastAction = summonClone();
+  }
+  // 關卡內持續召喚頭目：依序輪流召喚會掉落鑰匙、器官或精華的頭目；場上頭目死亡後間隔約 3 秒再召喚下一隻。
+  // 名單：鑰匙（女伯爵、召喚師、尼拉塞克）、器官（墨菲斯托、迪亞布羅、巴爾）、精華（各恐懼階首領，即第一幕至第五幕首領）。
+  // 第三欄為器官代碼：Uber 首領（Lilith、Duriel、Izual）死亡會掉落器官，依遊戲資料 Wt 的 organ 對應。
+  const SUMMON_ALL_BOSSES = [
+    ["corruptrogue3", "The Countess"], ["summoner", "The Summoner"], ["nihlathakboss", "Nihlathak"],
+    ["andariel", "Andariel", null, true], ["duriel", "Duriel", null, true], ["mephisto", "Mephisto", null, true], ["clone", "分身"], ["baalcrab", "Baal", null, true],
+    ["uberandariel", "Lilith", "dhn"], ["uberduriel", "Duriel", "bey"], ["uberizual", "Izual", "mbr"],
+    ["ubermephisto", "Mephisto", "mbr"], ["uberdiablo", "Diablo", "dhn"], ["uberbaal", "Baal", "bey"],
+  ];
+  // 遊戲的 Uber 首領以 actBoss 階級生成，死亡時掉器官；但 actBoss 死亡會觸發 actCleared（結束關卡）。
+  // 這裡記下已召喚且死亡的 Uber 首領，攔截其對應的一次 actCleared，讓關卡繼續輪序；器官仍會正常掉落。
+  // 依關卡世界（world）分開記錄，避免上一局殘留的已死亡 Uber 首領攔截下一局的 actCleared。
+  const uberPendingBy = new WeakMap();
+  // 診斷用計數（唯讀，供實機測試檢查攔截是否生效）。
+  const uberGuardStats = { tracked: 0, actClearedSeen: 0, suppressed: 0, lastPending: null };
+  window.__d2uberGuard = uberGuardStats;
+  const pendingOf = (w) => { let list = uberPendingBy.get(w); if (!list) { list = []; uberPendingBy.set(w, list); } return list; };
+  const guardedEvents = new WeakSet();
+  function guardActCleared(w) {
+    const events = w?.events;
+    if (!Array.isArray(events) || guardedEvents.has(events)) return;
+    guardedEvents.add(events);
+    const pending = pendingOf(w);
+    const push = events.push;
+    events.push = function (...items) {
+      const kept = items.filter((item) => {
+        if (item?.type !== "actCleared") return true;
+        uberGuardStats.actClearedSeen++;
+        uberGuardStats.lastPending = pending.map((m) => ({ name: m.name, rank: m.rank, dead: !!m.dead }));
+        // 召喚輪序開啟時，關卡不因任何 actCleared 結束（清場會開啟傳送門並進入下一層）；由玩家關閉「持續召喚頭目」後才恢復原版流程。
+        if (settings.cheat?.summonAllBosses && settings.cheat?.enabled) { for (let k = pending.length - 1; k >= 0; k--) if (pending[k].dead) pending.splice(k, 1); uberGuardStats.suppressed++; return false; }
+        const i = pending.findIndex((m) => m.dead);
+        if (i < 0) return true;
+        pending.splice(i, 1);
+        uberGuardStats.suppressed++;
+        return false;
+      });
+      return push.apply(this, kept);
+    };
+  }
+  const bossLoopSince = new WeakMap();
+  function summonAllBosses(g) {
+    const w = g?.world;
+    if (!settings.cheat?.summonAllBosses || g.state !== "playing" || !w?.player) return;
+    guardActCleared(w);
+    if (w.boss && !w.boss.dead && w.boss.life > 0) return;
+    if (typeof g.director?.boss !== "function") { lastAction = "找不到遊戲的頭目召喚函式，遊戲版本可能不相容"; return; }
+    const st = bossLoopSince.get(w) ?? { i: 0, next: 0 };
+    bossLoopSince.set(w, st);
+    if (w.time < st.next) return;
+    const [monster, name, organ, actBossEntry] = SUMMON_ALL_BOSSES[st.i % SUMMON_ALL_BOSSES.length];
+    st.i++;
+    st.next = w.time + 3;
+    // 分身（喬丹之石）：遊戲的 cloneComes 每局只能召喚一次，分身為當前幕的首領（第四幕為迪亞布羅）；已召喚過就略過。
+    if (monster === "clone") {
+      if (w.clone?.met) return;
+      if (typeof g.director?.cloneComes !== "function") { lastAction = "找不到遊戲的分身函式，遊戲版本可能不相容"; return; }
+      w.clone = w.clone || {};
+      try { g.director.cloneComes(w); lastAction = "持續召喚頭目：分身"; } catch (err) { lastAction = "召喚分身失敗：" + (err?.message || err); }
+      return;
+    }
+    // 遊戲的正式超級頭目會在生成時帶入鑰匙（key）；直接呼叫 director.boss 不會帶入，因此這裡補上對應的鑰匙代碼，否則不會掉落鑰匙。
+    const SUMMON_KEYS = { corruptrogue3: "pk1", summoner: "pk2", nihlathakboss: "pk3" };
+    try {
+      const boss = g.director.boss(w, monster, name, []);
+      if (SUMMON_KEYS[monster]) boss.key = SUMMON_KEYS[monster];
+      // 恐懼階中，幕首領以 actBoss 生成才會掉精華（遊戲 actBoss 死亡分支）；Uber 首領另掉器官。一般階段維持 boss，避免多餘掉落。
+      if (organ || (actBossEntry && w.terror)) { boss.rank = "actBoss"; if (organ) boss.organ = organ; pendingOf(w).push(boss); uberGuardStats.tracked++; }
+      lastAction = "持續召喚頭目：" + name;
+    } catch (err) { lastAction = "召喚頭目失敗：" + (err?.message || err); }
   }
   function applyCheats(g) {
     if (!g || !settings.cheat?.enabled) { restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); return; }
-    // 補充背包中的恐怖燃燒精華；關閉後保留已寫入的物品。
-    // 遊戲的精華格式：type 為 "essence"、base 為名稱 "Burning Essence of Terror"，數量存在 count（單疊上限 99）。
-    if (settings.cheat.forgeMax) {
+    // 補充背包中的精華（恐怖燃燒精華、拉蘇克精華）；關閉後保留已寫入的物品。
+    // 遊戲的精華格式：type 為 "essence"、base 為名稱，數量存在 count（單疊上限 99）。
+    const essenceCheats = [["forgeMax", "Burning Essence of Terror"], ["larzukMax", "Larzuk's Essence"]];
+    for (const [key, name] of essenceCheats) {
+      if (!settings.cheat[key]) continue;
       const cls = g.kit?.id, inv = cls && g.save?.inventoryByClass?.[cls];
-      if (Array.isArray(inv)) {
-        const name = "Burning Essence of Terror";
-        const stacks = inv.filter((item) => item?.type === "essence" && item.base === name);
-        if (stacks.length) {
-          stacks[0].count = 99;
-          for (const extra of stacks.slice(1)) inv.splice(inv.indexOf(extra), 1);
-        } else {
-          inv.push({ id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), base: name, type: "essence", rarity: "normal", name, level: 1, mods: [], count: 99 });
-        }
+      if (!Array.isArray(inv)) continue;
+      const stacks = inv.filter((item) => item?.type === "essence" && item.base === name);
+      if (stacks.length) {
+        stacks[0].count = 99;
+        for (const extra of stacks.slice(1)) inv.splice(inv.indexOf(extra), 1);
+      } else {
+        inv.push({ id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), base: name, type: "essence", rarity: "normal", name, level: 1, mods: [], count: 99 });
       }
     }
+    // 關卡時間暫停：遊戲以 time - actStart 計算本關經過時間；每幀把 actStart 對齊 time，經過時間永遠是 0，玩家可一直刷怪。
+    // 關閉後不需還原，時間從當下重新計算。
+    if (settings.cheat.pauseStageTime && g.world && Number.isFinite(g.world.time) && Number.isFinite(g.world.actStart)) g.world.actStart = g.world.time;
+    summonAllBosses(g);
     const currentGold = (Number.isFinite(g.save?.gold) ? g.save.gold : 0) + (Number.isFinite(g.world?.gold) ? g.world.gold : 0);
     if (settings.cheat.maxGoldRate && currentGold >= 9000000000) {
       settings.cheat.maxGoldRate = false;
@@ -1982,7 +2065,8 @@
       fire(loadSkillTables(url), "技能表");
       const proto = module.Game?.prototype;
       if (typeof proto?.tick !== "function" || typeof proto.drinkFrom !== "function" || typeof proto.steer !== "function") continue;
-      wrap(proto, "tick", (original) => function (...args) { if (alive) { game = this; guarded(this, performance.now()); } return Reflect.apply(original, this, args); });
+      // 遊戲的波次邏輯會在 tick 中以擊殺數改寫 actStart（world.actStart = time - ps(…)），所以時間暫停也要在原版 tick 結束後再對齊一次，否則在恐懼階會失效。
+      wrap(proto, "tick", (original) => function (...args) { if (alive) { game = this; guarded(this, performance.now()); } const out = Reflect.apply(original, this, args); if (alive && settings.cheat?.enabled && settings.cheat.pauseStageTime && this.world && Number.isFinite(this.world.time) && Number.isFinite(this.world.actStart)) this.world.actStart = this.world.time; return out; });
       // 原版 steer 會為拾取目標重建 walkTarget，記住該參照才能在停止時完全放手。
       wrap(proto, "steer", (original) => function (...args) { const result = Reflect.apply(original, this, args); if (alive && this === game && ownReach && this.world?.reaching === ownReach) ownWalk = this.walkTarget; return result; });
       gameplayCompatible = true; hookUrl = url; hookNote = "已掛接原版 Game，等待下一幀"; fire(checkGameVersion(url), "版本檢查"); return;
@@ -2138,6 +2222,9 @@
   field("cheat.allElites", "一般怪物全部變成精英以上等級（全圖小怪升階為金/藍怪）");
   group("流程與掉落修改");
   field("cheat.forgeMax", "恐怖燃燒精華數量 99（鍛造機率無法修改）");
+  field("cheat.larzukMax", "拉蘇克精華數量 99（加入背包，可用來增加物品鑲孔）");
+  field("cheat.pauseStageTime", "關卡時間暫停（本關計時不前進，可一直戰鬥刷怪）");
+  field("cheat.summonAllBosses", "關卡內持續召喚頭目（輪流召喚鑰匙頭目、各幕首領與 Uber 首領 Lilith、Duriel、Izual；Uber 首領掉器官，恐懼階中鑰匙可掉落）");
   field("cheat.infiniteRerolls", "選技能的重抽無限次數（升級選卡無限重抽、跳過與排除）");
   field("cheat.maxDropRate", "掉寶率最高（大幅提升暗金/套裝/稀有尋寶率）");
   field("cheat.maxXp", "經驗值加成最大（擊殺與任務獲得的經驗值乘以 1000 倍，升級極快）");
