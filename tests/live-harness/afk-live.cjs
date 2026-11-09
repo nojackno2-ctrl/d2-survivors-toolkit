@@ -93,11 +93,9 @@ app.whenReady().then(async () => {
     if (startP) await click(startP);
     await sleep(3000);
     out.runningBefore = await win.webContents.executeJavaScript(`({ running: window.__d2autoforgeUI.state.running, steps: window.__d2autoforgeUI.state.steps, result: window.__d2autoforgeUI.state.result, log: (window.__d2autoforgeUI.state.log || []).slice(-8) })`);
-    const afkP = await rectOf("#af-afk");
-    out.afkBtn = afkP;
-    if (!afkP) throw new Error("找不到掛機按鈕");
-    out.hitBeforeClick = await win.webContents.executeJavaScript(`(() => { const e = document.elementFromPoint(${afkP.x}, ${afkP.y}); return e ? { tag: e.tagName, id: e.id, text: (e.textContent || "").slice(0, 20), inPanel: !!e.closest("#d2autoforge-panel") } : null; })()`);
-    await click(afkP);
+    out.afkBtn = "工具包選單：掛機";
+    await win.webContents.executeJavaScript(`(async () => { const g = window.__d2autobot.game; const isPaused = () => document.body.classList.contains("frontend-over-run") || document.body.classList.contains("frontend-open") || (() => { const q = document.getElementById("paused"); return !!q && !q.classList.contains("hidden") && getComputedStyle(q).display !== "none"; })(); for (let i = 0; i < 20 && !isPaused(); i++) { try { g.pause(); } catch (e) {} await new Promise(r => setTimeout(r, 700)); } document.getElementById("d2toolkit-launcher")?.click(); await new Promise(r => setTimeout(r, 400)); [...(document.getElementById("d2toolkit-menu")?.children || [])].find(c => c.textContent === "掛機")?.click(); })()`);
+    await sleep(800);
     await sleep(800);
     out.overlay = await win.webContents.executeJavaScript(`(() => {
       const o = document.querySelector("#d2autoforge-afk"); if (!o) return { exists: false };

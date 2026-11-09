@@ -80,7 +80,25 @@ const state = {
   // 伺服器無回應暫停的結束時間（毫秒時間戳）；0 代表沒有在暫停。
   pauseUntil: 0,
 };
-const push = (msg) => { state.msg = msg; state.log.push(msg); if (state.log.length > 60) state.log.shift(); render(); };
+// 淬鍊中每一步都會 push：只更新訊息、步數與結果文字，不重寫整個面板。
+// 整塊重寫會在滑鼠按下與放開之間換掉按鈕，導致「掛機」等點擊失效。
+function liveUpdate() {
+  const b = box;
+  if (!b?.isConnected || state.folded || !state.itemId) return false;
+  const m = b.querySelector("#af-msg"), st = b.querySelector("#af-steps"), rs = b.querySelector("#af-result");
+  if (!m || !st || !rs) return false;
+  m.textContent = state.msg;
+  st.textContent = state.steps + " 步";
+  rs.textContent = state.result || "";
+  return true;
+}
+function requestRender() {
+  if (window.__d2afk) return; // 掛機中遮罩蓋住面板，喚醒時會完整重畫
+  if (state.folded && box?.isConnected) { box.title = "自動淬鍊：" + state.msg; return; }
+  if (state.running && liveUpdate()) return;
+  render();
+}
+const push = (msg) => { state.msg = msg; state.log.push(msg); if (state.log.length > 60) state.log.shift(); requestRender(); };
 
 // 讓面板對準鐵砧上的裝備：載入該裝備的屬性列，並帶入記住的目標。
 function attach(g, cls, item) {
@@ -268,21 +286,6 @@ async function runQueue() {
   push("序列結束");
 }
 
-// ---- 掛機：整個畫面蓋上全黑遮罩，自動淬鍊照常執行；點畫面即喚醒。 ----
-let afkEl = null;
-function setAfk(on) {
-  if (!on) { afkEl?.remove(); afkEl = null; return; }
-  if (afkEl?.isConnected) return;
-  afkEl = document.createElement("div");
-  afkEl.id = "d2autoforge-afk";
-  afkEl.title = "點擊畫面喚醒";
-  afkEl.style.cssText = "position:fixed;inset:0;z-index:2147483600;background:#000;cursor:pointer;color:#111;font:12px sans-serif;display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;user-select:none;";
-  afkEl.textContent = "掛機中（點擊畫面喚醒）";
-  // 遮罩吃掉點擊，避免穿透到遊戲；點擊即喚醒。
-  afkEl.addEventListener("pointerdown", (e) => { e.stopPropagation(); e.preventDefault(); setAfk(false); });
-  document.body.append(afkEl);
-}
-
 // ---- 浮動面板（固定右上，不放在恰西商店裡） ----
 let box = null;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -331,7 +334,7 @@ function oddsHtml() {
 function render() {
   ensureZhDict();
   const g = game();
-  if (!g) return;
+  if (!g || window.__d2afk) return;
   const b = ensureBox();
   const head = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="flex:1;color:#d4a84a">自動淬鍊（鐵砧單件）</b><button id="af-fold" type="button">${state.folded ? "展開" : "收合"}</button></div>`;
   // 收合：只顯示一個小圖示（執行中會亮綠點），點了才展開成完整面板。
@@ -356,15 +359,14 @@ function render() {
     : state.hfSucceeded ? '<div style="color:#d4a84a;font-weight:bold">✔ 地獄熔爐已成功（倍增），不進入自動淬鍊</div>' : "";
   const autoSellBox = `<label style="display:flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input id="af-autosell" type="checkbox"${state.autoSell ? " checked" : ""}> 地獄熔爐失敗就自動售出</label>`;
   const itemLine = state.itemId
-    ? `<div><b>${esc(state.itemObj ? zhItemName(state.itemObj) : "")}</b> <span style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85">${esc(state.result || "")} <b id="af-cd" style="color:#d4a84a">${pauseCountdownText()}</b></div>`
+    ? `<div><b>${esc(state.itemObj ? zhItemName(state.itemObj) : "")}</b> <span id="af-steps" style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85"><span id="af-result">${esc(state.result || "")}</span> <b id="af-cd" style="color:#d4a84a">${pauseCountdownText()}</b></div>`
     : `<div style="opacity:.8">${g.forgeUp ? "請把暗金、套裝或符文之語放到恰西的鐵砧上。" : "請在下方「背包可淬鍊」點「選取」，挑一件暗金、套裝或符文之語。"}</div>`;
   // 控制列放在面板最上方：「開始」有序列就依序淬鍊，沒有序列就淬鍊鐵砧上這件。
   const canStart = !state.running && !state.queueRunning && (state.queue.length > 0 || (!!state.itemId && !state.hfSucceeded));
   const controlRow = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
       <button id="af-start" type="button"${canStart ? "" : " disabled"} title="序列有裝備就依序淬鍊，否則淬鍊鐵砧上的這件">開始</button>
       <button id="af-stop" type="button"${state.running || state.queueRunning ? "" : " disabled"}>停止</button>
-      <button id="af-afk" type="button" title="畫面變全黑，自動淬鍊照常執行，點畫面喚醒">掛機</button>
-      <span style="flex:1;align-self:center;opacity:.9">${esc(state.msg)}</span>
+      <span id="af-msg" style="flex:1;align-self:center;opacity:.9">${esc(state.msg)}</span>
     </div>`;
   b.innerHTML = `
     ${head}
@@ -389,7 +391,8 @@ function render() {
     // 開關打開時，若鐵砧上已是熔爐失敗的裝備，立刻售出（不必等下一次開啟鐵砧）。
     if (state.autoSell && !state.running && g.kit?.id) {
       const it = anvilItem(g, g.kit.id);
-      if (it && AF().hellforgeFailed(it.forge)) { const ok = sellItem(g, g.kit.id, it); push(ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功（遊戲拒絕或商人不收）"); }
+      // 魔法裝備的淬鍊會被遊戲還原，不能因此自動售出。
+      if (eligible(it) && AF().hellforgeFailed(it.forge)) { const ok = sellItem(g, g.kit.id, it); push(ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功（遊戲拒絕或商人不收）"); }
     }
     render();
   };
@@ -403,7 +406,6 @@ function render() {
     loop();
   };
   b.querySelector("#af-stop").onclick = () => { state.running = false; state.queueRunning = false; push("已停止"); };
-  b.querySelector("#af-afk").onclick = () => setAfk(true);
   // 選取：把背包裡的裝備放上「鐵砧」（遊戲內部狀態），tick 會自動載入它的屬性與記住的目標。
   b.querySelectorAll("[data-select]").forEach((x) => x.onclick = () => { if (!state.running) { g.anvil = x.dataset.select; lastItemId = undefined; render(); } });
   b.querySelectorAll("[data-add]").forEach((x) => x.onclick = () => {
@@ -475,7 +477,7 @@ function tick() {
     if (item && usedHellforge(item)) {
       // 用過地獄熔爐（成功或失敗）的裝備不載入面板；開啟自動售出時，熔爐失敗的照樣售出。
       state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemObj = null; state.hfFailed = false; state.hfSucceeded = false;
-      if (AF().hellforgeFailed(item.forge) && state.autoSell) { const ok = sellItem(g, g.kit.id, item); push(ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功"); }
+      if (eligible(item) && AF().hellforgeFailed(item.forge) && state.autoSell) { const ok = sellItem(g, g.kit.id, item); push(ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功"); }
     } else if (item && eligible(item)) {
       attach(g, g.kit.id, item);
     } else { state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemObj = null; state.hfFailed = false; state.hfSucceeded = false; }
@@ -500,6 +502,8 @@ window.__d2autoforgeUI = {
     tick();
     return true;
   },
+  // 掛機結束（喚醒）後由工具包呼叫，重畫面板。
+  redraw() { render(); },
   lines(id) { const g = game(); return g ? lineList(g, state.cls || g.kit?.id, state.level, id) : []; },
   start(slots, cls) {
     const g = game();

@@ -336,6 +336,8 @@ const prevClose = window.__d2editClose;
 if (prevClose) prevClose(true);
 window.__d2editLauncher?.remove();
 window.__d2toolkitMenu?.remove();
+window.__d2perfClose?.(); // 重新點書籤時關掉舊的效能頁與其動畫迴圈
+document.getElementById("d2autoforge-afk")?.remove(); window.__d2afk = false; // 掛機遮罩（重新點書籤時清掉舊的）
 window.__d2editStopWatch?.();
 window.__d2editClose = (quiet) => { if (frame) { frame.remove(); frame = null; window.removeEventListener("message", onMessage); } if (!quiet && written) location.reload(); };
 window.__d2editIsOpen = () => !!frame;
@@ -377,6 +379,241 @@ registerToolkitFeature({ id: "autobot", label: zhUI ? "輔助器" : "Assistant",
 registerToolkitFeature({ id: "autoforge", label: zhUI ? "自動淬鍊" : "Auto forge", order: 15, open: () => { if (!window.__d2autoforgeUI?.open()) alert(zhUI ? "請先進入遊戲（選好職業）再開啟自動淬鍊" : "Enter the game (pick a class) first"); } });
 registerToolkitFeature({ id: "lang", label: zhUI ? "語言" : "Language", order: 20, open: () => document.getElementById("d2lang-btn")?.click() });
 registerToolkitFeature({ id: "editor", label: zhUI ? "修改器" : "Editor", order: 30, open: () => openEditor() });
+// 效能頁面：全螢幕顯示即時指標（只讀取，不修改遊戲與存檔）。
+registerToolkitFeature({ id: "perf", label: zhUI ? "效能" : "Performance", order: 40, open: () => openPerfPage() });
+// 優化開關（效能頁）：分兩組。
+// 一般遊玩（保留畫面）：lowRes 降低解析度（畫面較模糊，省 GPU 填充率）。
+// 掛機（不需畫面）：afkSkipMain 掛機時略過主畫面繪製（離屏貼圖照常）。
+const PERF_OPT_KEY = "d2toolkit.perfopts.v1";
+const perfOpts = (() => {
+  const d = { lowRes: false, fewerFx: false, memoryTidy: false, afkSkipMain: true };
+  try { return { ...d, ...JSON.parse(localStorage.getItem(PERF_OPT_KEY) || "{}") }; } catch (e) { return d; }
+})();
+window.__d2perfOpts = perfOpts;
+function savePerfOpts() { try { localStorage.setItem(PERF_OPT_KEY, JSON.stringify(perfOpts)); } catch (e) { /* 無法寫入時只是不會記住 */ } }
+// 解析度：記下原始 resolution，降低時乘以 0.75，關閉時還原；畫布尺寸改變後也會再套用。
+function applyResolution(g) {
+  const r = g?.app?.renderer;
+  if (!r || typeof r.resize !== "function" || !r.screen) return false;
+  r.__d2baseRes ??= r.resolution;
+  const want = perfOpts.lowRes ? r.__d2baseRes * 0.75 : r.__d2baseRes;
+  if (Math.abs(r.resolution - want) < 1e-6) return true;
+  try { r.resize(r.screen.width, r.screen.height, want); return true; } catch (e) { console.warn("[D2 工具包] 解析度套用失敗", e); return false; }
+}
+setInterval(() => { if (perfOpts.lowRes) applyResolution(window.__d2autobot?.game); }, 2000);
+// 減少特效：只隱藏效果的顯示物件（gfx.visible），不改動 rings／zones 等會影響判定的陣列。
+// 記憶體整理：移除已結束（dead）的效果項目，並請 Pixi 回收閒置貼圖。兩者都只在遊戲進行中由計時器執行，不進入遊戲迴圈。
+const FX_LISTS = ["flashes", "rings", "zones"];
+function tidyEffects(g) {
+  const w = g?.world; if (!w || !g?.app) return;
+  for (const key of FX_LISTS) {
+    const arr = w[key]; if (!Array.isArray(arr)) continue;
+    if (perfOpts.memoryTidy) for (let i = arr.length - 1; i >= 0; i--) if (arr[i]?.dead) arr.splice(i, 1);
+    for (const e of arr) {
+      const gfx = e?.gfx; if (!gfx) continue;
+      if (perfOpts.fewerFx) { if (gfx.visible !== false) { gfx.visible = false; gfx.__d2hid = true; } }
+      else if (gfx.__d2hid) { gfx.visible = true; gfx.__d2hid = false; }
+    }
+  }
+  // 記憶體整理：貼圖預設不自動回收（autoGarbageCollect=false），開啟時改為自動回收；正在使用的貼圖每幀都會被觸碰，不會被誤收。關閉時還原。
+  for (const t of g.app.renderer.texture?.managedTextures || []) {
+    if (!t) continue;
+    if (perfOpts.memoryTidy) { if (t.__d2agc === undefined) t.__d2agc = t.autoGarbageCollect; t.autoGarbageCollect = true; }
+    else if (t.__d2agc !== undefined) { t.autoGarbageCollect = t.__d2agc; delete t.__d2agc; }
+  }
+  // 記憶體整理（手動回收）：畫面上沒有使用、且閒置超過 3 秒的貼圖來源，卸載其 GPU 資料（之後被用到會自動重新上傳）。
+  // Pixi 的自動 GC 對這些貼圖沒有作用（實測 gc.run 前後數量不變），故改為手動卸載。
+  if (perfOpts.memoryTidy && gc && typeof gc.now === "number") {
+    const inUse = new Set(); const st = [g.app.stage]; let n = 0;
+    while (st.length && n < 200000) { const o = st.pop(); n++; if (o?.texture?.source) inUse.add(o.texture.source); for (const c of (o?.children || [])) st.push(c); }
+    for (const src of [...(g.app.renderer.texture?.managedTextures || [])]) {
+      if (!src || inUse.has(src)) continue;
+      if (gc.now - (src._gcLastUsed ?? gc.now) > 3000) { try { src.unload?.(); } catch (e) { /* 忽略單一貼圖的失敗 */ } }
+    }
+  }
+  // 記憶體整理：縮短 Pixi 貼圖的閒置回收時間（預設很長，殘留貼圖堆積），並執行一次回收；關閉時還原。
+  const gc = g.app.renderer.gc;
+  if (gc && typeof gc.run === "function") {
+    if (perfOpts.memoryTidy) {
+      gc.__d2baseUnused ??= gc.maxUnusedTime;
+      gc.maxUnusedTime = 3000;
+      try { gc.run(); } catch (e) { /* 不支援時略過 */ }
+    } else if (gc.__d2baseUnused != null) {
+      gc.maxUnusedTime = gc.__d2baseUnused; gc.__d2baseUnused = null;
+    }
+  }
+}
+setInterval(() => tidyEffects(window.__d2autobot?.game), 500);
+
+// 掛機（工具包選單）：整個畫面蓋上黑幕，遊戲與輔助器照常執行（打怪、升級、自動淬鍊）；點畫面喚醒。
+// 省電方式只略過「主畫面」的 Pixi 繪製（container 為 app.stage 且沒有 target），離屏貼圖（如物品圖示）照常繪製。
+let afkEl = null;
+function hookRenderer(g) {
+  const r = g?.app?.renderer, stage = g?.app?.stage;
+  if (!r || !stage || r.__d2afkHooked || typeof r.render !== "function") return;
+  const orig = r.render;
+  r.render = function (...args) {
+    if (window.__d2afk) {
+      const opts = args[0];
+      const container = opts && typeof opts === "object" && "container" in opts ? opts.container : opts;
+      const target = opts && typeof opts === "object" ? opts.target : undefined;
+      const stats = (window.__d2afkStats ??= { skippedMain: 0, passedOffscreen: 0, passedMainTarget: 0 });
+      if (container === stage && !target && perfOpts.afkSkipMain) { stats.skippedMain++; return; }
+      stats[target ? "passedOffscreen" : "passedMainTarget"]++;
+    }
+    return orig.apply(this, args);
+  };
+  r.__d2afkHooked = true;
+}
+function setAfk(on) {
+  window.__d2afk = !!on;
+  if (!on) { afkEl?.remove(); afkEl = null; window.__d2autoforgeUI?.redraw?.(); return; }
+  hookRenderer(window.__d2autobot?.game);
+  if (afkEl?.isConnected) return;
+  afkEl = document.createElement("div");
+  afkEl.id = "d2autoforge-afk";
+  afkEl.title = zhUI ? "點擊畫面喚醒" : "Tap to wake";
+  afkEl.style.cssText = "position:fixed;inset:0;z-index:2147483600;background:#000;cursor:pointer;color:#111;font:12px sans-serif;display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;user-select:none;";
+  afkEl.textContent = zhUI ? "掛機中（點擊畫面喚醒）" : "AFK (tap to wake)";
+  afkEl.addEventListener("pointerdown", (e) => { e.stopPropagation(); e.preventDefault(); setAfk(false); });
+  document.body.append(afkEl);
+}
+function enterAfk() {
+  const g = window.__d2autobot?.game;
+  if (!g?.kit) { alert(zhUI ? "請先進入遊戲（選好職業）再掛機" : "Enter the game (pick a class) first"); return; }
+  if (pausedNow()) { try { g.resume(); } catch (e) { console.warn("[D2 工具包] 無法恢復遊戲", e); } }
+  setAfk(true);
+}
+registerToolkitFeature({ id: "afk", label: zhUI ? "掛機" : "AFK", order: 16, open: () => enterAfk() });
+let perfPage = null;
+function openPerfPage() {
+  if (perfPage) return;
+  const t = (zh, en) => (zhUI ? zh : en);
+  const page = document.createElement("div");
+  page.id = "d2perf-page";
+  page.style.cssText = "position:fixed;inset:0;z-index:2147483647;overflow:auto;background:#14110d;color:#e8dcc4;font:15px 'Microsoft JhengHei',system-ui,sans-serif;padding:max(12px, env(safe-area-inset-top)) 16px 24px;box-sizing:border-box;touch-action:manipulation";
+  for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) page.addEventListener(ev, (e) => e.stopPropagation());
+  const head = document.createElement("div");
+  head.style.cssText = "display:flex;align-items:center;justify-content:space-between;max-width:520px;margin:0 auto 12px;";
+  const title = document.createElement("div");
+  title.textContent = t("效能", "Performance");
+  title.style.cssText = "font:bold 20px 'Microsoft JhengHei',system-ui,sans-serif;color:#d4a84a";
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.textContent = t("關閉", "Close");
+  closeBtn.style.cssText = "min-height:44px;min-width:72px;padding:0 14px;border:1px solid #d4a84a;border-radius:6px;background:transparent;color:#d4a84a;font:bold 15px 'Microsoft JhengHei',system-ui,sans-serif;cursor:pointer";
+  head.append(title, closeBtn);
+  const card = document.createElement("div");
+  card.style.cssText = "max-width:520px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px;padding:14px 16px;border:1px solid #d4a84a;border-radius:8px;background:rgba(20,17,13,.95);font-variant-numeric:tabular-nums";
+  const note = document.createElement("div");
+  note.style.cssText = "max-width:520px;margin:10px auto 0;font-size:13px;color:#a89878;line-height:1.5";
+  note.textContent = t("畫面更新率與影格間隔由本頁面自己的動畫迴圈量測；遊戲暫停時仍會反映當前畫面的負載。數據每 0.5 秒更新。", "FPS and frame time are measured by this page's own animation loop. Updates every 0.5 seconds.");
+  // 優化開關：分一般遊玩（保留畫面）與掛機（不需畫面）兩組
+  const optCard = document.createElement("div");
+  optCard.style.cssText = "max-width:520px;margin:12px auto 0;padding:14px 16px;border:1px solid #d4a84a;border-radius:8px;background:rgba(20,17,13,.95)";
+  const addToggle = (group, label, hint, key, onChange) => {
+    const row = document.createElement("label");
+    row.style.cssText = "display:flex;gap:10px;align-items:flex-start;margin-top:10px;cursor:pointer;min-height:44px";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = !!perfOpts[key]; cb.style.cssText = "width:22px;height:22px;margin-top:2px;flex:0 0 auto";
+    const txt = document.createElement("div");
+    txt.innerHTML = "";
+    const l = document.createElement("div"); l.textContent = label; l.style.cssText = "font-weight:bold";
+    const h = document.createElement("div"); h.textContent = hint; h.style.cssText = "font-size:13px;color:#a89878;line-height:1.5";
+    txt.append(l, h);
+    row.append(cb, txt);
+    cb.onchange = () => { perfOpts[key] = cb.checked; savePerfOpts(); onChange?.(); };
+    optCard.append(row);
+    return group;
+  };
+  const gTitle = (t) => { const d = document.createElement("div"); d.textContent = t; d.style.cssText = "font-weight:bold;color:#d4a84a;margin-top:6px"; optCard.append(d); };
+  gTitle(t("一般遊玩（保留畫面）", "Normal play (keep visuals)"));
+  addToggle(0, t("減少特效", "Fewer effects"), t("隱藏部分技能與爆炸的視覺特效（光環、閃光、區域效果的圖像）；傷害與判定照常。", "Hide some skill and explosion visuals (rings, flashes, zone art). Damage and hit logic unchanged."), "fewerFx", () => tidyEffects(window.__d2autobot?.game));
+  addToggle(0, t("記憶體整理", "Memory tidy"), t("定期清除已結束的特效物件，並回收閒置貼圖。不影響畫面與遊戲進度。", "Periodically clear finished effect objects and recycle idle textures. No change to visuals or progress."), "memoryTidy", () => tidyEffects(window.__d2autobot?.game));
+  addToggle(0, t("降低解析度", "Lower resolution"), t("以約 75% 解析度繪製再放大，畫面較模糊，可省 GPU 填充率。", "Render at ~75% resolution and scale up. Slightly blurrier; saves GPU fill."), "lowRes", () => applyResolution(window.__d2autobot?.game));
+  gTitle(t("掛機（不需畫面）", "AFK (no visuals needed)"));
+  addToggle(0, t("掛機時略過主畫面繪製", "Skip main drawing while AFK"), t("掛機遮罩蓋住畫面時不畫主畫面，遊戲邏輯與淬鍊照常執行；離屏貼圖仍會繪製。", "While AFK the main scene is not drawn; game logic and forging keep running. Off-screen textures still render."), "afkSkipMain");
+  page.append(head, card, optCard, note);
+
+  // 指標列：[名稱, 值的更新函式（僅在打開時與每 0.5 秒呼叫）]
+  const rows = [];
+  const addRow = (label) => {
+    const k = document.createElement("div");
+    k.textContent = label;
+    k.style.cssText = "color:#d4a84a;overflow-wrap:anywhere;min-width:0";
+    const v = document.createElement("div");
+    v.textContent = "—";
+    v.style.cssText = "text-align:right;word-break:break-word";
+    card.append(k, v);
+    return (text) => { v.textContent = text; };
+  };
+  const setFps = addRow(t("畫面更新率（FPS）", "FPS"));
+  const setFrame = addRow(t("影格間隔（平均／最慢）", "Frame time (avg / worst)"));
+  const setLong = addRow(t("長任務（>50ms，自開啟後）", "Long tasks (>50ms, since open)"));
+  const setHeap = addRow(t("JS 記憶體（已用／上限）", "JS heap (used / limit)"));
+  const setDom = addRow(t("DOM 節點數", "DOM nodes"));
+  const setRes = addRow(t("已載入資源（數量／約略大小）", "Resources (count / approx size)"));
+  const setLoad = addRow(t("頁面載入（DOMContentLoaded／load）", "Page load (DOMContentLoaded / load)"));
+  const setDev = addRow(t("視窗與裝置", "Viewport & device"));
+
+  // 影格量測：記錄最近 1 秒的 rAF 時間戳。
+  const stamps = [];
+  let rafId = 0;
+  const sampleFrame = (now) => {
+    stamps.push(now);
+    while (stamps.length && now - stamps[0] > 1000) stamps.shift();
+    rafId = requestAnimationFrame(sampleFrame);
+  };
+  rafId = requestAnimationFrame(sampleFrame);
+
+  // 長任務觀察（Chrome／Edge 支援；其他瀏覽器會顯示不支援）。
+  let longCount = 0, longMax = 0, observer = null;
+  try {
+    observer = new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) { longCount++; if (e.duration > longMax) longMax = e.duration; }
+    });
+    observer.observe({ type: "longtask", buffered: false });
+  } catch (e) { observer = null; }
+
+  const nav = performance.getEntriesByType?.("navigation")?.[0];
+  const fmtMs = (n) => (Number.isFinite(n) ? Math.round(n) + " ms" : "—");
+  const fmtMb = (n) => (Number.isFinite(n) ? (n / 1048576).toFixed(1) + " MB" : "—");
+  const fmtKb = (n) => (Number.isFinite(n) ? (n / 1024).toFixed(0) + " KB" : "—");
+  setLoad(nav ? fmtMs(nav.domContentLoadedEventEnd) + " ／ " + fmtMs(nav.loadEventEnd) : t("不支援", "Not supported"));
+  setDev(Math.round(innerWidth) + "×" + Math.round(innerHeight) + "，DPR " + devicePixelRatio + (navigator.hardwareConcurrency ? "，" + navigator.hardwareConcurrency + " 核心" : ""));
+  if (!observer) setLong(t("此瀏覽器不支援", "Not supported"));
+
+  const update = () => {
+    if (stamps.length >= 2) {
+      const span = stamps[stamps.length - 1] - stamps[0];
+      let worst = 0;
+      for (let i = 1; i < stamps.length; i++) worst = Math.max(worst, stamps[i] - stamps[i - 1]);
+      setFps(String(stamps.length));
+      setFrame((span / (stamps.length - 1)).toFixed(1) + " ms ／ " + worst.toFixed(1) + " ms");
+    } else setFps("—");
+    if (observer) setLong(longCount + " 次，最長 " + Math.round(longMax) + " ms");
+    const m = performance.memory;
+    setHeap(m ? fmtMb(m.usedJSHeapSize) + " ／ " + fmtMb(m.jsHeapSizeLimit) : t("此瀏覽器不提供", "Not available in this browser"));
+    setDom(String(document.getElementsByTagName("*").length));
+    const res = performance.getEntriesByType?.("resource") || [];
+    const bytes = res.reduce((s, e) => s + (e.transferSize || e.encodedBodySize || 0), 0);
+    setRes(res.length + " 個 ／ " + fmtKb(bytes));
+  };
+  update();
+  const timer = setInterval(update, 500);
+
+  const close = () => {
+    cancelAnimationFrame(rafId);
+    clearInterval(timer);
+    observer?.disconnect();
+    page.remove();
+    perfPage = null;
+  };
+  closeBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); close(); };
+  perfPage = { close };
+  window.__d2perfClose = close;
+  document.body.append(page);
+}
 function renderToolkitMenu() {
   toolkitMenu.textContent = "";
   const list = [...toolkitFeatures.values()].sort((a, b) => a.order - b.order);

@@ -67,6 +67,12 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+000000000. **【2026-11-09，未提交】遊戲 20261105.3 官方更新 25 項分析完成**（`verify/reports/impact.json` 待分析 0）。
+   - 分析以 Codex／AGY 子代理平行執行（每項一個），再對「無法確認」項目深入一輪；結論須附新版程式位置，關鍵項由主代理以 grep 複核。
+   - **需修改 2 項（已修正）**：#6 拾取過濾新動作 `hidesell`，`helper/autobot.js:406` 撿寶判斷補上；#10 魔法裝備不可淬鍊且會被還原，`helper/autoforge-ui.js:395、480` 熔爐失敗自動售出前加 `eligible()`。
+   - **驗證**：單元測試 `node helper/tests/toolkit-1105.cjs` 14 項通過（含移除 hidesell 的舊版對照會失敗）；官方網址實機載入通過（選單出現、輔助器 connected、無 console 錯誤）。兩項行為因函式未對外暴露，未在實機直接觸發。
+   - **原則（使用者 2026-11-09 指示）**：只驗證工具包是否符合官方新規則，不去驗證官方功能本身（例如牛叫是否停止、熔爐砍回 20 的遷移）。
+   - 另新增實機腳本 `tests/live-harness/cow-moo-live.cjs`（複製牛約 1 秒死亡並移出 `world.enemies`）、`hf-once-live.cjs`（直接寫入存檔的 forge 不被遊戲保留）。
 0000000000. **【已實作並實機驗證 2026-11-09，未提交】遊戲修改「關卡內持續召喚頭目」與「恐懼階自動召喚分身」**（`helper/autobot.js`，`summonAllBosses`、`autoSummonClone`）。
    - **輪序（一次一隻，每隻死後間隔約 3 秒）**：女伯爵、召喚師、尼拉塞克（補上 `boss.key` = pk1/pk2/pk3）、安達莉爾、都瑞爾、墨菲斯托、分身、巴爾，以及 Uber 首領 Lilith（dhn）、Duriel（bey）、Izual（mbr）、Mephisto（mbr）、Diablo（dhn）、Baal（bey）。
    - **鑰匙**：直接呼叫 `director.boss` 不會帶入 `key`，必須自行補上，否則不會掉鑰匙。遊戲規則：鑰匙只在 `world.terror` 存在時掉落（`itemArt-BPHOVK4V.js` 的 `bossSlain`）。
