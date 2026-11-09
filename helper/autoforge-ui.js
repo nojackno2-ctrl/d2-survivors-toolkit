@@ -96,17 +96,30 @@ function attach(g, cls, item) {
   state.hfSucceeded = AF().hellforgeSucceeded(item.forge);
 }
 
-// 把鐵砧上的裝備賣給商人（遊戲 gearActions.sell）。鐵砧開著時 sell 會被改成「放上鐵砧」，故暫時關閉鐵砧狀態再賣，失敗則還原。
+// 把裝備賣給商人（遊戲 gearActions.sell）。
+// 注意：遊戲的 sell 只會從「背包」（inventoryOf）以參照移除物品，且鐵砧開著時會被改成「放上鐵砧」。
+// 因此：(1) 一律以 id 重新找到目前的物件（熔爐後存檔物件可能已換新，舊參照會對不上而賣不掉）；
+// (2) 倉庫的裝備先用 fromStash 移回背包再賣；(3) 以 id 確認裝備確實已離開背包、倉庫與已裝備，才回報成功。
 function sellItem(g, cls, item) {
+  const id = item?.id;
+  if (!id) return false;
   const prevUp = g.forgeUp, prevAnvil = g.anvil;
-  const held = () => (g.inventoryOf?.(cls) || []).includes(item) || Object.values(g.save?.equippedByClass?.[cls] || {}).includes(item);
+  const findNow = () => ownItem(g, cls, id);
+  const inBag = () => (g.inventoryOf?.(cls) || []).some((x) => x?.id === id);
+  const stillThere = () => !!findNow();
   try {
     g.forgeUp = false;
     g.anvil = null;
-    g.gearActions(cls, () => {}, false).sell(item);
+    const cur = findNow();
+    if (cur && !inBag() && stashOf(g, cls).some((x) => x?.id === id)) {
+      // 倉庫的裝備：先移回背包。fromStash 只在 gearActions 帶 stash 參數時存在。
+      g.gearActions(cls, () => {}, true).fromStash(cur);
+    }
+    const now = findNow();
+    if (now && inBag()) g.gearActions(cls, () => {}, true).sell(now);
   } catch (e) { /* 由下方檢查判斷是否成功 */ }
   finally { g.forgeUp = prevUp; }
-  if (held()) { g.anvil = prevAnvil; return false; }
+  if (stillThere()) { g.anvil = prevAnvil; return false; }
   state.hfFailed = false;
   state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemObj = null;
   return true;
@@ -203,7 +216,9 @@ async function loop() {
 // 熔爐已成功（倍增）的裝備不得進入自動淬鍊清單。
 // 目前來源清單：背包或個人倉庫（依面板的「來源」選擇）。
 const sourceList = (g, cls) => (state.source === "stash" ? stashOf(g, cls) : (g.inventoryOf?.(cls) || []));
-const bagItems = (g, cls) => sourceList(g, cls).filter((x) => eligible(x) && !AF().hellforgeSucceeded(x.forge));
+// 只要用過地獄熔爐（成功倍增或失敗清空，遊戲都會寫入 forge.hf）就排除：每件只能熔爐一次，之後不能再淬鍊。
+const usedHellforge = (x) => !!x?.forge?.hf;
+const bagItems = (g, cls) => sourceList(g, cls).filter((x) => eligible(x) && !usedHellforge(x));
 // 不論來源，依 ID 找序列中的裝備（背包、倉庫、已裝備皆可）。
 const ownItem = (g, cls, id) => [...(g.inventoryOf?.(cls) || []), ...stashOf(g, cls), ...Object.values(g.save?.equippedByClass?.[cls] || {})].find((x) => x?.id === id) || null;
 const hasTarget = (key) => Object.values(loadMemory()[key] || {}).some((v) => v === "X" || Number(v) > 0);
@@ -219,7 +234,7 @@ async function runQueue() {
     if (!state.queueRunning) break;
     if (q.status === "完成") continue;
     const raw = ownItem(g, cls, q.id);
-    if (raw && AF().hellforgeSucceeded(raw.forge)) { q.status = "熔爐已成功，略過"; render(); continue; }
+    if (raw && usedHellforge(raw)) { q.status = "已用過地獄熔爐，略過"; render(); continue; }
     const item = raw && eligible(raw) ? raw : null;
     if (!item) { q.status = "不在背包或倉庫，略過"; render(); continue; }
     if (!hasTarget(itemKey(item))) { q.status = "未設定目標，略過"; render(); continue; }
@@ -356,9 +371,9 @@ function render() {
   b.querySelector("#af-autosell").onchange = (e) => {
     state.autoSell = !!e.target.checked; saveAutoSell(state.autoSell);
     // 開關打開時，若鐵砧上已是熔爐失敗的裝備，立刻售出（不必等下一次開啟鐵砧）。
-    if (state.autoSell && state.hfFailed && !state.running && g.kit?.id) {
+    if (state.autoSell && !state.running && g.kit?.id) {
       const it = anvilItem(g, g.kit.id);
-      if (it) { const ok = sellItem(g, g.kit.id, it); push(ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功（遊戲拒絕或商人不收）"); }
+      if (it && AF().hellforgeFailed(it.forge)) { const ok = sellItem(g, g.kit.id, it); push(ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功（遊戲拒絕或商人不收）"); }
     }
     render();
   };
@@ -441,9 +456,12 @@ function tick() {
   const id = item?.id ?? null;
   if (!state.running && id !== lastItemId) {
     lastItemId = id;
-    if (item && eligible(item)) {
+    if (item && usedHellforge(item)) {
+      // 用過地獄熔爐（成功或失敗）的裝備不載入面板；開啟自動售出時，熔爐失敗的照樣售出。
+      state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemObj = null; state.hfFailed = false; state.hfSucceeded = false;
+      if (AF().hellforgeFailed(item.forge) && state.autoSell) { const ok = sellItem(g, g.kit.id, item); push(ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功"); }
+    } else if (item && eligible(item)) {
       attach(g, g.kit.id, item);
-      if (state.hfFailed && state.autoSell) { const ok = sellItem(g, g.kit.id, item); state.result = ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功"; push(state.result); }
     } else { state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemObj = null; state.hfFailed = false; state.hfSucceeded = false; }
     render();
   } else if (!box?.isConnected) {

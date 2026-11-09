@@ -67,6 +67,10 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+00000. **【已實作 2026-11-09，未提交】自動淬鍊：用過地獄熔爐的裝備不再列出；熔爐失敗自動售出修正**（`helper/autoforge-ui.js`）。
+   - **改動**：背包／倉庫可淬鍊清單排除所有 `forge.hf`（成功倍增或失敗清空皆排除，遊戲每件只能熔爐一次）；放上鐵砧時同樣不載入面板（tick 直接跳過），熔爐失敗且開啟自動售出者仍會售出；序列遇到則標示「已用過地獄熔爐，略過」。`sellItem` 改以 id 重新找到目前物件（熔爐後舊參照會賣不掉）、倉庫裝備先 `fromStash` 移回背包再賣，並以 id 確認真的離開背包／倉庫才回報成功（修前倉庫會假成功）。
+   - **實機（官方 `/play/`，隔離存檔）**：`tests/live-harness/autoforge-sell-stash-live.cjs`。修前：清單仍列出熔爐失敗裝備；倉庫售出失敗（金幣不變）但面板顯示「已自動售出」。修後：清單排除、背包與倉庫皆售出（金幣 398→796）。
+   - **未驗證**：真實熔爐「失敗」後由 `loop()` 呼叫售出的路徑（使用者回報的背包「沒作用」可能就在這條路徑，參照過期推測，尚未在實機重現）；需要能穩定觸發熔爐失敗的測試流程。
 0000. **【已實作 2026-11-09，未提交】修改器「製作裝備」改為逐步選單**（`modifier/editor.html`）：順序為「裝備類型 → 品質 → 武器種類（僅武器）→ 底材」，每一步選完才顯示下一步（未選完前屬性區塊與製作按鈕皆隱藏）。品質與底材只列出該組合真的有的項目（暗金／套裝依原版目錄、符文之語依原版允許底材、魔法／稀有／普通為該類型全部底材）；未解除限制時不列暗金、套裝、符文之語。改動任一上游選擇會清空其後的選擇。實作：`refreshCraftChain`、`craftBaseNames`（`modifier/editor.html`）。**已驗證**：`electron modifier/tests/craft-weapon-kind-ui.cjs`（夾具：未解除限制與解除限制兩種情境）通過；craft-diagnostic／socket／save-faults／weapon-sets UI 測試與 craft-limits、item-db 皆通過。**未驗證**：官方 `/play/` 實機（`tests/live-harness/craft-weapon-kind-live.js` 已更新為新流程，但 `craft-live.cjs` 的 H_IN=editor 仍找不到修改器 iframe）；手機版排版。
 000. **【已實作 2026-11-09，未提交】修改器「製作裝備」武器種類選單**（`modifier/editor.html`）：分類選「武器」時出現「武器種類」下拉（全部武器／劍／斧／弓…），依底材 `itype` 篩選底材清單；其他分類隱藏。`WEAPON_KIND_ZH` 為中文對照，`modifier/i18n.js` 補英文。**已驗證**：`electron modifier/tests/craft-weapon-kind-ui.cjs`（本機 editor.html 夾具）通過，既有 craft-diagnostic／socket／save-faults UI 測試與 craft-limits、item-db 皆通過。**未驗證**：官方 `/play/` 實機（`tests/live-harness/craft-weapon-kind-live.js` 已寫好，但 `craft-live.cjs` 的 H_IN=editor 找不到修改器 iframe，需先解決開啟修改器的前置步驟）；手機版排版。
 00. **【已發布 2026-11-09】自動淬鍊：背景執行、序列、來源、同名加入、未升級警告**（`helper/autoforge-ui.js`）。發布方式：`verify/publish.cjs --confirm` 因需要遊戲更新的正式測試紀錄而被擋，改以 git 直接推送 main（工具包改動不涉及遊戲版本）。
