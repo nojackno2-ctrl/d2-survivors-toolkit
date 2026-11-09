@@ -165,6 +165,7 @@
         <h3>2026-11-09</h3>
     <ul>
       <li>修改器：「製作裝備」改為逐步選單，依序選裝備類型、品質、（武器的）武器種類、底材；每一步選完才會出現下一步，且只列出有底材的選項。</li>
+      <li>修改器：未解除修改限制也能製作暗金、套裝與符文之語，屬性種類與數量固定為原版定義，不能新增或刪除。</li>
       <li>工具包：暫停時左上角的按鈕合併為單一「工具包」，點開後選擇自動淬鍊、輔助器、語言、修改器，之後新增的功能也會收進同一個選單。</li>
       <li>自動淬鍊：不必走到恰西的鐵砧，可從工具包直接開啟，在背包選取暗金、套裝或符文之語淬鍊。</li>
       <li>自動淬鍊：「開始」併入序列，有序列就依序淬鍊；控制列（開始／停止／掛機）移到面板最上方。</li>
@@ -1078,10 +1079,9 @@ async function refreshCraftChain(reset) {
   const prevRar = reset === "cat" ? "" : rarSel.value;
   const prevKind = reset === "cat" || reset === "rar" ? "" : kindSel.value;
   const prevBase = reset ? "" : baseSel.value;
-  // 1. 品質：只列出此裝備類型至少有一個底材的品質；未解除限制時排除暗金、套裝、符文之語
+  // 1. 品質：只列出此裝備類型至少有一個底材的品質（暗金、套裝、符文之語未解除限制也可製作，屬性固定為原版）
   const rars = [];
   if (cat) for (const r of Object.keys(RARITY_ZH)) {
-    if (!unlocked() && FORBIDDEN_CRAFT_RARITIES.has(r)) continue;
     if ((await craftBaseNames(cat, r)).size) rars.push(r);
   }
   if (req !== craftChainReq) return;

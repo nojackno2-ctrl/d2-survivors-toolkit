@@ -40,6 +40,12 @@ app.whenReady().then(async () => {
     out.headAfterCat={rarVal:$('#xRar').value,rarOpts:opts('#xRar'),kind:vis('#xKind'),base:vis('#xBase')};
     await pick('#xRar','magic');
     out.headBases=opts('#xBase');
+    // 未解除限制：暗金也能選（屬性固定為原版），只出現在原版有暗金的底材上
+    await pick('#xCategory','weapon');
+    await pick('#xRar','unique');
+    out.lockedUniqueKinds=opts('#xKind');
+    await pick('#xKind','swor');
+    out.lockedUniqueBases=opts('#xBase');
     // 解除限制：暗金只出現在原版有暗金的底材上
     settings.unlock=true;
     await pick('#xCategory','weapon');
@@ -52,7 +58,7 @@ app.whenReady().then(async () => {
   })()`);
   assert.deepEqual(result.initial, { rar: false, kind: false, base: false, bar: false });
   assert.equal(result.afterCat.rar, true);
-  assert.deepEqual(result.afterCat.rarOpts, ['請選擇品質', '普通', '魔法', '稀有']);
+  assert.deepEqual(result.afterCat.rarOpts, ['請選擇品質', '普通', '魔法', '稀有', '暗金']);
   assert.equal(result.afterCat.kind, false); assert.equal(result.afterCat.base, false);
   assert.equal(result.afterRar.kind, true);
   assert.deepEqual(result.afterRar.kindOpts, ['請選擇武器種類', '全部武器', '劍', '斧', '弓']);
@@ -66,6 +72,8 @@ app.whenReady().then(async () => {
   assert.equal(result.headAfterCat.rarVal, '');
   assert.equal(result.headAfterCat.kind, false); assert.equal(result.headAfterCat.base, false);
   assert.deepEqual(result.headBases.map(s => s.replace(/（.*$/, '')), ['請選擇底材', 'Cap']);
+  assert.deepEqual(result.lockedUniqueKinds, ['請選擇武器種類', '全部武器', '劍']);
+  assert.deepEqual(result.lockedUniqueBases.map(s => s.replace(/（.*$/, '')), ['請選擇底材', 'Claymore']);
   assert.deepEqual(result.uniqueKinds, ['請選擇武器種類', '全部武器', '劍']);
   assert.deepEqual(result.uniqueBases.map(s => s.replace(/（.*$/, '')), ['請選擇底材', 'Claymore']);
   console.log('製作裝備逐步選單測試通過');
