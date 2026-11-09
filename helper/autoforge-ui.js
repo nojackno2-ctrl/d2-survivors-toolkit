@@ -77,6 +77,8 @@ const state = {
   manual: false,
   // 地獄熔爐失敗：目前裝備的熔爐是否已失敗（遊戲寫入 hf 且淬鍊清空）；autoSell 為「失敗就自動售出」開關。
   hfFailed: false, hfSucceeded: false, autoSell: loadAutoSell(),
+  // 伺服器無回應暫停的結束時間（毫秒時間戳）；0 代表沒有在暫停。
+  pauseUntil: 0,
 };
 const push = (msg) => { state.msg = msg; state.log.push(msg); if (state.log.length > 60) state.log.shift(); render(); };
 
@@ -158,8 +160,8 @@ async function stepOnce(g, cls) {
   // 成功淬煉（Raised）才計入「未升級」統計。
   if (d.action === "temper" && /^Raised/i.test(text)) trackUpgrade(anvilItem(g, cls), beforeT);
   // 連線失敗時遊戲不會扣精華但也沒有結果，必須停止，避免無限重試。
-  // 伺服器暫時無回應（實測多為 429 速率限制）：精華已暫存、不會遺失，改為等待後重試。
-  if (/No reply|No connection/i.test(text)) return { done: false, retry: true, result: "伺服器暫時無回應，等待後重試" };
+  // 伺服器暫時無回應（實測多為 429 速率限制）：精華已暫存、不會遺失，改為暫停 5 分鐘後繼續。
+  if (/No reply|No connection/i.test(text)) return { done: false, retry: true, result: "伺服器暫時無回應，暫停 5 分鐘後繼續" };
   // 伺服器與本地紀錄不同步時，遊戲會先把裝備改成伺服器上的最新結果（不扣精華），重新判斷即可。
   if (/updated to its last Forge result/i.test(text)) return { done: false, result: "已同步伺服器上的淬鍊紀錄" };
   // 只接受遊戲已知的鍛造結果；其他文字（例如「此裝備已鎖定」）代表遊戲拒絕，必須停止，否則會無限重試。
@@ -171,11 +173,27 @@ async function stepOnce(g, cls) {
   return { done: false, result: `${d.action === "temper" ? "淬鍊" : "清除"}：${text || "（無回應）"}` };
 }
 
-// 限流重試等待：3、6、12、24 秒遞增，比固定 15 秒更快恢復。
-const RETRY_WAIT_MS = [3000, 6000, 12000, 24000];
-const MAX_RETRIES = RETRY_WAIT_MS.length;
+// 伺服器無回應：暫停 5 分鐘後自動繼續，不停止序列。
+const RETRY_PAUSE_MS = 5 * 60 * 1000;
+// 暫停採分段等待，按「停止」時可立即中斷，不必等滿 5 分鐘。
+async function pauseBeforeRetry() {
+  state.pauseUntil = Date.now() + RETRY_PAUSE_MS;
+  render();
+  try {
+    for (let t = 0; t < RETRY_PAUSE_MS && state.running; t += 1000) await sleep(Math.min(1000, RETRY_PAUSE_MS - t));
+  } finally {
+    state.pauseUntil = 0;
+  }
+}
 
-// 單件迴圈：回傳 { result, fatal }；fatal 代表整個序列都該停（精華不足、伺服器持續無回應、手動停止）。
+// 倒數文字，例如「剩餘 04:59」；沒有在暫停則為空字串。
+function pauseCountdownText() {
+  if (!state.pauseUntil) return "";
+  const s = Math.max(0, Math.ceil((state.pauseUntil - Date.now()) / 1000));
+  return `（剩餘 ${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}）`;
+}
+
+// 單件迴圈：回傳 { result, fatal }；fatal 代表整個序列都該停（精華不足、手動停止）。
 async function loop() {
   const g = game();
   if (!g) { push("找不到遊戲"); return { result: "找不到遊戲", fatal: true }; }
@@ -186,11 +204,9 @@ async function loop() {
     try { r = await stepOnce(g, state.cls); } catch (e) { r = { done: true, result: "錯誤：" + String(e?.message || e) }; }
     if (r.retry) {
       retries++;
-      if (retries >= MAX_RETRIES) { state.running = false; out = { result: "伺服器持續無回應", fatal: true }; push(`伺服器連續 ${MAX_RETRIES} 次無回應，已停止，稍後可再開始`); break; }
       stepGap = Math.min(SLEEP_MAX, stepGap * 2);
-      const wait = RETRY_WAIT_MS[retries - 1];
-      push(`${r.result}（第 ${retries} 次，${wait / 1000} 秒後重試）`);
-      await sleep(wait);
+      push(`${r.result}（第 ${retries} 次，5 分鐘後繼續）`);
+      await pauseBeforeRetry();
       continue;
     }
     retries = 0;
@@ -340,7 +356,7 @@ function render() {
     : state.hfSucceeded ? '<div style="color:#d4a84a;font-weight:bold">✔ 地獄熔爐已成功（倍增），不進入自動淬鍊</div>' : "";
   const autoSellBox = `<label style="display:flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input id="af-autosell" type="checkbox"${state.autoSell ? " checked" : ""}> 地獄熔爐失敗就自動售出</label>`;
   const itemLine = state.itemId
-    ? `<div><b>${esc(state.itemObj ? zhItemName(state.itemObj) : "")}</b> <span style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85">${esc(state.result || "")}</div>`
+    ? `<div><b>${esc(state.itemObj ? zhItemName(state.itemObj) : "")}</b> <span style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85">${esc(state.result || "")} <b id="af-cd" style="color:#d4a84a">${pauseCountdownText()}</b></div>`
     : `<div style="opacity:.8">${g.forgeUp ? "請把暗金、套裝或符文之語放到恰西的鐵砧上。" : "請在下方「背包可淬鍊」點「選取」，挑一件暗金、套裝或符文之語。"}</div>`;
   // 控制列放在面板最上方：「開始」有序列就依序淬鍊，沒有序列就淬鍊鐵砧上這件。
   const canStart = !state.running && !state.queueRunning && (state.queue.length > 0 || (!!state.itemId && !state.hfSucceeded));
@@ -470,6 +486,8 @@ function tick() {
   }
 }
 setInterval(tick, 300);
+// 暫停倒數：每秒只更新倒數文字，不重畫整個面板（避免打斷下拉選單操作）。
+setInterval(() => { const el = document.getElementById("af-cd"); if (el) el.textContent = pauseCountdownText(); }, 1000);
 
 // 測試掛鉤（實機腳本）：把指定裝備放上鐵砧並啟動。slots: [{ id, targets }]，只取第一件。
 window.__d2autoforgeUI = {
