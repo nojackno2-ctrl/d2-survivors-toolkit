@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
     const code = fs.readFileSync(script, "utf8");
     if (process.env.H_IN === "editor") {
       // 在修改器 iframe 內執行腳本（腳本裡的 document 就是修改器介面）
-      await win.webContents.executeJavaScript(`window.__d2editLauncher.click(); 1`);
+      await win.webContents.executeJavaScript(`window.__d2editLauncher.click(); setTimeout(()=>{const it=[...(window.__d2toolkitMenu?.children??[])].find(x=>x.textContent=="修改器"||x.textContent=="Editor");it?.click()},300); 1`);
       await sleep(8000);
       const f = win.webContents.mainFrame.framesInSubtree.find((x) => x.url.includes("editor.html"));
       if (!f) return done({ error: "找不到修改器 iframe" });

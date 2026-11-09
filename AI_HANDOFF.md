@@ -67,6 +67,8 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+0000. **【已實作 2026-11-09，未提交】修改器「製作裝備」改為逐步選單**（`modifier/editor.html`）：順序為「裝備類型 → 品質 → 武器種類（僅武器）→ 底材」，每一步選完才顯示下一步（未選完前屬性區塊與製作按鈕皆隱藏）。品質與底材只列出該組合真的有的項目（暗金／套裝依原版目錄、符文之語依原版允許底材、魔法／稀有／普通為該類型全部底材）；未解除限制時不列暗金、套裝、符文之語。改動任一上游選擇會清空其後的選擇。實作：`refreshCraftChain`、`craftBaseNames`（`modifier/editor.html`）。**已驗證**：`electron modifier/tests/craft-weapon-kind-ui.cjs`（夾具：未解除限制與解除限制兩種情境）通過；craft-diagnostic／socket／save-faults／weapon-sets UI 測試與 craft-limits、item-db 皆通過。**未驗證**：官方 `/play/` 實機（`tests/live-harness/craft-weapon-kind-live.js` 已更新為新流程，但 `craft-live.cjs` 的 H_IN=editor 仍找不到修改器 iframe）；手機版排版。
+000. **【已實作 2026-11-09，未提交】修改器「製作裝備」武器種類選單**（`modifier/editor.html`）：分類選「武器」時出現「武器種類」下拉（全部武器／劍／斧／弓…），依底材 `itype` 篩選底材清單；其他分類隱藏。`WEAPON_KIND_ZH` 為中文對照，`modifier/i18n.js` 補英文。**已驗證**：`electron modifier/tests/craft-weapon-kind-ui.cjs`（本機 editor.html 夾具）通過，既有 craft-diagnostic／socket／save-faults UI 測試與 craft-limits、item-db 皆通過。**未驗證**：官方 `/play/` 實機（`tests/live-harness/craft-weapon-kind-live.js` 已寫好，但 `craft-live.cjs` 的 H_IN=editor 找不到修改器 iframe，需先解決開啟修改器的前置步驟）；手機版排版。
 00. **【已發布 2026-11-09】自動淬鍊：背景執行、序列、來源、同名加入、未升級警告**（`helper/autoforge-ui.js`）。發布方式：`verify/publish.cjs --confirm` 因需要遊戲更新的正式測試紀錄而被擋，改以 git 直接推送 main（工具包改動不涉及遊戲版本）。
    - **改動**：「開始」併入序列（有序列就依序淬鍊，否則淬鍊鐵砧上這件）；控制列（開始／停止／掛機）置於面板最上方；「加入同名（N）」一次加入同名同底材裝備；來源可選「角色背包」或「個人倉庫」（`stashTabs[角色]`）；被選為目標（數值 > 0）的屬性，連續 200 次成功淬鍊未升級時在面板跳出警告（每件重置，不停止淬鍊）。
    - **實機（官方 `/play/`，全新存檔，`tests/live-harness/afk-fresh-live.cjs`、`queue-source-live.cjs`、`afk-bg-live.cjs`）**：掛機遮罩蓋滿且點遮罩可喚醒；掛機期間步數持續增加；同名加入產生 2 件序列；倉庫裝備放上鐵砧後遊戲接受並實際淬鍊（13 步）。
