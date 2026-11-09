@@ -225,8 +225,7 @@ function ensureBox() {
   return box;
 }
 
-// 依目前目標與屬性列做蒙地卡羅模擬（結果依設定快取，避免每次重繪都重算）。
-let oddsCache = { sig: null, r: null };
+// 依目前目標與屬性列做精確計算（毫秒級，無亂數；不再使用蒙地卡羅）。
 function oddsHtml() {
   let targets;
   try { targets = AF().normalizeTargets(state.targets); } catch (e) { return `<div style="color:#e88">${esc(e.message || String(e))}</div>`; }
@@ -234,17 +233,18 @@ function oddsHtml() {
     return '<div style="opacity:.8;font-size:13px">目前沒有要達成的屬性（都是 0 或 X），自動淬鍊不會執行熔爐。</div>';
   }
   const keys = state.lines.map((l) => l.key);
-  const sig = JSON.stringify([targets, keys]);
-  if (oddsCache.sig !== sig) oddsCache = { sig, r: AF().simulateOdds(targets, keys, { runs: 20000, seed: 1 }) };
-  const r = oddsCache.r;
+  const r = AF().exactOdds(targets, keys);
   const pct = (x) => `${(x * 100).toFixed(1)}%`;
   const { attempts: ta, successes: ts } = AF().TEMPER_SAMPLE;
   const { attempts: ha, doubled: hd } = AF().HELLFORGE_SAMPLE;
-  const essSucc = r.essencesPerSuccess == null ? "—" : r.essencesPerSuccess.toFixed(1);
+  const body = r.hitRate > 0
+    ? `<div>・每回合走到熔爐的機率：<b>${pct(r.hitRate)}</b>（約需清除 ${Math.round(r.cyclesPerHellforge).toLocaleString()} 次才會走到熔爐）</div>
+    <div>・熔爐倍增率約 ${pct(r.successRate)}：自動淬鍊的成功率即為此值（達標後必定會走到熔爐）</div>
+    <div>・走到熔爐平均耗精華 ${r.essencesPerRun.toLocaleString(undefined, { maximumFractionDigits: 0 })}；期望每成功一件約 ${r.essencesPerSuccess.toLocaleString(undefined, { maximumFractionDigits: 0 })}（熔爐失敗即換新裝重來）</div>`
+    : `<div style="color:#f08070">此設定在 ${AF().TEMPER_CAP} 次淬鍊內不可能同時達標（需達成的屬性加總超過 ${AF().TEMPER_CAP}，或屬性不在屬性列上），自動淬鍊無法成功。</div>`;
   return `<div style="background:#2a241b;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:13px">
-    <div>依目前設定估算（模擬 ${r.runs.toLocaleString()} 次）：</div>
-    <div>・熔爐倍增且達標（自動淬鍊成功）：<b>${pct(r.successRate)}</b></div>
-    <div>・平均每次耗精華 ${r.essencesPerRun.toFixed(1)}（成功時約 ${essSucc}）</div>
+    <div>依目前設定精確計算：</div>
+    ${body}
     <div style="opacity:.75;margin-top:2px">依實測：單次淬鍊成功率約 ${pct(ts / ta)}（${ta} 次淬鍊）、熔爐倍增率約 ${pct(hd / ha)}（${ha} 次熔爐）。屬性分布以平均估計，實際依裝備而異。不含官方升級（基底升級）機率，自動淬鍊不會執行升級。</div>
   </div>`;
 }

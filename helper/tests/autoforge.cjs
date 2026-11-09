@@ -50,5 +50,21 @@ const simB = A.simulateOdds({ s0: { kind: "min", min: 2 } }, ["s0", "s1"], { run
 ok(simA.successRate === simB.successRate && simA.essencesPerRun === simB.essencesPerRun, "同一種子結果一致（面板不會抖動）");
 const simNone = A.simulateOdds({ s0: { kind: "any", min: 0 } }, ["s0"], { runs: 500, seed: 1 });
 ok(simNone.successRate === 0, "沒有需達成的目標 → 不視為成功");
+
+// 精確計算：手算值（4 條屬性、d 為 X、a、b 都 min 3）h≈0.0247、E≈349
+const ex = A.exactOdds(A.normalizeTargets({ a: 3, b: 3, c: 0, d: "X" }), ["a", "b", "c", "d"]);
+ok(Math.abs(ex.hitRate - 0.0247) < 0.0002, "精確 h 與手算一致（≈0.0247）");
+ok(Math.abs(ex.essencesPerRun - 349) < 1, "精確 E 與手算一致（≈349）");
+ok(Math.abs(ex.successRate - 5 / 18) < 1e-9, "精確成功率 = 熔爐倍增率 q");
+// 與蒙地卡羅（大步數上限）在容差內一致
+const mcBig = A.simulateOdds({ x: { kind: "min", min: 3 } }, ["x", "y"], { runs: 20000, seed: 5 });
+const exSimple = A.exactOdds({ x: { kind: "min", min: 3 } }, ["x", "y"]);
+ok(Math.abs(mcBig.essencesPerRun / exSimple.essencesPerRun - 1) < 0.05, "精確 E 與蒙地卡羅一致（相對誤差 < 5%）");
+// 邊界：min 加總超過 10 → 不可能達成
+const impossible = A.exactOdds(A.normalizeTargets({ a: 6, b: 6 }), ["a", "b"]);
+ok(impossible.hitRate === 0 && impossible.successRate === 0 && impossible.essencesPerRun === null, "min 加總超過 10 → h=0、不可能達成");
+// 邊界：目標屬性不在屬性列上
+const missingKey = A.exactOdds(A.normalizeTargets({ z: 1 }), ["a", "b"]);
+ok(missingKey.hitRate === 0, "目標屬性不在屬性列上 → h=0");
 if (fail) { console.error(fail + " 項失敗"); process.exit(1); }
 console.log("✔ 全部通過");

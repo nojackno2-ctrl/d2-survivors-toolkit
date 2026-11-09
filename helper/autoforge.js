@@ -140,6 +140,63 @@ function simulateOdds(targets, lineKeys, opts = {}) {
   };
 }
 
-const AUTOFORGE = { TEMPER_CAP, normalizeTargets, totalTempers, decideNext, afterHellforge, hellforgeFailed, hellforgeSucceeded, simulateOdds, TEMPER_SAMPLE, HELLFORGE_SAMPLE };
+// 精確計算（取代面板上的蒙地卡羅，毫秒級完成，無亂數、無步數上限）。
+// 一「回合」＝從空紀錄開始，直到「第 TEMPER_CAP 次命中」或「命中 X 屬性（清除）」為止。
+// 只有命中才改變紀錄，未命中只花精華；命中均勻落在屬性列的 K 條上。
+//   h ＝ 一回合走到熔爐的機率：前 10 次命中全都不是 X，且各 min 都達標。
+//        用多項式係數計算：h = (Σ 多項式係數) × 10! / K^10。
+//   H ＝ 一回合期望命中數 = Σ_{i=0..9} (1−r)^i，r = X 條數 ÷ K。
+//   E ＝ 走到熔爐的期望精華 = H/(p·h) + 1（Wald 恆等式；+1 為熔爐本身）。
+//   成功率 ＝ 熔爐倍增率 q（h>0 時必然會走到熔爐）。
+//   每成功一件期望精華 ＝ E/q（熔爐失敗即換新裝重來）。
+// 不可能達成（h=0）時 E 與 E/q 為 null。
+function exactOdds(targets, lineKeys, opts = {}) {
+  const p = opts.temperRate ?? TEMPER_SAMPLE.successes / TEMPER_SAMPLE.attempts;
+  const q = opts.hellforgeRate ?? HELLFORGE_SAMPLE.doubled / HELLFORGE_SAMPLE.attempts;
+  const N = TEMPER_CAP;
+  const keys = [...new Set((lineKeys || []).filter(Boolean))];
+  const K = keys.length;
+  if (K === 0) return { hitRate: 0, successRate: 0, cyclesPerHellforge: null, essencesPerRun: null, essencesPerSuccess: null, runs: 0 };
+  // 需達成的屬性若不在屬性列上，永遠無法達成。
+  const missing = Object.entries(targets).some(([k, t]) => t.kind === "min" && !keys.includes(k));
+  const fact = [1];
+  for (let i = 1; i <= N; i++) fact[i] = fact[i - 1] * i;
+  // 多項式乘法（僅保留次數 ≤ N）。每條屬性的因子為 Σ_{c 合法} t^c / c!。
+  let poly = new Array(N + 1).fill(0);
+  poly[0] = 1;
+  let xCount = 0;
+  for (const k of keys) {
+    const t = targets[k];
+    const g = new Array(N + 1).fill(0);
+    if (t?.kind === "x") { xCount++; g[0] = 1; } // X：命中即清除，只允許 0 次
+    else {
+      const minC = t?.kind === "min" ? t.min : 0;
+      for (let c = minC; c <= N; c++) g[c] = 1 / fact[c];
+    }
+    const next = new Array(N + 1).fill(0);
+    for (let a = 0; a <= N; a++) {
+      if (!poly[a]) continue;
+      for (let b = 0; a + b <= N; b++) if (g[b]) next[a + b] += poly[a] * g[b];
+    }
+    poly = next;
+  }
+  const h = missing ? 0 : Math.min(1, poly[N] * fact[N] / Math.pow(K, N));
+  const r = xCount / K;
+  let H = 0;
+  for (let i = 0; i < N; i++) H += Math.pow(1 - r, i);
+  const successRate = h > 0 ? q : 0;
+  if (h <= 0) return { hitRate: 0, successRate: 0, cyclesPerHellforge: null, essencesPerRun: null, essencesPerSuccess: null, runs: 0 };
+  const E = H / (p * h) + 1;
+  return {
+    hitRate: h,
+    successRate,
+    cyclesPerHellforge: 1 / h,
+    essencesPerRun: E,
+    essencesPerSuccess: q > 0 ? E / q : null,
+    runs: 0,
+  };
+}
+
+const AUTOFORGE = { TEMPER_CAP, normalizeTargets, totalTempers, decideNext, afterHellforge, hellforgeFailed, hellforgeSucceeded, simulateOdds, exactOdds, TEMPER_SAMPLE, HELLFORGE_SAMPLE };
 if (typeof module !== "undefined" && module.exports) module.exports = AUTOFORGE;
 else if (typeof window !== "undefined") window.__d2autoforge = AUTOFORGE;
