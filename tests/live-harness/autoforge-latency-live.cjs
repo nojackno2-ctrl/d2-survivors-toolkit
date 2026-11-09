@@ -26,7 +26,8 @@ app.whenReady().then(async () => {
   setTimeout(() => done({ error: "實機測試逾時" }, 1), 600000);
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try {
-    session.defaultSession.protocol.handle("https", (req) => {
+    // H_PUBLISHED=1：不攔截，直接載入 GitHub Pages 上已發布的工具包（等同玩家書籤）
+    if (!process.env.H_PUBLISHED) session.defaultSession.protocol.handle("https", (req) => {
       if (!req.url.startsWith(PAGES)) return net.fetch(req, { bypassCustomProtocolHandlers: true });
       const rel = decodeURIComponent(new URL(req.url).pathname.slice("/d2-survivors-toolkit/".length));
       const file = path.resolve(ROOT, rel);
