@@ -1,6 +1,5 @@
 // 用法：electron tests/live-harness/perf-mobile-live.cjs [輸出.json]   （H_SEED 可指定存檔副本，預設 backups/saves/test-fixture/save.json）
 // 驗證效能頁在手機寬度（390px）下無水平溢出、開關觸控區不小於 44px。
-// 驗證效能頁「降低解析度」開關：切換後 Pixi resolution 與畫布像素寬度改變、切回還原，畫面仍在。
 // 驗證「效能」頁面：工具包選單出現「效能」、點開後全螢幕頁面顯示即時指標（FPS、影格、長任務、記憶體、DOM、資源、載入時間）、
 // 數值會更新、關閉按鈕可收回。只讀取，不改遊戲與存檔。隔離 Electron 設定檔，不碰使用者真實存檔。
 const { app, BrowserWindow, session, net } = require("electron");

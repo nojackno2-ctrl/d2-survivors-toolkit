@@ -133,6 +133,8 @@ async function startEngine() {
   // 目前頁面不一定載入了物品程式（例如停在設定頁），所以也從遊戲主頁的程式清單開始找
   // 依使用者回報（物品引擎載入很久）：主頁清單與各程式區塊改為並行抓取（舊版逐一等待 45 個檔案），每一波抓完再找下一波參照。
   const t0 = performance.now(), mark = (k) => { (engineInfo.ms ??= {})[k] = Math.round(performance.now() - t0); };
+  const isTargetChunk = (f) => /^(?:itemArt|saveTransfer)-[\w-]+\.js$/.test(f);
+  const fetchChunk = (f) => fetch(base + f, { cache: "force-cache" }).then((r) => (r.ok ? r.text() : null)).catch(() => null);
   // iPhone 實測抓取 3.3 秒：程式區塊檔名帶雜湊（遊戲更新檔名就變），直接用瀏覽器快取（force-cache），不再逐一向伺服器確認；/play/ 已有清單就不抓首頁。
   for (const page of ["/play/", "/"]) {
     if (page === "/play/" && location.pathname.startsWith("/play") && queue.length) break;
@@ -141,16 +143,39 @@ async function startEngine() {
     queue.push(...found);
     if (found.length) break;
   }
-  let wave = [...new Set(queue)];
-  while (wave.length) {
-    const todo = wave.filter((f) => !seen.has(f)); for (const f of todo) seen.add(f);
-    const srcs = await Promise.all(todo.map((f) => fetch(base + f, { cache: "force-cache" }).then((r) => (r.ok ? r.text() : null)).catch(() => null)));
-    const next = new Set();
-    todo.forEach((f, i) => { const src = srcs[i]; if (src == null) return; files[f] = src; for (const m of src.matchAll(/["'`]\.\/([\w.-]+\.js)["'`]/g)) if (!seen.has(m[1])) next.add(m[1]); });
-    wave = [...next];
+  // 最佳化：所有特徵碼（signatures.json）皆位於 itemArt-*.js 與 saveTransfer-*.js。
+  // 先抓這兩個目標區塊（若清單只有入口檔則先透過 Game-*.js／game-*.js 找出參照），若特徵碼已全部命中就略過其餘 40+ 個 Pixi／介面分塊；若有缺漏才退回完整波段掃描。
+  let targets = [...new Set(queue)].filter(isTargetChunk);
+  if (targets.length < 2) {
+    const entry = [...new Set(queue)].filter((f) => /^(?:Game|game)-[\w-]+\.js$/.test(f) && !seen.has(f));
+    for (const f of entry) seen.add(f);
+    const srcs = await Promise.all(entry.map(fetchChunk));
+    entry.forEach((f, i) => {
+      const src = srcs[i]; if (src == null) return; files[f] = src;
+      for (const m of src.matchAll(/["'`]\.\/([\w.-]+\.js)["'`]/g)) queue.push(m[1]);
+    });
+    targets = [...new Set(queue)].filter((f) => isTargetChunk(f) && !seen.has(f));
+  }
+  if (targets.length) {
+    for (const f of targets) seen.add(f);
+    const srcs = await Promise.all(targets.map(fetchChunk));
+    targets.forEach((f, i) => { const src = srcs[i]; if (src != null) files[f] = src; });
+  }
+  let patchRes = Object.keys(files).length ? patch(files, signatures) : null;
+  const sigCount = Object.keys(signatures).filter((k) => k !== "_").length;
+  if (!patchRes || patchRes.missing.length || Object.keys(patchRes.found).length < sigCount) {
+    let wave = [...new Set(queue)].filter((f) => !seen.has(f));
+    while (wave.length) {
+      const todo = wave.filter((f) => !seen.has(f)); for (const f of todo) seen.add(f);
+      const srcs = await Promise.all(todo.map(fetchChunk));
+      const next = new Set();
+      todo.forEach((f, i) => { const src = srcs[i]; if (src == null) return; files[f] = src; for (const m of src.matchAll(/["'`]\.\/([\w.-]+\.js)["'`]/g)) if (!seen.has(m[1])) next.add(m[1]); });
+      wave = [...next];
+    }
+    patchRes = patch(files, signatures);
   }
   mark("抓取程式");
-  const { patched, missing, found } = patch(files, signatures);
+  const { patched, missing, found } = patchRes;
   mark("比對特徵碼");
   Object.assign(engineInfo, { step: "比對遊戲程式", chunks: Object.keys(files).length, found, missing });
   if (missing.length) throw new Error("遊戲版本不相容：找不到 " + missing.join("、"));
@@ -176,8 +201,10 @@ async function startEngine() {
   w.__gameIdentity = { items: found.setData, save: found.rankDefs };
   mark("讀取物品資料");
   return w.eval(`(async () => {
-    const mods = await Promise.all(__entries.map((u) => import(u)));
-    const { boot } = await import(${JSON.stringify(at("modifier/engine-page.js"))});
+    const [mods, { boot }] = await Promise.all([
+      Promise.all(__entries.map((u) => import(u))),
+      import(${JSON.stringify(at("modifier/engine-page.js"))}),
+    ]);
     return boot(Object.assign({}, ...mods), __itemstats, __gameIdentity);
   })()`);
 }
@@ -242,22 +269,25 @@ const backend = {
   },
   sealText,
   async assets() {
-    const dir = new URL("/d2", location.origin).href, man = await manifest();
-    try {
-      const j = await fetch(await d2url("items.json")).then((r) => r.json());
-      const slim = (o) => Object.fromEntries(Object.entries(o ?? {}).map(([k, v]) => [k, (v.inv ?? []).map((i) => [i.file, i.width, i.height])]));
-      return { dir, hashes: man?.hashes, webp: man?.webp, bases: slim(j.bases), uniques: slim(j.uniques), sets: slim(j.sets), quest: slim(j.quest), runes: slim(j.runes), gems: slim(j.gems) };
-    } catch {
-      return { dir, bases: {}, uniques: {}, sets: {}, quest: {}, runes: {}, gems: {} };
-    }
+    return (backend._assetsP ??= (async () => {
+      const dir = new URL("/d2", location.origin).href, man = await manifest();
+      try {
+        const j = await fetch(await d2url("items.json")).then((r) => r.json());
+        const slim = (o) => Object.fromEntries(Object.entries(o ?? {}).map(([k, v]) => [k, (v.inv ?? []).map((i) => [i.file, i.width, i.height])]));
+        return { dir, hashes: man?.hashes, webp: man?.webp, bases: slim(j.bases), uniques: slim(j.uniques), sets: slim(j.sets), quest: slim(j.quest), runes: slim(j.runes), gems: slim(j.gems) };
+      } catch {
+        backend._assetsP = null;
+        return { dir, bases: {}, uniques: {}, sets: {}, quest: {}, runes: {}, gems: {} };
+      }
+    })());
   },
   // 中文：與遊戲語言模組共用內建繁體字典。
   async i18n() {
-    const game = structuredClone(await (window.__d2gamedataPromise || loadGameData()));
+    const game = await (window.__d2gamedataPromise || loadGameData());
     let dict = {};
     if (window.__d2zhPromise) {
       const shared = await window.__d2zhPromise;
-      if (shared && typeof shared === "object") dict = { ...shared };
+      if (shared && typeof shared === "object") dict = shared;
     }
     // 實測：手機在網站部署期間或網路不穩時字典偶爾抓不到，整頁底材、物品都退回英文；失敗時重試 3 次。
     for (let i = 0; i < 3 && !Object.keys(dict).length; i++) {
@@ -283,7 +313,7 @@ const backend = {
   // 遊戲版本：修改器在 GitHub 頁面的 iframe 內，跨網站讀不到遊戲的 changelog.json，改由這裡（遊戲同源）讀取。
   async gameBuild() {
     let list = null;
-    try { list = await fetch("/changelog.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)); } catch { list = null; }
+    try { list = await (window.__d2changelogPromise ??= fetch("/changelog.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null)); } catch { list = null; }
     const gameJs = performance.getEntriesByType("resource").map((e) => e.name).concat([...document.querySelectorAll("script[src],link[rel=modulepreload]")].map((e) => e.src || e.href)).map((u) => u.match(/\/(Game-[\w-]+\.js)/)?.[1]).find(Boolean) || "";
     return { build: list?.[0]?.build || "", date: list?.[0]?.date || "", gameJs };
   },
@@ -381,69 +411,19 @@ registerToolkitFeature({ id: "lang", label: zhUI ? "語言" : "Language", order:
 registerToolkitFeature({ id: "editor", label: zhUI ? "修改器" : "Editor", order: 30, open: () => openEditor() });
 // 效能頁面：全螢幕顯示即時指標（只讀取，不修改遊戲與存檔）。
 registerToolkitFeature({ id: "perf", label: zhUI ? "效能" : "Performance", order: 40, open: () => openPerfPage() });
-// 優化開關（效能頁）：分兩組。
-// 一般遊玩（保留畫面）：lowRes 降低解析度（畫面較模糊，省 GPU 填充率）。
-// 掛機（不需畫面）：afkSkipMain 掛機時略過主畫面繪製（離屏貼圖照常）。
+// 優化開關（效能頁）：只保留「掛機時略過主畫面繪製」。
+// 2026-11-10 實機同場對照（tests/live-harness/perf-ab-live.cjs）：「減少特效」「記憶體整理」「降低解析度」量不到效益，
+// 且降低解析度會與遊戲自己的動態解析度互相覆蓋，三項已移除；舊存檔設定裡的這些欄位直接忽略。
 const PERF_OPT_KEY = "d2toolkit.perfopts.v1";
 const perfOpts = (() => {
-  const d = { lowRes: false, fewerFx: false, memoryTidy: false, afkSkipMain: true };
-  try { return { ...d, ...JSON.parse(localStorage.getItem(PERF_OPT_KEY) || "{}") }; } catch (e) { return d; }
+  const d = { afkSkipMain: true };
+  try { const saved = JSON.parse(localStorage.getItem(PERF_OPT_KEY) || "{}"); return { afkSkipMain: typeof saved?.afkSkipMain === "boolean" ? saved.afkSkipMain : d.afkSkipMain }; } catch (e) { return d; }
 })();
 window.__d2perfOpts = perfOpts;
 function savePerfOpts() { try { localStorage.setItem(PERF_OPT_KEY, JSON.stringify(perfOpts)); } catch (e) { /* 無法寫入時只是不會記住 */ } }
-// 解析度：記下原始 resolution，降低時乘以 0.75，關閉時還原；畫布尺寸改變後也會再套用。
-function applyResolution(g) {
-  const r = g?.app?.renderer;
-  if (!r || typeof r.resize !== "function" || !r.screen) return false;
-  r.__d2baseRes ??= r.resolution;
-  const want = perfOpts.lowRes ? r.__d2baseRes * 0.75 : r.__d2baseRes;
-  if (Math.abs(r.resolution - want) < 1e-6) return true;
-  try { r.resize(r.screen.width, r.screen.height, want); return true; } catch (e) { console.warn("[D2 工具包] 解析度套用失敗", e); return false; }
-}
-setInterval(() => { if (perfOpts.lowRes) applyResolution(window.__d2autobot?.game); }, 2000);
-// 減少特效：只隱藏效果的顯示物件（gfx.visible），不改動 rings／zones 等會影響判定的陣列。
-// 記憶體整理：移除已結束（dead）的效果項目，並請 Pixi 回收閒置貼圖。兩者都只在遊戲進行中由計時器執行，不進入遊戲迴圈。
-const FX_LISTS = ["flashes", "rings", "zones"];
-function tidyEffects(g) {
-  const w = g?.world; if (!w || !g?.app) return;
-  for (const key of FX_LISTS) {
-    const arr = w[key]; if (!Array.isArray(arr)) continue;
-    if (perfOpts.memoryTidy) for (let i = arr.length - 1; i >= 0; i--) if (arr[i]?.dead) arr.splice(i, 1);
-    for (const e of arr) {
-      const gfx = e?.gfx; if (!gfx) continue;
-      if (perfOpts.fewerFx) { if (gfx.visible !== false) { gfx.visible = false; gfx.__d2hid = true; } }
-      else if (gfx.__d2hid) { gfx.visible = true; gfx.__d2hid = false; }
-    }
-  }
-  // 記憶體整理：貼圖預設不自動回收（autoGarbageCollect=false），開啟時改為自動回收；正在使用的貼圖每幀都會被觸碰，不會被誤收。關閉時還原。
-  for (const t of g.app.renderer.texture?.managedTextures || []) {
-    if (!t) continue;
-    if (perfOpts.memoryTidy) { if (t.__d2agc === undefined) t.__d2agc = t.autoGarbageCollect; t.autoGarbageCollect = true; }
-    else if (t.__d2agc !== undefined) { t.autoGarbageCollect = t.__d2agc; delete t.__d2agc; }
-  }
-  // 記憶體整理（手動回收）：畫面上沒有使用、且閒置超過 3 秒的貼圖來源，卸載其 GPU 資料（之後被用到會自動重新上傳）。
-  // Pixi 的自動 GC 對這些貼圖沒有作用（實測 gc.run 前後數量不變），故改為手動卸載。
-  if (perfOpts.memoryTidy && gc && typeof gc.now === "number") {
-    const inUse = new Set(); const st = [g.app.stage]; let n = 0;
-    while (st.length && n < 200000) { const o = st.pop(); n++; if (o?.texture?.source) inUse.add(o.texture.source); for (const c of (o?.children || [])) st.push(c); }
-    for (const src of [...(g.app.renderer.texture?.managedTextures || [])]) {
-      if (!src || inUse.has(src)) continue;
-      if (gc.now - (src._gcLastUsed ?? gc.now) > 3000) { try { src.unload?.(); } catch (e) { /* 忽略單一貼圖的失敗 */ } }
-    }
-  }
-  // 記憶體整理：縮短 Pixi 貼圖的閒置回收時間（預設很長，殘留貼圖堆積），並執行一次回收；關閉時還原。
-  const gc = g.app.renderer.gc;
-  if (gc && typeof gc.run === "function") {
-    if (perfOpts.memoryTidy) {
-      gc.__d2baseUnused ??= gc.maxUnusedTime;
-      gc.maxUnusedTime = 3000;
-      try { gc.run(); } catch (e) { /* 不支援時略過 */ }
-    } else if (gc.__d2baseUnused != null) {
-      gc.maxUnusedTime = gc.__d2baseUnused; gc.__d2baseUnused = null;
-    }
-  }
-}
-setInterval(() => tidyEffects(window.__d2autobot?.game), 500);
+// 重新點書籤時，清掉上一版留下的效能計時器（舊版的解析度／特效計時器會繼續改遊戲畫面）。
+for (const id of window.__d2perfTimers || []) clearInterval(id);
+window.__d2perfTimers = [];
 
 // 掛機（工具包選單）：整個畫面蓋上黑幕，遊戲與輔助器照常執行（打怪、升級、自動淬鍊）；點畫面喚醒。
 // 省電方式只略過「主畫面」的 Pixi 繪製（container 為 app.stage 且沒有 target），離屏貼圖（如物品圖示）照常繪製。
@@ -458,7 +438,8 @@ function hookRenderer(g) {
       const container = opts && typeof opts === "object" && "container" in opts ? opts.container : opts;
       const target = opts && typeof opts === "object" ? opts.target : undefined;
       const stats = (window.__d2afkStats ??= { skippedMain: 0, passedOffscreen: 0, passedMainTarget: 0 });
-      if (container === stage && !target && perfOpts.afkSkipMain) { stats.skippedMain++; return; }
+      // 讀 window 上目前這一版的設定：繪製掛接只裝一次，重新點書籤後不能繼續用舊版的 perfOpts。
+      if (container === stage && !target && (window.__d2perfOpts ?? perfOpts).afkSkipMain) { stats.skippedMain++; return; }
       stats[target ? "passedOffscreen" : "passedMainTarget"]++;
     }
     return orig.apply(this, args);
@@ -508,7 +489,7 @@ function openPerfPage() {
   const note = document.createElement("div");
   note.style.cssText = "max-width:520px;margin:10px auto 0;font-size:13px;color:#a89878;line-height:1.5";
   note.textContent = t("畫面更新率與影格間隔由本頁面自己的動畫迴圈量測；遊戲暫停時仍會反映當前畫面的負載。數據每 0.5 秒更新。", "FPS and frame time are measured by this page's own animation loop. Updates every 0.5 seconds.");
-  // 優化開關：分一般遊玩（保留畫面）與掛機（不需畫面）兩組
+  // 優化開關：目前只有掛機一組
   const optCard = document.createElement("div");
   optCard.style.cssText = "max-width:520px;margin:12px auto 0;padding:14px 16px;border:1px solid #d4a84a;border-radius:8px;background:rgba(20,17,13,.95)";
   const addToggle = (group, label, hint, key, onChange) => {
@@ -527,10 +508,6 @@ function openPerfPage() {
     return group;
   };
   const gTitle = (t) => { const d = document.createElement("div"); d.textContent = t; d.style.cssText = "font-weight:bold;color:#d4a84a;margin-top:6px"; optCard.append(d); };
-  gTitle(t("一般遊玩（保留畫面）", "Normal play (keep visuals)"));
-  addToggle(0, t("減少特效", "Fewer effects"), t("隱藏部分技能與爆炸的視覺特效（光環、閃光、區域效果的圖像）；傷害與判定照常。", "Hide some skill and explosion visuals (rings, flashes, zone art). Damage and hit logic unchanged."), "fewerFx", () => tidyEffects(window.__d2autobot?.game));
-  addToggle(0, t("記憶體整理", "Memory tidy"), t("定期清除已結束的特效物件，並回收閒置貼圖。不影響畫面與遊戲進度。", "Periodically clear finished effect objects and recycle idle textures. No change to visuals or progress."), "memoryTidy", () => tidyEffects(window.__d2autobot?.game));
-  addToggle(0, t("降低解析度", "Lower resolution"), t("以約 75% 解析度繪製再放大，畫面較模糊，可省 GPU 填充率。", "Render at ~75% resolution and scale up. Slightly blurrier; saves GPU fill."), "lowRes", () => applyResolution(window.__d2autobot?.game));
   gTitle(t("掛機（不需畫面）", "AFK (no visuals needed)"));
   addToggle(0, t("掛機時略過主畫面繪製", "Skip main drawing while AFK"), t("掛機遮罩蓋住畫面時不畫主畫面，遊戲邏輯與淬鍊照常執行；離屏貼圖仍會繪製。", "While AFK the main scene is not drawn; game logic and forging keep running. Off-screen textures still render."), "afkSkipMain");
   page.append(head, card, optCard, note);
@@ -660,6 +637,7 @@ sync();
 window.__d2zhUrl = at("lang/zh-TW.json");
 const loadZhDict = () => (window.__d2zhPromise ??= hostFetch(window.__d2zhUrl).catch((e) => { window.__d2zhPromise = null; throw e; }));
 const loadGameData = () => (window.__d2gamedataPromise ??= hostFetch(at("modifier/gamedata.json")).catch((e) => { window.__d2gamedataPromise = null; throw e; }));
+window.__d2changelogPromise ??= fetch("/changelog.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 // 依使用者要求：點書籤後預先讀完輔助器、字典、遊戲資料、物品引擎與修改器頁面，畫面中央顯示進度條；
 // 各模組改為並行載入以縮短等待時間，單一步驟失敗不卡住（標示警告後繼續），全部結束才開放「修改器」按鈕。
 (async () => {
@@ -670,18 +648,22 @@ const loadGameData = () => (window.__d2gamedataPromise ??= hostFetch(at("modifie
   fill.style.cssText = "height:100%;width:0;background:#d4a84a;transition:width .2s";
   bar.append(fill); box.append(text, bar); document.body.append(box); window.__d2editLoading = box;
   for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) box.addEventListener(ev, (e) => e.stopPropagation());
+  let langP = null, botP = null, selfCheckP = null;
+  const loadLang = () => (langP ??= import(at("lang/lang.js")));
+  const loadBot = () => (botP ??= import(at("helper/autobot.js")));
+  const loadSelfCheck = () => (selfCheckP ??= import(at("helper/selfcheck.js")));
   const steps = [
     [zhUI ? "繁中字典" : "Dictionary", loadZhDict],
     [zhUI ? "遊戲資料" : "Game data", loadGameData],
-    [zhUI ? "語言模組" : "Language module", () => import(at("lang/lang.js"))],
-    [zhUI ? "輔助器" : "Assistant", () => import(at("helper/autobot.js"))],
+    [zhUI ? "語言模組" : "Language module", loadLang],
+    [zhUI ? "輔助器" : "Assistant", loadBot],
     [zhUI ? "自動淬鍊" : "Auto forge", async () => { await import(at("helper/autoforge.js")); await import(at("helper/autoforge-ui.js")); }],
     [zhUI ? "物品引擎（遊戲裝備產生器）" : "Item engine", () => engine()],
-    [zhUI ? "修改器頁面" : "Editor page", () => hostFetch(editorUrl(), "text")],
+    [zhUI ? "修改器頁面" : "Editor page", () => Promise.all([hostFetch(editorUrl(), "text"), backend.assets()])],
     // 自檢與其他步驟並行：載入進度條跑的同時檢查工具包與當前遊戲是否相符；問題只輸出，不阻擋遊玩。
     [zhUI ? "相容性自檢" : "Compatibility self-check", async () => {
-      const { runSelfCheck } = await import(at("helper/selfcheck.js"));
-      selfCheck = await runSelfCheck({ engine, engineInfo, backend, dict: loadZhDict, gamedata: loadGameData, gameScript: activeGameScript, ready: () => Promise.allSettled([import(at("lang/lang.js")), import(at("helper/autobot.js"))]) });
+      const { runSelfCheck } = await loadSelfCheck();
+      selfCheck = await runSelfCheck({ engine, engineInfo, backend, dict: loadZhDict, gamedata: loadGameData, gameScript: activeGameScript, ready: () => Promise.allSettled([loadLang(), loadBot()]) });
       window.__d2editSelfCheck = selfCheck;
     }],
   ];
@@ -725,25 +707,16 @@ const loadGameData = () => (window.__d2gamedataPromise ??= hostFetch(at("modifie
   if (selfCheck?.issues.some((i) => i.level === "info" && (i.area === "輔助器" || i.area === "語言"))) {
     setTimeout(async () => {
       try {
-        const { checkGameHook } = await import(at("helper/selfcheck.js"));
-        const later = (await checkGameHook(2000)).filter((i) => i.level !== "info");
+        const { checkGameHook } = await loadSelfCheck();
+        // 補查結果取代當時的掛接提示（已掛上的就不再留著「尚未掛上」）。
+        const recheck = await checkGameHook(2000), later = recheck.filter((i) => i.level !== "info");
+        const stale = selfCheck.issues.filter((i) => i.level === "info" && (i.area === "輔助器" || i.area === "語言"));
+        for (const i of stale) selfCheck.issues.splice(selfCheck.issues.indexOf(i), 1);
+        selfCheck.issues.push(...recheck);
         if (!later.length) return;
-        selfCheck.issues.push(...later); selfCheck.ok = false;
+        selfCheck.ok = false;
         for (const i of later) console.warn(`[D2 工具包自檢（進入遊戲後）][${i.area}] ${i.msg}`);
       } catch {}
     }, 25000);
   }
 })();
-  // 在載入完成後自動執行防修改覆蓋腳本
-  // 等待所有資源載入完成後執行覆蓋
-  setTimeout(() => {
-    // 嘗試載入並執行防修改覆蓋腳本
-    try {
-      const overrideScript = document.createElement('script');
-      overrideScript.src = at('modifier/overrides/game-overrides.js');
-      document.head.appendChild(overrideScript);
-      console.log('[D2 工具包] 防修改覆蓋腳本已載入');
-    } catch (e) {
-      console.warn('[D2 工具包] 載入防修改覆蓋腳本時出錯:', e);
-    }
-  }, 100);

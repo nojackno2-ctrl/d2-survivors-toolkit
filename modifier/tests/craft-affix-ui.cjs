@@ -11,6 +11,8 @@ app.whenReady().then(async()=>{
   const base={name:'Ogre Gauntlets',type:'gloves',itype:'glov',level:1};const names=['Godly','Bronze',"Dragon's",'of the Leech','of the Bat','of the Sun','Glimmering','Glowing'];
   const game={__setData(){},__uniques:[],__sets:[],__runewords:[],__bases:[base],__affixes:${JSON.stringify(all)}.filter(a=>names.includes(a.name)),__affixApplies:a=>a.rows.some(r=>r.on.some(t=>['armo','glov','weap'].includes(t)))&&!a.rows.every(r=>r.not.includes('glov')),__isType:(a,b)=>a===b,__seeded:(_,f)=>f(),__makeAffix:()=>({mods:[{stat:'damageReduction',value:3,implicit:true}]})};
   const engine=boot(game,JSON.stringify({bases:{}}));window.api.engine=async(fn,...args)=>engine[fn](...args);BASES=[base];await renderCraft();
+  // 製作裝備為逐步選單（2026-11-09 起）：先選類型 → 品質 → 底材，屬性區塊與新增按鈕才會啟用
+  const pick=(s,v)=>{const e=document.querySelector(s);e.value=v;e.onchange&&e.onchange();return new Promise(r=>setTimeout(r,150))};await pick("#xCategory","gloves");await pick("#xRar","rare");await pick("#xBase","Ogre Gauntlets");if(document.querySelector("#xBase").value!=="Ogre Gauntlets")throw new Error("逐步選單未選到底材");
   const add=(table,stat,value,kind)=>{let b=document.querySelector(table+' tbody');b.insertAdjacentHTML('beforeend',craftModRow(kind));let tr=b.lastElementChild;let sel=tr.querySelector('.stat');sel.add(new Option(stat,stat));sel.value=stat;tr.querySelector('.val').value=value;delete tr.dataset.auto;return tr};
   add('#cmods-pre','enhancedDefense',200,'prefix');add('#cmods-pre','attackRatingPoints',20,'prefix');add('#cmods-pre','mana',40,'prefix');
   add('#cmods-suf','lifeLeech',3,'suffix');add('#cmods-suf','manaLeech',3,'suffix');add('#cmods-suf','lightRadius',5,'suffix');add('#cmods-imp','damageReduction',3,'imp');

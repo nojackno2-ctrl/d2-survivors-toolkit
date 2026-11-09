@@ -1213,14 +1213,19 @@
   const ALL_SKILLS_BONUS = 20;
   let allSkillsOverride = null;
   let SKILLS = null, PASSIVES = null, SKILL_BY_NAME = null, PASSIVE_BY_NAME = null, nativeLevelChoices = null, nativeWeapon = null, nativeKeyBindings = null;
-  async function loadSkillTables(gameUrl) {
+  async function loadSkillTables(gameUrl, prefetchedSource = "") {
     // 相依模組檔名含每版不同的雜湊，從遊戲入口的 import 動態解析，不寫死檔名（2026-11-04 起）。
-    let gameSource = "";
-    try { gameSource = await (await fetch(gameUrl, { signal: abort.signal })).text(); } catch { /* 讀不到就走各自的降級 */ }
+    let gameSource = prefetchedSource;
+    if (!gameSource) {
+      try { gameSource = await (await fetch(gameUrl, { signal: abort.signal })).text(); } catch { /* 讀不到就走各自的降級 */ }
+    }
+    const itemArtName = /["']\.\/(itemArt-[\w-]+\.js)["']/.exec(gameSource)?.[1];
+    const saveTransferName = /["']\.\/(saveTransfer-[\w-]+\.js)["']/.exec(gameSource)?.[1];
+    const itemArtP = itemArtName ? import(new URL(itemArtName, gameUrl).href).catch(() => null) : Promise.resolve(null);
+    const saveTransferP = saveTransferName ? import(new URL(saveTransferName, gameUrl).href).catch(() => null) : Promise.resolve(null);
     try {
-      const itemArtName = /["']\.\/(itemArt-[\w-]+\.js)["']/.exec(gameSource)?.[1];
-      for (const u of itemArtName ? [new URL(itemArtName, gameUrl).href] : []) {
-        const m = await import(u);
+      const m = await itemArtP;
+      if (m) {
         // 鍵位讀取函式的匯出名每版都會變（20261103.2 為 V_ 陣列 as Di，20261104.1 為 j_ as Sa），改依特徵辨認：
         // 零參數、以 JSON.parse(localStorage.getItem(…)) 讀取 d2s:keys。
         for (const v of Object.values(m)) {
@@ -1229,27 +1234,24 @@
           if (!SKILLS && v.doubleSwing?.name && v.magicArrow?.name) { SKILLS = v; SKILL_BY_NAME = new Map(Object.entries(v).map(([k, d]) => [String(d?.name || "").toLowerCase(), k])); }
           if (!PASSIVES && v.innerSight?.name && v.criticalStrike?.name) { PASSIVES = v; PASSIVE_BY_NAME = new Map(Object.entries(v).map(([k, d]) => [String(d?.name || "").toLowerCase(), k])); }
         }
-        if (SKILLS && PASSIVES) break;
       }
     } catch { /* 讀不到就只用排行榜權重 */ }
     try {
-      const saveTransferName = /["']\.\/(saveTransfer-[\w-]+\.js)["']/.exec(gameSource)?.[1];
-      const urls = saveTransferName ? [new URL(saveTransferName, gameUrl).href] : [];
-      for (const url of urls) {
-        const module = await import(url);
+      const module = await saveTransferP;
+      if (module) {
         const matches = Object.values(module).filter((fn) => {
           if (typeof fn !== "function" || fn.length !== 4) return false;
           const source = Function.prototype.toString.call(fn);
           return /\.difficulty/.test(source) && /\.type\s*!==/.test(source) && /[`'"]attribute[`'"]/.test(source);
         });
-        if (matches.length === 1) { nativeLevelChoices = matches[0]; break; }
+        if (matches.length === 1) nativeLevelChoices = matches[0];
       }
       // 從同一版 Game 的選卡呼叫與 import 解析武器函式，壓縮匯出名稱每版可能不同。
-      const source = await (await fetch(gameUrl, { signal: abort.signal })).text();
+      const source = gameSource;
       const offer = /offerLevelUp\(\)\{[\s\S]{0,300}?=\(\)=>[\w$]+\([^,]+,[^,]+,[^,]+,([\w$]+)\(this\.world\.player\)\)/.exec(source);
       if (offer) for (const match of source.matchAll(/import\{([^}]+)\}from["']\.\/(itemArt-[\w-]+\.js)["']/g)) {
         const binding = match[1].split(",").map((x) => x.trim()).find((x) => x.endsWith(" as " + offer[1]));
-        if (binding) { const module = await import(new URL(match[2], gameUrl).href); const fn = module[binding.split(/\s+as\s+/)[0]]; if (typeof fn === "function") nativeWeapon = fn; break; }
+        if (binding) { const mod = match[2] === itemArtName ? await itemArtP : await import(new URL(match[2], gameUrl).href); const fn = mod?.[binding.split(/\s+as\s+/)[0]]; if (typeof fn === "function") nativeWeapon = fn; break; }
       }
     } catch { /* 無法確認原版候選產生器時直接選卡 */ }
   }
@@ -2062,7 +2064,7 @@
       if (!signatures.every((re) => re.test(source))) { for (const m of source.matchAll(/["'`]\.\/(Game-[\w-]+\.js)["'`]/g)) queue.push(new URL(m[1], url).href); continue; }
       // 精確沿用頁面模組 URL，讓瀏覽器回傳原模組實例；不加查詢字串、不執行修改版副本。
       const module = await import(url); if (!alive) return;
-      fire(loadSkillTables(url), "技能表");
+      fire(loadSkillTables(url, source), "技能表");
       const proto = module.Game?.prototype;
       if (typeof proto?.tick !== "function" || typeof proto.drinkFrom !== "function" || typeof proto.steer !== "function") continue;
       // 遊戲的波次邏輯會在 tick 中以擊殺數改寫 actStart（world.actStart = time - ps(…)），所以時間暫停也要在原版 tick 結束後再對齊一次，否則在恐懼階會失效。
@@ -2108,12 +2110,13 @@
       let latestBuild = "", latestDate = "";
       const ctrl = new AbortController(), tid = setTimeout(() => ctrl.abort(), 5000);
       try {
-        const res = await fetch("/changelog.json", { signal: ctrl.signal, cache: "no-cache" }).catch(() => fetch("https://d2survivors.lol/changelog.json", { signal: ctrl.signal, cache: "no-cache" }));
-        if (res && res.ok) {
-          const list = await res.json();
-          const first = Array.isArray(list) ? list[0] : null;
-          if (first?.build) { latestBuild = String(first.build); latestDate = String(first.date || ""); }
+        let list = window.__d2changelogPromise ? await window.__d2changelogPromise : null;
+        if (!list) {
+          const res = await fetch("/changelog.json", { signal: ctrl.signal, cache: "no-cache" }).catch(() => fetch("https://d2survivors.lol/changelog.json", { signal: ctrl.signal, cache: "no-cache" }));
+          if (res && res.ok) list = await res.json();
         }
+        const first = Array.isArray(list) ? list[0] : null;
+        if (first?.build) { latestBuild = String(first.build); latestDate = String(first.date || ""); }
       } catch {} finally { clearTimeout(tid); }
       const compareBuild = latestBuild || prev?.build || "";
       const compareDate = latestDate || prev?.date || "";

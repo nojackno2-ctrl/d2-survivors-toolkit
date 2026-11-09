@@ -10,7 +10,7 @@ const server = http.createServer((req, res) => {
   const p = path.resolve(root, "." + decodeURIComponent(new URL(req.url, "http://localhost").pathname));
   if (!p.startsWith(root + path.sep)) { res.writeHead(403); return res.end(); }
   const rel = path.relative(root, p).replaceAll("\\", "/");
-  const allowed = new Set(["d2edit.js", "version.json", "helper/autobot.js", "helper/autoforge.js", "helper/autoforge-ui.js", "helper/selfcheck.js", "lang/lang.js", "lang/zh-TW.json", "modifier/patch.mjs", "modifier/signatures.json", "modifier/gamedata.json", "modifier/engine-page.js", "modifier/overrides/game-overrides.js"]);
+  const allowed = new Set(["d2edit.js", "version.json", "helper/autobot.js", "helper/autoforge.js", "helper/autoforge-ui.js", "helper/selfcheck.js", "lang/lang.js", "lang/zh-TW.json", "modifier/patch.mjs", "modifier/signatures.json", "modifier/gamedata.json", "modifier/engine-page.js"]);
   if (!allowed.has(rel)) { res.writeHead(403); return res.end(); }
   fs.readFile(p, (err, data) => {
     if (err) { res.writeHead(404); return res.end(); }

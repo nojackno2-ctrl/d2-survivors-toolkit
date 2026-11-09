@@ -162,6 +162,15 @@
   <section>
     <h2>更新日誌</h2>
     <p class="dim">介紹網頁：<a href="https://d2-survivors-toolkit.nojackno2.workers.dev/#changelog" target="_blank" rel="noopener" style="color:var(--gold)">d2-survivors-toolkit.nojackno2.workers.dev</a></p>
+        <h3>2026-11-10</h3>
+    <ul>
+      <li>語言：修正長時間遊玩時記憶體不斷增加的問題。先前載入工具包後，遊戲畫出的每一段文字（傷害數字、地上物品名稱等）都不會被釋放，打怪幾分鐘就多佔數 GB 記憶體，久了會變卡甚至當掉；修正後記憶體用量維持穩定。</li>
+      <li>載入：點書籤後的載入速度加快。物品引擎只讀取需要的兩個遊戲程式檔（原本要掃描四十多個），並避免重複下載相同的檔案。</li>
+      <li>效能頁：移除「減少特效」「記憶體整理」「降低解析度」三個開關。實際對照量測後三項都沒有可量到的改善，其中降低解析度還會和遊戲自己的自動解析度調整互相干擾。</li>
+      <li>效能頁：保留「掛機時略過主畫面繪製」。實測掛機時處理器與顯示卡負擔約減少四成，遊戲與自動淬鍊照常執行。</li>
+      <li>效能頁：修正「記憶體整理」開啟後持續出錯的問題（該開關已一併移除）。</li>
+      <li>工具包：修正每次載入時主控台出現一則錯誤訊息的問題；進入遊戲後，相容性自檢不再殘留「尚未掛上」的過期提示。</li>
+    </ul>
         <h3>2026-11-09</h3>
     <ul>
       <li>修改器：「製作裝備」改為逐步選單，依序選裝備類型、品質、（武器的）武器種類、底材；每一步選完才會出現下一步，且只列出有底材的選項。</li>
@@ -568,15 +577,17 @@ async function checkGameVersion() {
     let latestBuild = "", latestDate = "";
     // 網頁版：由遊戲頁面代讀（跨網站直接讀會被瀏覽器擋）。
     if (window.api?.gameBuild) { try { const gb = await window.api.gameBuild(); if (gb?.build) { latestBuild = gb.build; latestDate = gb.date || ""; } } catch {} }
-    const ctrl = new AbortController(), tid = setTimeout(() => ctrl.abort(), 5000);
-    try {
-      const res = await fetch("https://d2survivors.lol/changelog.json", { signal: ctrl.signal, cache: "no-cache" }).catch(() => fetch("/changelog.json", { signal: ctrl.signal, cache: "no-cache" }));
-      if (res && res.ok) {
-        const list = await res.json();
-        const first = Array.isArray(list) ? list[0] : null;
-        if (first?.build) { latestBuild = String(first.build); latestDate = String(first.date || ""); }
-      }
-    } catch {} finally { clearTimeout(tid); }
+    if (!latestBuild) {
+      const ctrl = new AbortController(), tid = setTimeout(() => ctrl.abort(), 5000);
+      try {
+        const res = await fetch("https://d2survivors.lol/changelog.json", { signal: ctrl.signal, cache: "no-cache" }).catch(() => fetch("/changelog.json", { signal: ctrl.signal, cache: "no-cache" }));
+        if (res && res.ok) {
+          const list = await res.json();
+          const first = Array.isArray(list) ? list[0] : null;
+          if (first?.build) { latestBuild = String(first.build); latestDate = String(first.date || ""); }
+        }
+      } catch {} finally { clearTimeout(tid); }
+    }
     const compareBuild = latestBuild || prev?.build || "";
     const compareDate = latestDate || prev?.date || "";
     const isNewer = compareBuild ? isBuildNewer(compareBuild, TESTED_GAME_BUILD) : false;
@@ -2481,13 +2492,15 @@ async function load() {
     if (save) { renderTree(); renderView(); renderEditor(); }
   }).catch(() => { gameSupported = false; refreshVersionNotice(); });
   status("讀取中…");
+  const loadP = window.api.load($("#mode").value);
+  loadP.catch(() => {}); // 素材或字典先失敗時，這個請求的錯誤不會變成未處理的拒絕；下面 await loadP 仍會照常拋出
   if (!A) {
-    A = await window.api.assets();
-    const zh = await window.api.i18n();
+    const [assets, zh] = await Promise.all([window.api.assets(), window.api.i18n()]);
+    A = assets;
     zhInit(zh);
     zhMissing = !!zh.missing;
   }
-  const r = await window.api.load($("#mode").value);
+  const r = await loadP;
   if (r.error) return status(r.error, "bad");
   save = r.save; lastSeal = r.seal; sel = null; BASELINE = new Set(allItems(save).map(itemKey)); renderAll();
   const SOURCE_ZH = { localStorage: "瀏覽器存放區", "save.json": "備份存檔檔案" };

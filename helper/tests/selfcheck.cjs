@@ -67,7 +67,7 @@ const goodCtx = () => ({
 
 // 驗證「致命一擊／一擊必殺／掉寶」子開關：開→改值、關→還原、遊戲自行改過的值不覆蓋、新的一局不沿用舊紀錄、全部還原。
 {
-  const source = require("node:fs").readFileSync(path.join(__dirname, "..", "autobot.js"), "utf8");
+  const source = require("node:fs").readFileSync(path.join(__dirname, "..", "autobot.js"), "utf8").replace(/\r\n/g, "\n");
   const helpers = source.slice(source.indexOf("  // 子開關還原紀錄"), source.indexOf("  // 遊戲修改：無敵、致命攻擊"));
   const block = source.slice(source.indexOf("\n    const p = g.world?.player;\n    if (!p) {") + 1, source.indexOf("    // 4. 技能加成"));
   const build = () => new Function("settings", "g", "let goldOverride = null;" + "const ALL_SKILLS_BONUS = 20;" + helpers + "return { tick: () => {" + block + "}, restoreAllCheats };");

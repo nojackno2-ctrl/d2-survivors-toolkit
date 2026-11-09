@@ -67,6 +67,47 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+000000000000. **【已發布 2026-11-10】效能實測：語言模組記憶體洩漏（已修並實機驗證）＋四個優化開關的同場對照**（`lang/lang.js`、新腳本 `tests/live-harness/perf-ab-live.cjs`）。
+   - **量測方法**：官方 `/play/`、隔離設定檔、使用者 D2S1 存檔副本（法師 99 級）、視窗 1600×900、Intel UHD 770。同一局內「基準 → 條件 → 基準 → 條件…」輪流（每段 15 秒、2 輪、第二輪順序反轉），條件只跟緊鄰前後兩段基準平均比；開關走真實效能頁介面，量測時效能頁關閉。`H_SCENE=normal`（只開無敵）／`dense`（怪物數量最大化＋全部精英）／`heavy`。`H_NOSET=1` 為不碰開關的對照組，`H_ONLYBOT=1` 只載入輔助器，`H_AB` 可自訂對照。CPU% 已換算為單一核心百分比。
+   - **洩漏**：`lang/lang.js` 的 `liveCanvases` 用 `Set` 直接存遊戲每次畫字產生的畫布，只有換語言時才清，戰鬥中永遠不釋放。修前對照組（不碰開關，normal）約 4 分鐘 GPU 行程 971 → 2020 MB、分頁行程 1077 → 1602 MB；dense 約 9 分鐘 GPU 行程到 5.5 GB；JS 堆積不變（所以先前只看 JS 堆積沒發現）。只載入輔助器時 GPU 維持 760～940 MB。**修正**：改存 `WeakRef`（`trackLiveCanvas`，每 500 次新增清一次已回收項目），`window.__d2langLiveCount()` 供診斷。**修後**：normal 4 分鐘 GPU 763～929 MB、dense 9 分鐘 745～1046 MB，不再成長；追蹤數量在 140～640 間起伏。dense 基準段跨次比較：GPU 行程 CPU 45 → 30、分頁 CPU 100 → 81、FPS 47 → 53（跨次執行，僅供參考）。
+   - **開關結論（修後 dense 兩輪；修前 dense、normal 各兩輪方向一致）**：
+     - 「掛機時略過主畫面繪製」**有效**：dense 分頁 CPU −27%／−30%、GPU 行程 CPU −46%／−48%、render 耗時 −96%；normal（修前）分頁 −40%、GPU −45%。掛機但不略過＝無差異，效果確實來自略過繪製。
+     - 「減少特效」：dense 的 render 耗時約 −11%～−18%（4 次同向），但分頁／GPU CPU 差在 ±5% 內，低於雜訊，**沒有可感的效益**。
+     - 「記憶體整理」（TDZ 錯誤修正後首次有效量測）：受管貼圖數 −16%～−33%（6 次同向），但 GPU 行程記憶體只差 −1%～−4%（雜訊 ±13%）、CPU 無差，**沒有實際省到記憶體**。
+     - 「降低解析度」：CPU、GPU、影格都在雜訊內，**無效益**。另發現遊戲本身有動態解析度（基準段自己在 1.5／1.25／1 間變動）；工具包以首次看到的值 ×0.75 並每 2 秒強制套用，會與遊戲的自動調整互相覆蓋（未修）。
+   - **後續處理（同日，使用者同意）**：效能頁移除「減少特效」「記憶體整理」「降低解析度」三個開關與其程式（`d2edit.js` 的 `tidyEffects`、`applyResolution` 及兩個計時器），只保留「掛機時略過主畫面繪製」；`perfOpts` 只剩 `afkSkipMain`，舊設定的其他欄位忽略；載入時仍清掉舊版留在 `window.__d2perfTimers` 的計時器。降低解析度與遊戲動態解析度互相覆蓋的問題隨之消失。`tests/live-harness/perf-lowres-live.cjs` 已刪除，`perf-ab-live.cjs` 條件改為基準／掛機略過／掛機不略過。本檔較早項目（掛機與效能優化、效能頁）中關於這三個開關的描述已過時。
+   - **移除後實機（官方 `/play/`，同上環境）**：localStorage 預先寫入舊格式（三項皆開、`afkSkipMain:false`）後載入，`__d2perfOpts` 只有 `afkSkipMain:false`、效能頁只有一個開關、解析度維持 1.5、勾選後存回 `{"afkSkipMain":true}`。normal 場景掛機對照兩輪：略過繪製分頁 CPU −42%／−37%、GPU 行程 −42%／−46%；不略過 −4%／−14%、−6%／−7%；GPU 記憶體全程 740～923 MB。**語言切換**：暫停時畫面上 34 個含英文原文的文字畫布，切到 English 34 個全部改變，切回繁中後仍在的 32 個與原本完全相同，無錯誤（先前列為未驗證的 `redrawLiveCanvases` 已驗證）。`verify --quick` 15／15、`live-smoke` 通過。
+   - **發布**：2026-11-10 公告寫入 `site/index.html` 與 `modifier/editor.html`（記憶體洩漏修正、載入加速、移除三個開關等 6 項），依先例以 git 直接推送 main（`publish.cjs --confirm` 需要遊戲更新的正式測試紀錄，工具包改動不適用）。使用者表示其餘項目自行測試。
+   - **雜訊**：場景負載（敵人數 54～465）波動大，基準段彼此的 CPU 差可達 ±17%，小於此幅度的差異一律不下結論。
+   - **未驗證**：手機與獨立顯示卡；大於 1600×900 的視窗；安裝自訂 D2R 字型時才會套用的畫布 CSS 濾鏡（`contrast／brightness`）負擔；修後工具包相對「只載入輔助器」仍略高的 CPU（分頁約 55 對 50、GPU 約 24 對 19，跨次比較）。
+00000000000. **【已發布 2026-11-10】工具包全面測試找到的 5 項問題**（`d2edit.js`、`modifier/editor.html`、`modifier/tests/craft-affix-ui.cjs`、`craft-companion-ui.cjs`、`verify/suite.cjs`）。
+   - **效能頁「記憶體整理」持續報錯**：`tidyEffects` 在宣告前使用 `gc`（暫時性死區），開關一開每 0.5 秒丟一次 `ReferenceError`，後半段回收邏輯從未執行。已把 `const gc` 移到使用前。先前「記憶體整理無可證實效益」的量測是在這個錯誤存在時做的，結論需重測。
+   - **`modifier/overrides/game-overrides.js` 已刪除**（原待決事項 4，使用者 2026-11-10 同意）：`d2edit.js` 結尾每次載入都注入該檔，第 2 行中文未加註解，執行時丟 `ReferenceError`，從未生效但主控台印「已載入」。該檔若被修好會擋掉遊戲對存檔鍵的所有寫入（玩家進度無法存檔），故連同載入段一併移除。
+   - **重新點書籤後效能開關被舊計時器改回**：舊版模組的 `setInterval`（解析度 2 秒、特效整理 0.5 秒）沒被清掉，拿著舊的 `perfOpts` 繼續跑。計時器代號改記在 `window.__d2perfTimers`，載入時先清上一版；繪製掛接改讀 `window.__d2perfOpts`。
+   - **自檢殘留過期提示**：25 秒補查改為以補查結果取代原本的「輔助器／語言」提示。
+   - **修改器 `load()`**：先發出的讀檔請求加上空的 `catch`，避免素材或字典先失敗時變成未處理的拒絕。
+   - **兩個過時測試**：`craft-affix-ui`、`craft-companion-ui` 沒跟上逐步選單（未先選類型／品質／底材），已補上並登記進 `verify/suite.cjs`（快速套件由 13 項變 15 項）。
+   - **已驗證**：`node verify/verify.cjs --quick` 15／15。**官方 `/play/` 實機（隔離設定檔、使用者 D2S1 存檔副本、法師 99 級）**：修前開記憶體整理 3.2 秒內 7 次錯誤、`gc.maxUnusedTime` 維持 60000；修後 0 次錯誤、開啟時 3000、關閉後還原 60000。修前重新點書籤後關閉降低解析度，5 秒內由 1.5 被改回 1.125；修後維持 1.5。載入時主控台不再有覆蓋腳本的錯誤；自檢補查後提示清空；修改器開啟 6 個後端呼叫全部成功；掛機遮罩與擊殺數正常。
+   - **未驗證**：「減少特效」在重新點書籤後的行為（與解析度同一組計時器，未單獨實機跑）；從「已部署的舊版」重新點書籤載入新版時，舊版計時器沒有記在 `window`，這一次清不到（重新整理頁面即可）；手機版面；`load()` 的失敗路徑未實際觸發。
+   - 實機記錄中的 `startRun … reading 'id'` 是測試框架按 hosted 按鈕造成（`tests/live-harness/boot.js` 已註明），非玩家路徑。
+0000000000a. **【已發布 2026-11-10】Antigravity：專案載入速度最佳化**（`d2edit.js`、`helper/selfcheck.js`、`helper/autobot.js`、`lang/lang.js`、`modifier/editor.html`）。
+   - **物品引擎目標分塊快速通道（`d2edit.js`）**：歷版遊戲所有 21 個特徵碼（`modifier/signatures.json`）皆位於 `itemArt-*.js`（17 個）與 `saveTransfer-*.js`（4 個）。`startEngine` 改為先抓這兩個目標分塊比對特徵碼，若 21 個特徵全部命中即略過其餘 44 個 Pixi／UI／韓文分塊（省下約 2 MB 下載與多輪波段正則掃描）；若未來改版有缺漏則自動退回完整波段掃描。同時引擎 iframe 內將修補後模組與 `modifier/engine-page.js` 改為 `Promise.all` 並行匯入。
+   - **相容性自檢並行化與輪詢加速（`helper/selfcheck.js`）**：`runSelfCheck` 將「遊戲版本」「字典／遊戲資料」「物品引擎＋存檔」「掛接」改為 `Promise.all` 並行執行（存檔讀取與引擎啟動並行，讀完後再跑 `saveFaults`）；`checkGameHook` 輪詢間隔由 `250ms` 縮短為 `50ms`，且 `withTimeout` 結束後清除計時器避免阻擋程序結束。
+   - **消除跨模組重複網路請求（`d2edit.js`、`helper/autobot.js`、`lang/lang.js`、`modifier/editor.html`）**：
+     - `autobot.js` 的 `connect()` 將已抓到的 `Game-*.js` 原始碼直接傳給 `loadSkillTables(url, source)`，消除同一檔案重複抓取 3 次的問題，並將 `itemArt-*.js` 與 `saveTransfer-*.js` 改為並行 `import()`。
+     - `d2edit.js` 建立共用的 `window.__d2changelogPromise`，供 `selfcheck.js`、`autobot.js`、`d2edit.js`（`gameBuild`）共用，且 `editor.html` 在 `window.api.gameBuild()` 已取得版本時不再重複跨網域抓 `/changelog.json`（由 4 次降至 1 次）。
+     - `d2edit.js` 記憶化 `backend.assets()`（並在工具包載入進度條預熱 `items.json`），`backend.i18n()` 移除多餘的 `structuredClone` 與淺拷貝（`postMessage` 本身已做結構化複製），`editor.html` 的 `load()` 改為並行執行 `assets()`、`i18n()` 與 `load(mode)`。
+     - `lang/lang.js` 的 `assetUrl` 優先處理 `translate-*.js`／`lang-*.js`／`Game-*.js`，點陣字型掛接前 3 秒輪詢間隔由 `500ms` 縮短為 `100ms`。
+   - **已驗證**：
+     - 單元與整合測試：`node verify/verify.cjs --quick` **13／13 項全數通過**（含 `selfcheck`、`lang`、`build-web`、`item-db`、`weapon-sets`、`autoforge`、`autobot` 208 項等）。
+     - **官方網址實機驗證（`https://d2survivors.lol/play/`，隔離 Electron 設定檔）**：
+       1. `node verify/live-smoke.cjs`：實機煙霧測試通過（`20261105.3`，amazon，進入戰局 `playing`、輔助器 `connected: true`、語言 `gameHooked: true`、`lang.assets: 0`、自檢 `ok: true`）。
+       2. 實機載入測速對照（點書籤載入 `d2edit.js` 至自檢完成，再從選單點開修改器至顯示「已讀取」）：
+          - 對 `d2survivors.lol` 發出的請求數：**53～60 個 → 7～9 個**（減少約 85%）。
+          - 物品引擎掃描分塊數：**46 個（約 3.3 MB）→ 2 個**。
+          - 物品引擎啟動耗時（`engine.ms.完成`）：**351～356 ms → 160～165 ms**（加快約 54%，其中「抓取程式＋比對特徵碼」由 **263～269 ms 降至 74～76 ms**）。
+          - 修改器點擊開啟至「已讀取」耗時：**122 ms → 75～99 ms**。
+   - **未驗證**：真實 iPhone Safari／行動網路高延遲環境下的實際秒數（理論上因省去 44 個分塊請求與多輪波段往返，高延遲環境改善幅度更大）；正式部署至 GitHub Pages 後的快取行為。
 000000000. **【2026-11-09，未提交】遊戲 20261105.3 官方更新 25 項分析完成**（`verify/reports/impact.json` 待分析 0）。
    - 分析以 Codex／AGY 子代理平行執行（每項一個），再對「無法確認」項目深入一輪；結論須附新版程式位置，關鍵項由主代理以 grep 複核。
    - **需修改 2 項（已修正）**：#6 拾取過濾新動作 `hidesell`，`helper/autobot.js:406` 撿寶判斷補上；#10 魔法裝備不可淬鍊且會被還原，`helper/autoforge-ui.js:395、480` 熔爐失敗自動售出前加 `eligible()`。
@@ -167,7 +208,7 @@
 1. **【待使用者決定】繁中怪物同名衝突**：`translate("Horror")` 翻為恐骨骷髏、`Slayer` 殺戮僕魔，但字典基礎譯名為驚駭、屠殺者（用於技能或稱號）。待決定：A. 怪物名僅在明確怪物欄位使用；B. 維持現狀。
 2. **【待使用者決定】`cleanCJK` 空白與標點處理**：`cleanCJK` 會吃掉逗號，約 2,434 條譯文逗號受影響。待決定：A. 維持現狀；B. 加入長句逗號保護；C. 採用點陣字型映射。
 3. **【待使用者決定】字典 165 條韓文對齊**：依韓文官方資料修正 `Fiend` 為惡魔、`Rule` 為統御，需使用者確認是否接受此批詞條變更。
-4. **【待使用者決定】`modifier/overrides/game-overrides.js`**：第 2 行中文字語法錯誤致該檔從未生效。該檔用途為繞過存檔檢查，修復將使防修改失效，待使用者確認是否啟用或刪除。
+4. **【已刪除 2026-11-10】`modifier/overrides/game-overrides.js`**：使用者同意刪除，連同 `d2edit.js` 的載入段移除（詳見本節最上方 2026-11-10 項目）。
 5. **手機版比較框排版**：`lang/lang.js` 已新增 `planTipLayout`（避免裝備框蓋住操作按鈕），純函式單元測試已過，尚待真實觸控手機或官方實機驗證。
 6. **鍛造精華作弊與實機接受度**：`cheat.forgeMax` 已改為遊戲真實格式（`type: "essence"`、`base: "Burning Essence of Terror"`、`count` 99）；官方 /play/ 實機（`tests/live-harness/forge-essence-live.cjs`）確認存檔內出現精華堆疊且 count=99。尚未驗證：鍛造面板顯示數量、實際鍛造是否被遊戲接受、重新整理後是否保留。
 7. **桌面版封裝**：網頁端修改已同步至啟動器程式碼，但尚未執行正式桌面 exe 重新打包（`publish.cjs --desktop`）。

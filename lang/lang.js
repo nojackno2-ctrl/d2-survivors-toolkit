@@ -110,6 +110,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
   // 爬過的網址與待爬佇列跨呼叫保留；找到目標就停（入口檔先引入大量繪圖模組，固定上限會爬不到 translate／lang）
   const assetSeen = new Set(), assetQueue = [];
   let assetStarted = false;
+  const assetPriority = (u) => /\/(?:translate|lang)-[\w-]+\.js(?:\?|$)/.test(u) ? 0 : /\/(?:Game|game)-[\w-]+\.js(?:\?|$)/.test(u) ? 1 : 2;
   async function assetUrl(re) {
     const hit = performance.getEntriesByType("resource").map((e) => e.name).find((n) => re.test(n));
     if (hit) return hit;
@@ -120,17 +121,20 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       assetQueue.push(...[...document.querySelectorAll("script[type=module][src], link[rel=modulepreload][href]")].map((s) => s.src || s.href).filter((u) => /\/assets\//.test(u)));
     }
     while (assetQueue.length && assetSeen.size < 400) {
+      assetQueue.sort((a, b) => assetPriority(a) - assetPriority(b));
       const url = assetQueue.shift();
       if (assetSeen.has(url)) continue;
       assetSeen.add(url);
       if (re.test(url)) return url;
       try {
         const src = await (await fetch(url)).text();
+        let matched = null;
         for (const m of src.matchAll(/["'`]\.\/([\w.-]+\.js)["'`]/g)) {
           const next = new URL(m[1], url).href;
-          if (re.test(next)) return next;
           if (!assetSeen.has(next)) assetQueue.push(next);
+          if (!matched && re.test(next)) matched = next;
         }
+        if (matched) return matched;
       } catch {}
     }
     return null;
@@ -326,21 +330,33 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
   }
 
 
+  // 只存弱參照：戰鬥中遊戲不斷建立文字畫布（傷害數字、地上物品名…），用完就丟。
+  // 舊版用 Set 直接存畫布，等於永遠不釋放（實機量到 GPU 行程每分鐘多約 270 MB、分頁行程約 130 MB，JS 堆積不變）。
   const liveCanvases = new Set();
+  let liveAdds = 0;
+  function trackLiveCanvas(canvas) {
+    if (canvas.__d2langTracked) return;
+    canvas.__d2langTracked = true;
+    liveCanvases.add(new WeakRef(canvas));
+    // 每新增 500 個清一次已被回收的項目，集合大小不會無限成長
+    if (++liveAdds % 500 === 0) for (const ref of liveCanvases) if (!ref.deref()) liveCanvases.delete(ref);
+  }
   // 用記下的原文與參數，以目前語言重畫遊戲建立的文字畫布
   function redrawLiveCanvases() {
-    for (const c of [...liveCanvases]) {
-      if (!c.isConnected) { liveCanvases.delete(c); continue; }
+    for (const ref of [...liveCanvases]) {
+      const c = ref.deref();
+      if (!c || !c.isConnected) { liveCanvases.delete(ref); if (c) c.__d2langTracked = false; continue; }
       const src = c.__d2langSrc; if (!src) continue;
       try {
         const next = src.font.canvas(src.text, ...src.rest);
         if (next instanceof HTMLCanvasElement && next !== c) {
           copyCanvasStyle(c, next);
-          c.replaceWith(next); liveCanvases.delete(c);
+          c.replaceWith(next); liveCanvases.delete(ref);
         }
       } catch {}
     }
   }
+  window.__d2langLiveCount = () => liveCanvases.size; // 診斷用：追蹤中的文字畫布數量
   // 記下遊戲最後一次建立升級畫面的參數：即時換語言時請遊戲用同樣參數重建，整張卡片以新語言重畫
   // （卡片的「進化為…」是分段畫的，逐段重畫只能逐字翻）
   let lastLevelUp = null;
@@ -514,7 +530,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
           if (currentLang !== "en" && HAS_CJK.test(out.textContent || "")) {
             try { out.getContext("2d")?.getImageData(0, 0, 1, 1); } catch {}
           }
-          out.__d2langSrc = { font: this, text: raw, rest }; liveCanvases.add(out);
+          out.__d2langSrc = { font: this, text: raw, rest }; trackLiveCanvas(out);
         }
         return out;
       });
@@ -1195,7 +1211,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     }
     // 點陣字型能畫中文後才接上遊戲翻譯流程（否則 Canvas 上會變成「??」；DOM 與一般 Canvas 文字照常由本模組翻譯）
     (async () => {
-      for (let i = 0; i < 240 && !patchBitmapFont(); i++) { await captureGame(); await new Promise((r) => setTimeout(r, 500)); }
+      for (let i = 0; i < 260 && !patchBitmapFont(); i++) { await captureGame(); await new Promise((r) => setTimeout(r, i < 30 ? 100 : 500)); }
       if (fontPatched) { if (currentLang !== "en") await hookGameTranslation(); clearTextCaches(); redrawStaticCanvases(); }
       else console.warn("[d2lang] 找不到遊戲點陣字型，遊戲畫布上的選單維持原文");
     })();
