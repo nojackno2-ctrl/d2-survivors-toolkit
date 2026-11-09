@@ -43,13 +43,30 @@ function lineList(g, cls, level, id) {
 
 // ---- 記憶：同稀有度＋名稱＋底材共用目標設定 ----
 const itemKey = (it) => [it.rarity, it.name, it.base].join("|");
+
+// 名稱繁中化（序列、背包列表、狀態標題）：沿用共用字典 zh-TW.json。
+// 字典尚未載入、或遊戲介面為英文時顯示英文原名；字典載入後會自動重繪。
+let zhDictAF = null, zhDictReq = false;
+const zhUILang = () => (window.__d2lang ? window.__d2lang.get() === "en" : window.LANG === "en");
+function ensureZhDict() {
+  if (zhDictAF || zhDictReq || !window.__d2zhUrl) return;
+  zhDictReq = true;
+  const p = (window.__d2zhPromise ??= fetch(window.__d2zhUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null));
+  Promise.resolve(p).then((d) => { if (d && typeof d === "object") { zhDictAF = d; render(); } }, () => { /* 讀取失敗就維持英文 */ });
+}
+function zhItemName(it) {
+  const name = String(it?.name || ""), base = String(it?.base || "");
+  if (!zhDictAF || zhUILang()) return `${name}（${base}）`;
+  const zt = (s) => zhDictAF[s] || s;
+  return `${zt(name)}（${zt(base)}）`;
+}
 function loadMemory() { try { return JSON.parse(localStorage.getItem(MEM_KEY) || "{}") || {}; } catch (e) { return {}; } }
 function saveMemory(m) { try { localStorage.setItem(MEM_KEY, JSON.stringify(m)); } catch (e) { /* 無法寫入時仍可用，只是不會記住 */ } }
 function rememberTargets(key, targets) { const m = loadMemory(); m[key] = { ...targets }; saveMemory(m); }
 
 const state = {
   running: false, cls: null, level: 1, msg: "待命", log: [], folded: undefined,
-  itemId: null, itemKey: null, itemName: "", lines: [], targets: {}, steps: 0, result: "",
+  itemId: null, itemKey: null, itemObj: null, lines: [], targets: {}, steps: 0, result: "",
   // 序列：[{ id, name, status }]，依序放上鐵砧淬鍊。目標設定沿用記憶（同稀有度＋名稱＋底材）。
   queue: [], queueRunning: false,
   // 未升級統計（每件裝備的每次淬鍊重置）與警告文字。
@@ -68,7 +85,7 @@ function attach(g, cls, item) {
   state.cls = cls;
   state.itemId = item.id;
   state.itemKey = itemKey(item);
-  state.itemName = `${item.name}（${item.base}）`;
+  state.itemObj = { name: item.name, base: item.base };
   state.lines = lineList(g, cls, state.level, item.id);
   const saved = loadMemory()[state.itemKey] || {};
   state.targets = {};
@@ -91,7 +108,7 @@ function sellItem(g, cls, item) {
   finally { g.forgeUp = prevUp; }
   if (held()) { g.anvil = prevAnvil; return false; }
   state.hfFailed = false;
-  state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemName = "";
+  state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemObj = null;
   return true;
 }
 
@@ -210,7 +227,7 @@ async function runQueue() {
     attach(g, cls, item);
     lastItemId = item.id;
     q.status = "淬鍊中";
-    state.running = true; push(`序列：開始 ${q.name}`);
+    state.running = true; push(`序列：開始 ${zhItemName(q)}`);
     const r = await loop();
     q.status = r.result;
     if (r.fatal) break;
@@ -281,6 +298,7 @@ function oddsHtml() {
 }
 
 function render() {
+  ensureZhDict();
   const g = game();
   if (!g) return;
   const b = ensureBox();
@@ -307,7 +325,7 @@ function render() {
     : state.hfSucceeded ? '<div style="color:#d4a84a;font-weight:bold">✔ 地獄熔爐已成功（倍增），不進入自動淬鍊</div>' : "";
   const autoSellBox = `<label style="display:flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input id="af-autosell" type="checkbox"${state.autoSell ? " checked" : ""}> 地獄熔爐失敗就自動售出</label>`;
   const itemLine = state.itemId
-    ? `<div><b>${esc(state.itemName)}</b> <span style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85">${esc(state.result || "")}</div>`
+    ? `<div><b>${esc(state.itemObj ? zhItemName(state.itemObj) : "")}</b> <span style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85">${esc(state.result || "")}</div>`
     : `<div style="opacity:.8">${g.forgeUp ? "請把暗金、套裝或符文之語放到恰西的鐵砧上。" : "請在下方「背包可淬鍊」點「選取」，挑一件暗金、套裝或符文之語。"}</div>`;
   // 控制列放在面板最上方：「開始」有序列就依序淬鍊，沒有序列就淬鍊鐵砧上這件。
   const canStart = !state.running && !state.queueRunning && (state.queue.length > 0 || (!!state.itemId && !state.hfSucceeded));
@@ -359,13 +377,13 @@ function render() {
   b.querySelectorAll("[data-select]").forEach((x) => x.onclick = () => { if (!state.running) { g.anvil = x.dataset.select; lastItemId = undefined; render(); } });
   b.querySelectorAll("[data-add]").forEach((x) => x.onclick = () => {
     const it = bagItems(g, g.kit?.id).find((i) => i.id === x.dataset.add);
-    if (it && !state.queue.some((q) => q.id === it.id)) state.queue.push({ id: it.id, name: `${it.name}（${it.base}）`, status: "等待" });
+    if (it && !state.queue.some((q) => q.id === it.id)) state.queue.push({ id: it.id, name: it.name, base: it.base, status: "等待" });
     render();
   });
   // 一鍵加入同名：同稀有度、名稱、底材的裝備（背包或倉庫，依來源）全部加入序列。
   b.querySelectorAll("[data-addsame]").forEach((x) => x.onclick = () => {
     const key = x.dataset.addsame;
-    for (const it of bagItems(g, g.kit?.id)) if (itemKey(it) === key && !state.queue.some((q) => q.id === it.id)) state.queue.push({ id: it.id, name: `${it.name}（${it.base}）`, status: "等待" });
+    for (const it of bagItems(g, g.kit?.id)) if (itemKey(it) === key && !state.queue.some((q) => q.id === it.id)) state.queue.push({ id: it.id, name: it.name, base: it.base, status: "等待" });
     render();
   });
   b.querySelectorAll("[data-source]").forEach((x) => x.onclick = () => { if (!state.running && !state.queueRunning) { state.source = x.dataset.source; render(); } });
@@ -384,11 +402,11 @@ function queueHtml(g) {
   const qRows = state.queue.map((q, i) => {
     const it = ownItem(g, cls, q.id);
     const warn = it && !hasTarget(itemKey(it)) ? ' <span style="color:#e88">（未設目標）</span>' : "";
-    return `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="opacity:.7">${i + 1}.</span><a data-pick="${esc(q.id)}" style="flex:1;cursor:pointer;text-decoration:underline">${esc(q.name)}</a>${warn}<span style="opacity:.85;font-size:13px">${esc(q.status || "")}</span><button type="button" data-del="${esc(q.id)}" style="${btn}"${state.queueRunning ? " disabled" : ""}>移除</button></div>`;
+    return `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="opacity:.7">${i + 1}.</span><a data-pick="${esc(q.id)}" style="flex:1;cursor:pointer;text-decoration:underline">${esc(zhItemName(q))}</a>${warn}<span style="opacity:.85;font-size:13px">${esc(q.status || "")}</span><button type="button" data-del="${esc(q.id)}" style="${btn}"${state.queueRunning ? " disabled" : ""}>移除</button></div>`;
   }).join("");
   // 同名（同稀有度、名稱、底材）且尚未在序列中的件數，供「加入同名」按鈕顯示。
   const sameCount = (it) => bag.filter((x) => itemKey(x) === itemKey(it)).length;
-  const bagRows = bag.map((it) => `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="flex:1">${esc(it.name)}（${esc(it.base)}）</span><button type="button" data-select="${esc(it.id)}" style="${btn}"${state.running ? " disabled" : ""}>選取</button><button type="button" data-add="${esc(it.id)}" style="${btn}">加入</button><button type="button" data-addsame="${esc(itemKey(it))}" style="${btn}" title="把同名、同底材的裝備全部加入序列">加入同名（${sameCount(it)}）</button></div>`).join("");
+  const bagRows = bag.map((it) => `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="flex:1">${esc(zhItemName(it))}</span><button type="button" data-select="${esc(it.id)}" style="${btn}"${state.running ? " disabled" : ""}>選取</button><button type="button" data-add="${esc(it.id)}" style="${btn}">加入</button><button type="button" data-addsame="${esc(itemKey(it))}" style="${btn}" title="把同名、同底材的裝備全部加入序列">加入同名（${sameCount(it)}）</button></div>`).join("");
   const srcBtn = (key, label) => `<button type="button" data-source="${key}" style="${btn}${state.source === key ? "border-color:#d4a84a;color:#d4a84a;" : ""}"${state.running || state.queueRunning ? " disabled" : ""}>${label}</button>`;
   const sourceRow = `<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><span style="opacity:.8">來源：</span>${srcBtn("bag", "角色背包")}${srcBtn("stash", "個人倉庫")}</div>`;
   return `
@@ -426,7 +444,7 @@ function tick() {
     if (item && eligible(item)) {
       attach(g, g.kit.id, item);
       if (state.hfFailed && state.autoSell) { const ok = sellItem(g, g.kit.id, item); state.result = ok ? "地獄熔爐已失敗，已自動售出" : "地獄熔爐已失敗，自動售出未成功"; push(state.result); }
-    } else { state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemName = ""; state.hfFailed = false; state.hfSucceeded = false; }
+    } else { state.itemId = null; state.itemKey = null; state.lines = []; state.targets = {}; state.itemObj = null; state.hfFailed = false; state.hfSucceeded = false; }
     render();
   } else if (!box?.isConnected) {
     state.cls = g.kit.id;
@@ -469,7 +487,7 @@ window.__d2autoforgeUI = {
       const it = bagItems(g, cls).find((x) => x.id === id);
       if (!it) continue;
       if (targetsById?.[id]) rememberTargets(itemKey(it), targetsById[id]);
-      state.queue.push({ id, name: `${it.name}（${it.base}）`, status: "等待" });
+      state.queue.push({ id, name: it.name, base: it.base, status: "等待" });
     }
     state.log = [];
     await runQueue();
