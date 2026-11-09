@@ -24,11 +24,13 @@ function essenceCount(g, cls) {
 // 可淬鍊：暗金、套裝、符文之語，且有屬性。
 const eligible = (it) => !!it && ["unique", "set", "runeword"].includes(it.rarity) && Array.isArray(it.mods) && it.mods.length > 0;
 
-// 鐵砧上的裝備：依 g.anvil 的 ID 在背包與已裝備中尋找。
+// 該角色的個人倉庫（與遊戲 stashTabs[角色] 相同）。
+const stashOf = (g, cls) => g.save?.stashTabs?.[cls] || [];
+// 鐵砧上的裝備：依 g.anvil 的 ID 在背包、個人倉庫與已裝備中尋找。
 function anvilItem(g, cls) {
   const id = g.anvil;
   if (!id) return null;
-  const pool = [...(g.inventoryOf?.(cls) || []), ...Object.values(g.save?.equippedByClass?.[cls] || {})];
+  const pool = [...(g.inventoryOf?.(cls) || []), ...stashOf(g, cls), ...Object.values(g.save?.equippedByClass?.[cls] || {})];
   return pool.find((x) => x?.id === id) || null;
 }
 
@@ -50,6 +52,10 @@ const state = {
   itemId: null, itemKey: null, itemName: "", lines: [], targets: {}, steps: 0, result: "",
   // 序列：[{ id, name, status }]，依序放上鐵砧淬鍊。目標設定沿用記憶（同稀有度＋名稱＋底材）。
   queue: [], queueRunning: false,
+  // 未升級統計（每件裝備的每次淬鍊重置）與警告文字。
+  sinceUp: {}, warn: [],
+  // 可淬鍊的來源：角色背包（"bag"）或該角色的個人倉庫（"stash"）。
+  source: "bag",
   // 工具包手動開啟：不必在恰西鐵砧選單，從背包選裝備即可淬鍊。遊戲恢復執行（未暫停）且未在淬鍊時自動關閉。
   manual: false,
   // 地獄熔爐失敗：目前裝備的熔爐是否已失敗（遊戲寫入 hf 且淬鍊清空）；autoSell 為「失敗就自動售出」開關。
@@ -89,6 +95,23 @@ function sellItem(g, cls, item) {
   return true;
 }
 
+// 「未升級」警告：被選為目標（數值 > 0）的屬性，每次成功淬鍊後若沒有升級就累計；達 200 次跳出警告。
+const UPGRADE_WARN_AT = 200;
+function trackUpgrade(item, beforeT) {
+  if (!item) return;
+  const afterT = item.forge?.t ?? {};
+  for (const [k, v] of Object.entries(state.targets || {})) {
+    if (!(Number(v) > 0)) continue;
+    if ((afterT[k] ?? 0) > (beforeT[k] ?? 0)) { state.sinceUp[k] = 0; continue; }
+    state.sinceUp[k] = (state.sinceUp[k] || 0) + 1;
+    if (state.sinceUp[k] === UPGRADE_WARN_AT) {
+      const label = state.lines.find((l) => l.key === k)?.text || k;
+      state.warn.push(`「${label}」成功淬煉 ${UPGRADE_WARN_AT} 次仍未升級，請確認目標是否可達`);
+      push(`警告：${label} 已成功淬煉 ${UPGRADE_WARN_AT} 次仍未升級`);
+    }
+  }
+}
+
 // 一步：依目前紀錄決定淬鍊／清除／熔爐，或結束。回傳 { done, result }。
 async function stepOnce(g, cls) {
   const item = anvilItem(g, cls);
@@ -98,9 +121,12 @@ async function stepOnce(g, cls) {
   const d = AF().decideNext(AF().normalizeTargets(state.targets), { counts: item.forge?.t ?? {}, hellforgeUsed: !!item.forge?.hf });
   if (d.action === "done") return { done: true, result: d.reason };
   g.anvil = item.id;
+  const beforeT = { ...(item.forge?.t ?? {}) };
   const r = await g.forgeTry(cls, state.level, d.action, () => {});
   const text = r?.text || "";
   state.steps++;
+  // 成功淬煉（Raised）才計入「未升級」統計。
+  if (d.action === "temper" && /^Raised/i.test(text)) trackUpgrade(anvilItem(g, cls), beforeT);
   // 連線失敗時遊戲不會扣精華但也沒有結果，必須停止，避免無限重試。
   // 伺服器暫時無回應（實測多為 429 速率限制）：精華已暫存、不會遺失，改為等待後重試。
   if (/No reply|No connection/i.test(text)) return { done: false, retry: true, result: "伺服器暫時無回應，等待後重試" };
@@ -124,6 +150,7 @@ async function loop() {
   const g = game();
   if (!g) { push("找不到遊戲"); return { result: "找不到遊戲", fatal: true }; }
   let retries = 0, out = { result: "已停止", fatal: true };
+  state.sinceUp = {}; state.warn = [];
   while (state.running) {
     let r;
     try { r = await stepOnce(g, state.cls); } catch (e) { r = { done: true, result: "錯誤：" + String(e?.message || e) }; }
@@ -157,7 +184,11 @@ async function loop() {
 
 // 當前職業背包裡可淬鍊的裝備。
 // 熔爐已成功（倍增）的裝備不得進入自動淬鍊清單。
-const bagItems = (g, cls) => (g.inventoryOf?.(cls) || []).filter((x) => eligible(x) && !AF().hellforgeSucceeded(x.forge));
+// 目前來源清單：背包或個人倉庫（依面板的「來源」選擇）。
+const sourceList = (g, cls) => (state.source === "stash" ? stashOf(g, cls) : (g.inventoryOf?.(cls) || []));
+const bagItems = (g, cls) => sourceList(g, cls).filter((x) => eligible(x) && !AF().hellforgeSucceeded(x.forge));
+// 不論來源，依 ID 找序列中的裝備（背包、倉庫、已裝備皆可）。
+const ownItem = (g, cls, id) => [...(g.inventoryOf?.(cls) || []), ...stashOf(g, cls), ...Object.values(g.save?.equippedByClass?.[cls] || {})].find((x) => x?.id === id) || null;
 const hasTarget = (key) => Object.values(loadMemory()[key] || {}).some((v) => v === "X" || Number(v) > 0);
 
 // 序列：一件一件放上鐵砧，跑到該件結束再換下一件。
@@ -170,10 +201,10 @@ async function runQueue() {
   for (const q of state.queue) {
     if (!state.queueRunning) break;
     if (q.status === "完成") continue;
-    const raw = (g.inventoryOf?.(cls) || []).find((x) => x.id === q.id);
+    const raw = ownItem(g, cls, q.id);
     if (raw && AF().hellforgeSucceeded(raw.forge)) { q.status = "熔爐已成功，略過"; render(); continue; }
-    const item = bagItems(g, cls).find((x) => x.id === q.id);
-    if (!item) { q.status = "不在背包，略過"; render(); continue; }
+    const item = raw && eligible(raw) ? raw : null;
+    if (!item) { q.status = "不在背包或倉庫，略過"; render(); continue; }
     if (!hasTarget(itemKey(item))) { q.status = "未設定目標，略過"; render(); continue; }
     g.anvil = item.id;
     attach(g, cls, item);
@@ -278,18 +309,22 @@ function render() {
   const itemLine = state.itemId
     ? `<div><b>${esc(state.itemName)}</b> <span style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85">${esc(state.result || "")}</div>`
     : `<div style="opacity:.8">${g.forgeUp ? "請把暗金、套裝或符文之語放到恰西的鐵砧上。" : "請在下方「背包可淬鍊」點「選取」，挑一件暗金、套裝或符文之語。"}</div>`;
+  // 控制列放在面板最上方：「開始」有序列就依序淬鍊，沒有序列就淬鍊鐵砧上這件。
+  const canStart = !state.running && !state.queueRunning && (state.queue.length > 0 || (!!state.itemId && !state.hfSucceeded));
+  const controlRow = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <button id="af-start" type="button"${canStart ? "" : " disabled"} title="序列有裝備就依序淬鍊，否則淬鍊鐵砧上的這件">開始</button>
+      <button id="af-stop" type="button"${state.running || state.queueRunning ? "" : " disabled"}>停止</button>
+      <button id="af-afk" type="button" title="畫面變全黑，自動淬鍊照常執行，點畫面喚醒">掛機</button>
+      <span style="flex:1;align-self:center;opacity:.9">${esc(state.msg)}</span>
+    </div>`;
   b.innerHTML = `
     ${head}
+    ${controlRow}
     ${itemLine}
+    ${state.warn?.length ? `<div style="margin-top:4px;padding:4px 6px;border:1px solid #c44;border-radius:4px;background:#3a1212;color:#f88">${state.warn.map((w) => esc(w)).join("<br>")}</div>` : ""}
     <div style="border-top:1px solid #4a3d25;margin-top:6px;padding-top:6px">${oddsLine}${lineSel || ""}</div>
     ${autoSellBox}
     ${state.itemId ? '<div style="opacity:.7;margin-top:4px">設定會自動記住（同稀有度、名稱與底材共用）。</div>' : ""}
-    <div style="display:flex;gap:6px;margin-top:8px">
-      <button id="af-start" type="button"${state.running || !state.itemId || state.hfSucceeded ? " disabled" : ""}>開始</button>
-      <button id="af-stop" type="button"${state.running ? "" : " disabled"}>停止</button>
-      <button id="af-afk" type="button" title="畫面變全黑，自動淬鍊照常執行，點畫面喚醒">掛機</button>
-      <span style="flex:1;align-self:center;opacity:.9">${esc(state.msg)}</span>
-    </div>
     ${queueHtml(g)}`;
   // 必須阻止冒泡：否則同一次點擊會傳到外框，觸發收合後才掛上的「點圖示展開」而立刻又展開。
   // 手動開啟的面板收合即關閉（之後由工具包再開）；鐵砧選單開著時仍只是收成圖示。
@@ -310,7 +345,10 @@ function render() {
     render();
   };
   b.querySelector("#af-start").onclick = () => {
-    if (state.running || !state.itemId) return;
+    if (state.running || state.queueRunning) return;
+    // 序列有裝備：依序淬鍊（同一顆按鈕，不再另有「開始序列」）。
+    if (state.queue.length) return runQueue();
+    if (!state.itemId) return;
     try { AF().normalizeTargets(state.targets); } catch (e) { return push(e.message || String(e)); }
     state.running = true; push("開始");
     loop();
@@ -324,11 +362,16 @@ function render() {
     if (it && !state.queue.some((q) => q.id === it.id)) state.queue.push({ id: it.id, name: `${it.name}（${it.base}）`, status: "等待" });
     render();
   });
+  // 一鍵加入同名：同稀有度、名稱、底材的裝備（背包或倉庫，依來源）全部加入序列。
+  b.querySelectorAll("[data-addsame]").forEach((x) => x.onclick = () => {
+    const key = x.dataset.addsame;
+    for (const it of bagItems(g, g.kit?.id)) if (itemKey(it) === key && !state.queue.some((q) => q.id === it.id)) state.queue.push({ id: it.id, name: `${it.name}（${it.base}）`, status: "等待" });
+    render();
+  });
+  b.querySelectorAll("[data-source]").forEach((x) => x.onclick = () => { if (!state.running && !state.queueRunning) { state.source = x.dataset.source; render(); } });
   b.querySelectorAll("[data-del]").forEach((x) => x.onclick = () => { if (state.queueRunning) return; state.queue = state.queue.filter((q) => q.id !== x.dataset.del); render(); });
   // 點序列中的名稱：放上鐵砧，方便設定該件的目標。
   b.querySelectorAll("[data-pick]").forEach((x) => x.onclick = () => { if (!state.running) { g.anvil = x.dataset.pick; render(); } });
-  const qs = b.querySelector("#af-qstart");
-  if (qs) qs.onclick = () => runQueue();
   const qc = b.querySelector("#af-qclear");
   if (qc) qc.onclick = () => { if (!state.queueRunning) { state.queue = []; render(); } };
 }
@@ -339,24 +382,28 @@ function queueHtml(g) {
   const bag = bagItems(g, cls).filter((i) => !inQ.has(i.id));
   const btn = "background:#2a241b;color:#e8dcc4;border:1px solid #6a5530;border-radius:4px;padding:0 6px;";
   const qRows = state.queue.map((q, i) => {
-    const it = bagItems(g, cls).find((x) => x.id === q.id);
+    const it = ownItem(g, cls, q.id);
     const warn = it && !hasTarget(itemKey(it)) ? ' <span style="color:#e88">（未設目標）</span>' : "";
     return `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="opacity:.7">${i + 1}.</span><a data-pick="${esc(q.id)}" style="flex:1;cursor:pointer;text-decoration:underline">${esc(q.name)}</a>${warn}<span style="opacity:.85;font-size:13px">${esc(q.status || "")}</span><button type="button" data-del="${esc(q.id)}" style="${btn}"${state.queueRunning ? " disabled" : ""}>移除</button></div>`;
   }).join("");
-  const bagRows = bag.map((it) => `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="flex:1">${esc(it.name)}（${esc(it.base)}）</span><button type="button" data-select="${esc(it.id)}" style="${btn}"${state.running ? " disabled" : ""}>選取</button><button type="button" data-add="${esc(it.id)}" style="${btn}">加入</button></div>`).join("");
+  // 同名（同稀有度、名稱、底材）且尚未在序列中的件數，供「加入同名」按鈕顯示。
+  const sameCount = (it) => bag.filter((x) => itemKey(x) === itemKey(it)).length;
+  const bagRows = bag.map((it) => `<div style="display:flex;gap:6px;align-items:center;margin:2px 0"><span style="flex:1">${esc(it.name)}（${esc(it.base)}）</span><button type="button" data-select="${esc(it.id)}" style="${btn}"${state.running ? " disabled" : ""}>選取</button><button type="button" data-add="${esc(it.id)}" style="${btn}">加入</button><button type="button" data-addsame="${esc(itemKey(it))}" style="${btn}" title="把同名、同底材的裝備全部加入序列">加入同名（${sameCount(it)}）</button></div>`).join("");
+  const srcBtn = (key, label) => `<button type="button" data-source="${key}" style="${btn}${state.source === key ? "border-color:#d4a84a;color:#d4a84a;" : ""}"${state.running || state.queueRunning ? " disabled" : ""}>${label}</button>`;
+  const sourceRow = `<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><span style="opacity:.8">來源：</span>${srcBtn("bag", "角色背包")}${srcBtn("stash", "個人倉庫")}</div>`;
   return `
     <div style="border-top:1px solid #4a3d25;margin-top:8px;padding-top:6px">
       <b style="color:#d4a84a">序列（${state.queue.length}）</b>
       <div style="opacity:.7;font-size:13px">點名稱可放上鐵砧設定目標；未設目標的會略過。</div>
       ${qRows || '<div style="opacity:.7">尚未加入</div>'}
       <div style="display:flex;gap:6px;margin-top:6px">
-        <button id="af-qstart" type="button"${state.running || !state.queue.length ? " disabled" : ""}>開始序列</button>
         <button id="af-qclear" type="button"${state.queueRunning || !state.queue.length ? " disabled" : ""}>清空</button>
       </div>
     </div>
     <div style="border-top:1px solid #4a3d25;margin-top:8px;padding-top:6px">
-      <b style="color:#d4a84a">背包可淬鍊（${bag.length}）</b>
-      ${bagRows || '<div style="opacity:.7">背包沒有暗金、套裝或符文之語</div>'}
+      <b style="color:#d4a84a">${state.source === "stash" ? "個人倉庫" : "背包"}可淬鍊（${bag.length}）</b>
+      ${sourceRow}
+      ${bagRows || `<div style="opacity:.7">${state.source === "stash" ? "個人倉庫" : "背包"}沒有暗金、套裝或符文之語</div>`}
     </div>`;
 }
 
