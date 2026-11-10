@@ -391,3 +391,5 @@
 - 疊加本來就能製作：第二列下拉會提供同屬性（例如 Monarch 火抗 30 之後可再選火抗 20，屬全抗詞綴），規則檢查與遊戲 `itemFault` 皆接受。
 - 回歸測試：`node modifier/tests/drop-ranges.cjs`（已加入 `verify/suite.cjs`，每次遊戲更新必跑）。結果：83320 件，超出 0、低於 0、合計超過上限 0。`verify.cjs --quick` 16／16 通過；修改器 Electron 介面測試 7 支通過（含先前記為既有失敗的 `craft-affix-ui`）。
 - **未驗證**：官方 `/play/` 實機的範圍文字顯示；手機版排版（範圍文字變長）。發布前需補公告站與修改器更新日誌（規則 5）。
+
+- **自動淬鍊時無法操作遊戲介面（2026-11-10，已修，官方 /play/ 隔離存檔實機驗證）**：原因是遊戲每次送淬鍊請求都設 `forgeBusy`，`whileForgeIdle` 會把此時的角色／倉庫／收藏箱操作（切分頁等）直接丟棄；淬鍊中 forgeBusy 佔 75%～90%。`helper/autoforge-ui.js` 的 `patchForgeIdle` 改成「忙碌時等到空檔再執行」。實機（`tests/live-harness/autoforge-yield-live.cjs`）：淬鍊同時 40 次呼叫（35 次落在忙碌中）全部執行，平均延遲 203ms、最長 666ms，淬鍊照常跑。**未驗證**：真的在收藏箱用滑鼠點分頁；對掛接前已開著的選單無效，需關掉重開一次。

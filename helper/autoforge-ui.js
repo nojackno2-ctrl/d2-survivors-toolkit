@@ -212,6 +212,27 @@ function pauseCountdownText() {
   return `（剩餘 ${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}）`;
 }
 
+// 淬鍊中仍可操作遊戲：遊戲每次送出淬鍊請求都會設 forgeBusy，期間角色／倉庫／收藏箱的操作（含切換分頁）
+// 會被遊戲的 whileForgeIdle 直接丟棄（實測淬鍊時 forgeBusy 約佔 75%～90%）。
+// 這裡把「丟棄」改成「等到空檔再執行」（步驟之間有間隔，約幾毫秒內就會執行）。
+// 只對之後新開的商店／倉庫選單生效；已開著的選單需關掉重開一次。
+function patchForgeIdle(g) {
+  if (!g || g.__d2idlePatched || typeof g.whileForgeIdle !== "function") return;
+  g.__d2idlePatched = true;
+  g.whileForgeIdle = function (actions) {
+    const self = this;
+    return Object.fromEntries(Object.entries(actions).map(([k, fn]) => [k, typeof fn !== "function" ? fn : (...a) => {
+      if (!self.forgeBusy) return fn(...a);
+      const t0 = Date.now();
+      const iv = setInterval(() => {
+        if (self.forgeBusy && Date.now() - t0 < 8000) return;
+        clearInterval(iv);
+        if (!self.forgeBusy) { try { fn(...a); } catch (e) { /* 動作本身出錯就算了，與原本一致 */ } }
+      }, 5);
+    }]));
+  };
+}
+
 // 單件迴圈：回傳 { result, fatal }；fatal 代表整個序列都該停（精華不足、手動停止）。
 async function loop() {
   const g = game();
@@ -479,6 +500,7 @@ const pausedNow = () => document.body.classList.contains("frontend-over-run") ||
   || (() => { const p = document.getElementById("paused"); return !!p && !p.classList.contains("hidden") && getComputedStyle(p).display !== "none"; })();
 function tick() {
   const g = game();
+  patchForgeIdle(g);
   // 手動開啟：遊戲恢復執行、且沒有在淬鍊時，自動關閉，避免面板擋住遊戲畫面。
   if (state.manual && !state.running && !state.queueRunning && !pausedNow()) state.manual = false;
   // 顯示條件：恰西鐵砧選單開著（g.forgeUp），或由工具包手動開啟；執行中也保留。
