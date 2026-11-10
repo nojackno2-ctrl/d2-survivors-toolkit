@@ -264,13 +264,20 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
   function baseImplicits(base) {
     if (implicitCache.has(base.name)) return implicitCache.get(base.name);
     const r = {};
-    for (let i = 0; i < 6 || (i < 400 && Object.keys(r).some(k => r[k].auto)); i++) {
-      const it = G.__seeded(Math.floor(Math.random() * 4294967296), () => G.__makeAffix(base, "magic", ILVL, ILVL));
+    const take = (it) => {
       for (const m of it?.mods ?? []) if (m.implicit || m.auto) {
         const k = m.stat, v = r[k] ??= [m.value, m.value];
         if (m.auto) v.auto = true;
         v[0] = Math.min(v[0], m.value); v[1] = Math.max(v[1], m.value);
       }
+    };
+    for (let i = 0; i < 6; i++) take(G.__seeded(Math.floor(Math.random() * 4294967296), () => G.__makeAffix(base, "magic", ILVL, ILVL)));
+    // 職業底材的固有加成（auto）：遊戲（w8）先用第一個亂數依權重挑一列，再擲該列的數值；物品等級 99 時每一列都可挑。
+    // 隨機取樣抓不到兩端（實測上限少 1；權重小的低等級列抓不到，下限偏高），改為把第一個亂數掃過 0～1、
+    // 其餘亂數固定在最低／最高，取得每一列的最低與最高擲值（權重最小的列約占 0.7%，間距 1/1500 足夠）。
+    if (Object.values(r).some(v => v.auto)) {
+      const scripted = (first, rest) => { const old = Math.random; let n = 0; Math.random = () => (n++ === 0 ? first : rest); try { return G.__makeAffix(base, "magic", ILVL, ILVL); } finally { Math.random = old; } };
+      for (let k = 0; k < 1500; k++) for (const rest of [0, 0.9999999]) take(scripted((k + 0.5) / 1500, rest));
     }
     implicitCache.set(base.name, r);
     return r;
@@ -595,13 +602,16 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
     // 使用遊戲產生器取得此物品各屬性的最高擲值；其他品質沒有固定的物品上限。
     itemModMax(item) {
       if (!defs[item?.rarity]?.has(item.name)) return null;
-      const low = pinned(() => make(item.rarity, item.name, item.base), 0);
-      const high = pinned(() => make(item.rarity, item.name, item.base));
+      // 無形（只有符文之語可以）：底材的基礎傷害與防禦是 1.5 倍，範圍要用無形的版本算
+      const eth = item.rarity === "runeword" && !!item.ethereal;
+      const low = pinned(() => make(item.rarity, item.name, item.base, eth), 0);
+      const high = pinned(() => make(item.rarity, item.name, item.base, eth));
       if (!low || !high) return null;
       const collect = (it) => {
         const out = {};
         for (const m of it.mods ?? []) {
-          if (typeof m.value !== "number" || !Number.isFinite(m.value)) continue;
+          // 底材固有加成（auto）每次掉落隨機挑一列，最低與最高擲值不是同一列，另由 statRanges 的 auto 提供
+          if (m.auto || typeof m.value !== "number" || !Number.isFinite(m.value)) continue;
           const key = `${m.implicit ? "1" : "0"}:${m.stat}`;
           (out[key] ??= []).push(m.value);
         }
@@ -632,7 +642,25 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
         if (a.d2?.also) add(a.d2.also.stat, a.d2.also.min, a.d2.also.max, a.kind);
       }
       const combinations = affixes.map(a => ({ kind: a.kind, stat: a.stat, min: a.min, max: a.max, alike: a.d2?.alike ?? [], also: a.d2?.also ?? null }));
-      const out = { ranges, byKind, combinations };
+      // 同一屬性可以由不同群組的詞綴各給一列（例如單抗＋全抗、兩個增強傷害前綴），遊戲提示框把同屬性加總成一個數字顯示。
+      // totals[stat] = { rows: 最多幾列, total: 各列取最高值的合計 }；只列出能疊加（超過單列上限）的屬性。
+      // 依遊戲產生器（z9／TAe）：每個群組最多一個詞綴、前後綴各有上限、總數有上限。
+      const lim = limitOf(base, rarity), perStat = {};
+      for (const a of affixes) {
+        const parts = [[a.stat, a.max], ...(a.d2?.alike ?? []).map(s => [s, a.max]), ...(a.d2?.also ? [[a.d2.also.stat, a.d2.also.max]] : [])];
+        for (const [stat, max] of parts) {
+          if (!stat || !Number.isFinite(max) || max <= 0) continue;
+          const g = ((perStat[stat] ??= { prefix: new Map(), suffix: new Map() })[a.kind] ??= new Map()), key = affixGroup(a);
+          if (!g.has(key) || g.get(key) < max) g.set(key, max);
+        }
+      }
+      const totals = {};
+      if (lim) for (const [stat, g] of Object.entries(perStat)) {
+        const top = (m, n) => [...m.values()].sort((x, y) => y - x).slice(0, n);
+        const picked = [...top(g.prefix, lim.pre), ...top(g.suffix, lim.suf)].sort((x, y) => y - x).slice(0, lim.max);
+        if (picked.length > 1) totals[stat] = { rows: picked.length, total: picked.reduce((x, y) => x + y, 0) };
+      }
+      const out = { ranges, byKind, combinations, totals };
       affixInfoCache.set(cacheKey, out);
       return out;
     },
@@ -645,7 +673,9 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
       const base = bases.get(item?.base);
       let implicit = {};
       if (base && G.__makeAffix) { try { implicit = baseImplicits(base); } catch (_) {} }
-      return { fixed, implicit, affix: info?.ranges ?? {}, affixByKind: info?.byKind ?? {} };
+      // auto：底材固有加成（職業底材隨機一列）的範圍；遊戲提示框會把它和同屬性的詞綴加在一起顯示
+      const auto = Object.fromEntries(Object.entries(implicit).filter(([, v]) => v.auto).map(([k, v]) => [k, [v[0], v[1]]]));
+      return { fixed, implicit, auto, affix: info?.ranges ?? {}, affixByKind: info?.byKind ?? {}, affixTotal: info?.totals ?? {} };
     },
     // 依遊戲的詞綴組合規則推導名稱；無法唯一確定時不猜測。
     resolveName(item) {

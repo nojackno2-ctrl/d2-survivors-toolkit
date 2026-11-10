@@ -1892,14 +1892,23 @@ function renderEditor() {
 async function loadStatRanges(item) {
   try { const r = await window.api.engine("statRanges", item); return r && !r.error ? r : null; } catch (_) { return null; }
 }
-function rangeText(db, stat, implicit, index, kind) {
+// 遊戲提示框把同屬性的每一列加總成一個數字（詞綴各列＋底材固有加成＋鑲嵌珠寶），所以掉落物看到的數字會超過單列範圍。
+// 這裡補上「可疊幾列、合計最高多少」與底材固有加成的範圍，讓製作頁看到的上限與遊戲內一致。
+function stackText(db, stat) {
+  const t = db?.affixTotal?.[stat], a = db?.auto?.[stat];
+  return (t ? `；可疊 ${t.rows} 列，遊戲提示框顯示合計最高 ${t.total}` : "") + (a ? `；底材固有另加 ${a[0]}～${a[1]}` : "");
+}
+function rangeText(db, stat, implicit, index, kind, auto) {
+  // 底材固有加成（職業底材每次掉落隨機一列）：不屬於詞綴，也不是固定品質的原始屬性
+  if (auto && db?.auto?.[stat]) return `底材固有加成範圍：${db.auto[stat].join("～")}`;
   const fixed = db?.fixed?.[`${implicit ? "1" : "0"}:${stat}`]?.[index];
   if (fixed) return `範圍：${fixed[0]}～${fixed[1]}`;
   if (implicit && db?.implicit?.[stat]) return `底材取樣範圍：${db.implicit[stat].join("～")}`;
   const list = !implicit && (kind ? db?.affixByKind?.[kind]?.[stat] : db?.affix?.[stat]);
-  return list?.length ? `可用詞綴範圍：${[...new Set(list.map(r => r.join("～")))].join("、")}` : "範圍：未提供";
+  return list?.length ? `可用詞綴範圍：${[...new Set(list.map(r => r.join("～")))].join("、")}${stackText(db, stat)}` : "範圍：未提供";
 }
-function rangeMax(db, stat, implicit, index, kind) {
+function rangeMax(db, stat, implicit, index, kind, auto) {
+  if (auto && db?.auto?.[stat]) return db.auto[stat][1];
   const fixed = db?.fixed?.[`${implicit ? "1" : "0"}:${stat}`]?.[index];
   if (fixed) return fixed[1];
   if (implicit && db?.implicit?.[stat]) return db.implicit[stat][1];
@@ -1910,11 +1919,14 @@ function showRanges(table, db) {
   const seen = {};
   for (const tr of document.querySelectorAll(`${table} tbody tr`)) {
     const stat = tr.querySelector(".stat").value, implicit = tr.querySelector(".imp").checked, key = `${implicit ? 1 : 0}:${stat}`;
-    const index = seen[key] ?? 0; seen[key] = index + 1;
+    // 底材固有加成（auto）的列：原始資料帶 auto 且屬性沒被改掉；不占固定品質原始屬性的順序
+    let orig = null; try { orig = JSON.parse(tr.dataset.original || "null"); } catch (_) { /* 沒有原始資料 */ }
+    const auto = !!orig?.auto && orig.stat === stat;
+    const index = auto ? 0 : seen[key] ?? 0; if (!auto) seen[key] = index + 1;
     const kind = table === "#cmods-pre" ? "prefix" : table === "#cmods-suf" ? "suffix" : null;
-    tr.querySelector(".limit").textContent = stat ? rangeText(db, stat, implicit, index, kind) : "";
+    tr.querySelector(".limit").textContent = stat ? rangeText(db, stat, implicit, index, kind, auto) : "";
     const suggested = tr.querySelector(".stat").selectedOptions[0]?.dataset.value;
-    const max = stat && tr.dataset.auto ? (kind && suggested !== undefined && suggested !== "" && Number.isFinite(Number(suggested)) ? Number(suggested) : rangeMax(db, stat, implicit, index, kind)) : null;
+    const max = stat && tr.dataset.auto ? (kind && suggested !== undefined && suggested !== "" && Number.isFinite(Number(suggested)) ? Number(suggested) : rangeMax(db, stat, implicit, index, kind, auto)) : null;
     if (max !== null && Number.isFinite(max)) { tr.querySelector(".val").value = max; tr.querySelector(".zh").textContent = modZh({ stat, value: max, implicit }); }
   }
 }
@@ -1928,7 +1940,7 @@ async function updateModLimits() {
 async function loadModLimits(it) {
   MOD_LIMITS = null;
   const table = $("#mods");
-  const db = await loadStatRanges({ rarity: it.rarity, name: it.name, base: it.base });
+  const db = await loadStatRanges({ rarity: it.rarity, name: it.name, base: it.base, ...(it.ethereal && { ethereal: true }) });
   if ($("#mods") !== table) return;
   MOD_LIMITS = db;
   updateModLimits();

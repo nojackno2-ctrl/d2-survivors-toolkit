@@ -8,7 +8,9 @@ module.exports = [
   { id: "runeword-class-base",tier: "static",      kind: "node",     file: "modifier/tests/runeword-class-base.cjs", timeout: 60 },
   // 裝備資料庫完整檢查：每次更新必跑（always），逐件驗證一鍵解鎖與製作裝備
   { id: "item-db",            tier: "static",      kind: "node",     file: "modifier/tests/item-db.cjs",       timeout: 300, always: true },
-  { id: "skill-mods",         tier: "static",      kind: "node",     file: "modifier/tests/skill-mods.cjs",    timeout: 60 },
+  // 掉落屬性範圍對照：遊戲產生器取樣，逐列對照修改器顯示的範圍與同屬性疊加上限
+  { id: "drop-ranges",        tier: "static",      kind: "node",     file: "modifier/tests/drop-ranges.cjs",   timeout: 300, always: true },
+  { id: "skill-mods",         tier: "static",     kind: "node",     file: "modifier/tests/skill-mods.cjs",    timeout: 60 },
   { id: "weapon-sets",        tier: "static",      kind: "node",     file: "modifier/tests/weapon-sets.cjs",   timeout: 60 },
   { id: "selfcheck",          tier: "static",      kind: "node",     file: "helper/tests/selfcheck.cjs",       timeout: 60 },
   { id: "autoforge",          tier: "static",      kind: "node",     file: "helper/tests/autoforge.cjs",       timeout: 60 },

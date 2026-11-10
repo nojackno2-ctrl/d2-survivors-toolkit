@@ -96,7 +96,8 @@
     "屬性可從下拉選單挑選。範圍以此物品的遊戲產生資料為準；無法判定時顯示「未提供」。修改套裝／魔法／稀有物品的屬性後，可能被遊戲判定為不合法，請到「反修改偵測」頁處理。按上方「寫入存檔」才會真正存檔。": "Pick stats from the dropdown. Ranges come from the game's own item data; \"n/a\" means unknown. After editing set/magic/rare stats the game may consider the item not legit — use the Anti-tamper check page. Nothing is saved until you press \"Write save\".",
     "已刪除（尚未寫入存檔）": "Deleted (not written yet)", "已複製（尚未寫入存檔）": "Copied (not written yet)", "已移動（尚未寫入存檔）": "Moved (not written yet)",
     "已套用（尚未寫入存檔）": "Applied (not written yet)", "（尚未寫入存檔）": " (not written yet)",
-    "可用詞綴範圍：": "Affix ranges: ", "範圍：未提供": "Range: n/a", "範圍：讀取中": "Range: loading", "範圍：": "Range: ",
+    "可用詞綴範圍：": "Affix ranges: ", "；可疊 ": "; stacks up to ", " 列，遊戲提示框顯示合計最高 ": " rows — the game tooltip shows the sum, max ", "；底材固有另加 ": "; base auto mod adds ", "底材固有加成範圍：": "Base auto mod range: ", "底材取樣範圍：": "Base range: ",
+"範圍：未提供": "Range: n/a", "範圍：讀取中": "Range: loading", "範圍：": "Range: ",
     "這件物品不能穿戴在任何欄位。": "This item can't be equipped in any slot.", "欄已有物品，請先移走。": " slot is occupied — move that item first.", " 沒有足夠空間。": " has no room.", "沒有足夠空間。": " has no room.",
     // 暗金收藏
     "載入物品資料中…": "Loading item data…", "已收藏 ": "Collected ", "一鍵解鎖＋全部最高": "Unlock all + max all",
