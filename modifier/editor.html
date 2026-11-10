@@ -294,8 +294,6 @@
 <div class="page" id="settings">
   <section>
     <h2>設定</h2>
-    <label style="justify-content:flex-start;gap:10px;margin-bottom:10px"><span style="color:var(--text);font-weight:bold">介面語言 / Language</span>
-      <select id="langSel"><option value="auto">自動（依系統語言）</option><option value="zh">繁體中文</option><option value="en">English</option></select></label>
     <label style="justify-content:flex-start;gap:10px"><input type="checkbox" id="unlockMode"><span style="color:var(--text);font-weight:bold">解除修改限制</span></label>
     <p class="dim">預設關閉。關閉時修改器會依原版規則把關，檢查已知規則，仍不保證排行榜接受存檔：</p>
     <ul class="dim">
@@ -487,12 +485,12 @@
 
 <script>
 // 依診斷（iPhone 一直用快取的舊 webapi.js）：用本頁網址的 ?v=（書籤每次開啟修改器都帶新值）載入這三個腳本，避免手機快取舊版；document.write 保持載入順序。
-(() => { const v = new URLSearchParams(location.search).get("v") || String(Date.now()); for (const f of ["i18n.js", "webapi.js", "zh.js"]) document.write('<script src="' + f + "?v=" + encodeURIComponent(v) + '"><' + '/script>'); })();
+(() => { const v = new URLSearchParams(location.search).get("v") || String(Date.now()); for (const f of ["webapi.js", "zh.js"]) document.write('<script src="' + f + "?v=" + encodeURIComponent(v) + '"><' + '/script>'); })();
 </script>
 
 
 <script>
-const LOCALE = window.LANG === "en" ? "en-US" : "zh-TW";
+const LOCALE = "zh-TW";
 const TESTED_GAME_BUILD = "20261105.3"; // 每次確認新版遊戲相容後更新此值
 const BUILD_KEY = "d2edit:gameBuild";
 const TOOLKIT_VERSION = "1.0.13"; // 與 package.json 的 version 一致；發布前由 build-web.js 檢查
@@ -504,7 +502,7 @@ const DIFFS = ["", "normal", "nightmare", "hell"];
 const DIFF_ZH = {"":"未解鎖", normal:"普通", nightmare:"惡夢", hell:"地獄"};
 const RARITY_ZH = {normal:"普通", magic:"魔法", rare:"稀有", set:"套裝", unique:"暗金", runeword:"符文之語"};
 const SLOT_ZH = {weapon:"武器", shield:"副手", head:"頭盔", body:"盔甲", gloves:"手套", belt:"腰帶", boots:"鞋子", amulet:"項鍊", ring1:"戒指1", ring2:"戒指2"};
-const RANK_ZH = {strength:"力量",dexterity:"敏捷",vitality:"體力",energy:"能量",goldFind:"金幣尋獲",magicFind:"魔法尋獲",damageReduced:"傷害減免",replenish:"生命回復",rerolls:"重抽",skips:"跳過",banishes:"放逐",resurrect:"復活",frw:"跑速",fcr:"施法速度",sellPrice:"賣價",potions:"藥水",experience:"經驗",firePierce:"火焰穿透",coldPierce:"冰冷穿透",lightningPierce:"閃電穿透",poisonPierce:"毒素穿透",physicalPierce:"物理穿透",mercLife:"傭兵生命",mercResist:"傭兵抗性",mercDefense:"傭兵防禦"};
+const RANK_ZH = {strength:"力量",dexterity:"敏捷",vitality:"體能",energy:"能量",goldFind:"金幣尋獲",magicFind:"魔法尋獲",damageReduced:"傷害減免",replenish:"生命回復",rerolls:"重抽",skips:"跳過",banishes:"放逐",resurrect:"復活",frw:"跑速",fcr:"施法速度",sellPrice:"賣價",potions:"藥水",experience:"經驗",firePierce:"火焰穿透",coldPierce:"冰冷穿透",lightningPierce:"閃電穿透",poisonPierce:"毒素穿透",physicalPierce:"物理穿透",mercLife:"傭兵生命",mercResist:"傭兵抗性",mercDefense:"傭兵防禦"};
 const GRID = { stash:[10,12], inventory:[10,4], charms:[5,4] };
 let save = null, A = null, cur = null, sel = null; // cur = 目前容器, sel = 目前物品 key
 let supportsWeaponSets = null; // 由實際載入的遊戲程式判斷；null 表示尚未確認。
@@ -2603,8 +2601,6 @@ $("#unlockMode").onchange = (e) => {
   status(settings.unlock ? "已解除修改限制" : "已恢復修改限制", settings.unlock ? "bad" : "ok");
 };
 applyUnlockUI();
-$("#langSel").value = window.LANG_PREF ?? "auto";
-$("#langSel").onchange = (e) => window.setLangPref(e.target.value);
 $("#keepList").innerHTML = Object.entries(KEEP).map(([k, [label]]) => `<label style="justify-content:flex-start"><input type="checkbox" data-keep="${k}" checked><span style="color:var(--text)">${label}</span></label>`).join("");
 load();
 </script>

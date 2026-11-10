@@ -4,7 +4,7 @@
 
 ## 專案概況
 - **定位**：靜態網頁工具包（純 JavaScript，無 Rust）。`d2edit.js` 書籤入口載入各模組：
-  - `lang/lang.js`：遊戲內繁體中文化，共用字典 `lang/zh-TW.json`。
+  - `lang/lang.js`：遊戲內繁體中文化（只有繁中，無語言切換），共用字典 `lang/zh-TW.json`，譯名對齊 D2R 官方繁中。
   - `helper/autobot.js`：遊戲輔助器（自動戰鬥、走位、喝水、選卡、換裝、作弊輔助）。
   - `modifier/engine-page.js`：存檔物品引擎（讀寫、合法性驗證、詞綴產生）。
   - `modifier/editor.html`：存檔修改器介面。
@@ -41,7 +41,7 @@
 ## 資料夾結構
 - **根目錄**：共用進入點與設定（`d2edit.js`、`index.html`、`version.json`、`AGENTS.md`、`AI_HANDOFF.md`、`wrangler.jsonc`）。
 - `helper/`：輔助器模組（`autobot.js`、`selfcheck.js`、測試 `helper/tests/`）。
-- `lang/`：語言模組（`lang.js`、字典 `zh-TW.json`、`locales/`、語言工具 `tools/`、測試 `lang/tests/`）。
+- `lang/`：語言模組（`lang.js`、字典 `zh-TW.json`、語言與官方字串工具 `tools/`、測試 `lang/tests/`）。
 - `modifier/`：修改器模組（`editor.html`、`engine-page.js`、`patch.mjs`、`signatures.json`、`i18n.js`、測試 `modifier/tests/`）。
 - `site/`：網站與公告站（`index.html`、`install.template.html`）。
 - `editor/`：桌面啟動器（`main.js`、`preload.js`、`core.js`、`remote.js` 等）。
@@ -67,6 +67,11 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+000000000000d. **【已實作、官方 /play/ 實機抽驗，未發布】中文化改為「只有繁體中文」，譯名對齊原版暗黑 2（D2R 官方繁中）**（`lang/`、`d2edit.js`、`helper/`、`modifier/`）。
+   - **官方資料來源**：本機 `C:\Program Files (x86)\Diablo II Resurrected`（D2R 3.3.93847，zhTW）。新工具 `lang/tools/d2r-strings.mjs` 讀 CASC（只讀）匯出官方字串與 excel 表到 `backups/d2r-strings/`（Git 忽略，不把官方資料放進倉庫）；`lang/tools/d2r-align.mjs` 依 excel 表（物品、暗金、套裝、符文之語、魔法／稀有／暗金詞綴、怪物、技能、地名）核對 `zh-TW.json`，加 `--write` 寫回；再跑應為 0 差異。字典已更新約 150 條名稱（例：項鍊→護身符、兇殘鐮刀→陰森鐮刀、戰鬥體制→戰鬥命令、毀滅之符→滅絕、稀有名稱 Hide／Jack／Nock／Quarrel／Scarab 等 559 條重組），並另補 `item:`／`affix:`／`monster:`／`unique:` 同字不同譯鍵。
+   - **句子用詞**：閃電傷害／抗性／免疫→電擊、耐力→精力（Energy 改「能量」）、每級→每等級、約旦之石→喬丹之石、護符→咒符（Charm）、傳送點→傳送平台、第○幕→第○章、屍體爆炸→屍爆、爆炸箭→爆裂箭 等。保留：技能「閃電」（官方閃電箭，但遊戲把 Lightning 也當元素標籤，字典鍵維持「閃電」）、遊戲自創用語。分 10 份交由子代理（AGY／Codex）逐份校對後，由主代理驗證占位符與鍵集合再合併（slice-10 因子代理工作區限制未動，改由規則腳本處理）。
+   - **移除英文／多語言**：`lang/lang.js` 不再有語言選單、locales、`__d2lang.set/get/list/register`（版本 2）；按鈕改為「中文化」（只剩比較框排版、D2R 原版字型）。`modifier/i18n.js`、`lang/locales/` 已刪；`d2edit.js`、輔助器、自動淬鍊、修改器的英文分支與修改器「介面語言」設定一併移除。
+   - **驗證**：`test_lang.cjs`、`helper/tests/selfcheck.cjs`、`node verify/live-smoke.cjs` 通過；官方 `/play/` 以真實 `__d2lang.translate` 抽驗：電擊免疫、護身符、骸骨面罩、屍爆、戰鬥命令、疾刺、多頭蛇皆為官方譯名。**未驗證**：`electron helper/tests/autobot.cjs` 與修改器 UI 測試（改動了修改器設定頁與 zh.js）、桌面版（`desktop-lang.mjs` 刪 locales 複製後的注入）、遊戲畫面上逐項目視、手機版。`modifier/editor.html` 舊更新日誌文字（「閃電相關詞彙統一為閃電」）為歷史紀錄未改；公告站與更新日誌尚未發布。
 00000000000c. **【已發布 2026-11-10，git 直接推送 main，公告站與修改器日誌已補】自動淬鍊：序列「同時淬鍊 N 件」（1～10）、面板控制列改版、縮小圖示提示**（`helper/autoforge-ui.js`）。
    - **同時淬鍊**：遊戲 `forgeTry` 在送出請求前就同步記下 `this.anvil`，之後只用記下的 ID；所以「`g.anvil = id` 後立刻呼叫 `forgeTry`」可多件同時送出。序列區新增「同時淬鍊 N 件」選單（localStorage `d2autoforge.parallel`，預設 1＝原本逐件流程）；N > 1 走 `runQueueParallel`／`runItem`（每件自己的 ctx，不用面板狀態；`stepOnce`、`trackUpgrade` 多一個 ctx 參數）。429 時設共同的 `state.pauseUntil`，全部件一起等 Retry-After 後續跑。同款一件熔爐成功，其餘進行中的同款立即停止（沿用既有規則）。
    - **面板**：標題右邊「開始／停止／收合」同一排並加大，淬鍊狀態獨立一排。

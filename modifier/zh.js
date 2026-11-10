@@ -1,7 +1,5 @@
 // 中文化：把物品名稱、底材、屬性、技能翻成繁體中文
 // DICT 來自啟動器的 zh-TW 字典（英文 → 中文，{0} {1} 為數值位置），GAME 是從遊戲程式碼擷取的屬性樣板與技能樹
-// 英文介面（i18n.js 判定）：遊戲名稱與屬性直接用遊戲原文
-const UI_EN = typeof window !== "undefined" && window.LANG === "en";
 let DICT = {}, GAME = { stats: {}, classes: {} };
 const ZH_CLASS = { amazon: "亞馬遜", sorceress: "魔法使", necromancer: "死靈法師", paladin: "聖騎士", barbarian: "野蠻人", druid: "德魯伊", assassin: "刺客" };
 const CLASS_ORDER = ["amazon", "sorceress", "necromancer", "paladin", "barbarian", "druid", "assassin"];
@@ -13,19 +11,18 @@ function zhInit(data) {
   for (const [k, v] of Object.entries(DICT)) LOWER[k.toLowerCase()] ??= v;
 }
 const look = (s) => (s ? DICT[s] ?? LOWER[s.toLowerCase()] : undefined);
-const T = (s) => (UI_EN ? s : look(s) || s);
+const T = (s) => look(s) || s;
 const has = (s) => !!look(s);
 const num = (v) => (typeof v === "number" && !Number.isInteger(v) ? Number(v.toFixed(2)) : v);
 // camelCase 技能 id → 英文技能名（與遊戲 WX() 相同）
 const skillEn = (id) => id.replace(/^./, (c) => c.toUpperCase()).replace(/([A-Z])/g, " $1").trim();
 // 本作新增、字典沒有的技能
 const EXTRA_SKILLS = { plaguePoppy: "瘟疫罌粟", eruption: "噴發" };
-const skillZh = (id) => (UI_EN ? skillEn(id) : EXTRA_SKILLS[id] ?? T(skillEn(id)));
+const skillZh = (id) => EXTRA_SKILLS[id] ?? T(skillEn(id));
 
 // 用英文樣板（# 為數值）找中文樣板並代入數值
 function tpl(en, vals) {
   vals = vals.map(num);
-  if (UI_EN) { let i = 0; return en.replace(/#/g, () => vals[i++] ?? ""); }
   for (const k of [en, en.replace(/#/g, "*")]) { const z = look(k); if (z !== undefined) return z.replace(/\{(\d)\}/g, (_, i) => vals[i] ?? ""); }
   // 每級成長：翻前半句再加「（每級）」
   const per = / (per Level|per Character Level|\(Based on Character Level\))$/.exec(en);
@@ -64,7 +61,6 @@ function modZh(m) {
 // 物品名稱：先整句查；魔法物品拆成 字首 + 底材 + 字尾 再組成中文（字尾 + 字首 + 底材）
 const cleanName = (s) => (typeof s === "string" ? s.replace(/([\u4e00-\u9fa5\u3400-\u4dbf])\s+([\u4e00-\u9fa5\u3400-\u4dbf])/g, "$1$2") : s);
 function nameZh(it) {
-  if (UI_EN) return it.name ?? "";
   const itemName = look("item:" + it.name);
   if (itemName && (["runeword", "unique", "set"].includes(it.rarity) || it.name === it.base)) return cleanName(itemName);
   if (has(it.name)) return cleanName(T(it.name));
@@ -79,7 +75,6 @@ function nameZh(it) {
   return cleanName(it.name);
 }
 function baseZh(it) {
-  if (UI_EN) return it.type === "quest" ? it.name : it.base;
   if (it.type === "quest") return cleanName(nameZhQuest(it));
   return cleanName(look("item:" + it.base) ?? T(it.base));
 }

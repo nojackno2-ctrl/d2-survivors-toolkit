@@ -59,9 +59,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "d2lang-asar-"));
 try {
   asar.extractAll(source, tmp);
   const web = path.join(tmp, "desktop", "dist", "web"), dst = path.join(web, "d2lang");
-  fs.mkdirSync(path.join(dst, "locales"), { recursive: true });
   for (const f of ["lang.js", "d2rfont.js", "zh-TW.json"]) fs.copyFileSync(path.join(root, f), path.join(dst, f));
-  for (const f of fs.readdirSync(path.join(root, "locales"))) fs.copyFileSync(path.join(root, "locales", f), path.join(dst, "locales", f));
 
   let font = false;
   try {

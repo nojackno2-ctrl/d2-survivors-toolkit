@@ -381,7 +381,6 @@ function openEditor() {
   document.body.appendChild(frame);
 }
 // 點書籤後不直接開啟：留在遊戲中，按暫停時畫面左上角才出現「修改器」按鈕
-const zhUI = String((navigator.languages && navigator.languages[0]) || navigator.language || "").toLowerCase().startsWith("zh");
 // 工具包單一按鈕：把「輔助器」「語言」「修改器」收進同一個下拉選單。
 // 輔助器與語言仍由各自模組建立與處理，這裡只隱藏它們原本的浮動按鈕，點選單項目時代為觸發。
 const toolkitStyle = document.getElementById("d2toolkit-style") || document.head.appendChild(Object.assign(document.createElement("style"), { id: "d2toolkit-style" }));
@@ -389,8 +388,8 @@ toolkitStyle.textContent = "#d2autobot-launcher,#d2lang-btn{display:none!importa
 const launcher = document.createElement("button");
 launcher.type = "button";
 launcher.id = "d2toolkit-launcher";
-launcher.textContent = zhUI ? "工具包" : "Toolkit";
-launcher.title = zhUI ? "D2 倖存者工具包：輔助器、語言、修改器" : "D2 Survivors toolkit: assistant, language, editor";
+launcher.textContent = "工具包";
+launcher.title = "D2 倖存者工具包：輔助器、中文化、修改器";
 launcher.style.cssText = "position:fixed;top:max(12px, env(safe-area-inset-top));left:max(12px, env(safe-area-inset-left));z-index:2147483646;display:none;"
   + "padding:8px 14px;min-height:44px;border:1px solid #d4a84a;border-radius:6px;background:rgba(20,17,13,.92);color:#d4a84a;font:bold 15px 'Microsoft JhengHei',system-ui,sans-serif;cursor:pointer;touch-action:manipulation";
 const toolkitMenu = document.createElement("div");
@@ -405,12 +404,12 @@ function registerToolkitFeature({ id, label, open, order = 100 }) {
   toolkitFeatures.set(id, { id, label, open, order });
 }
 window.__d2toolkit = { register: registerToolkitFeature, features: () => [...toolkitFeatures.values()].map(({ id, label, order }) => ({ id, label, order })) };
-registerToolkitFeature({ id: "autobot", label: zhUI ? "輔助器" : "Assistant", order: 10, open: () => document.getElementById("d2autobot-launcher")?.click() });
-registerToolkitFeature({ id: "autoforge", label: zhUI ? "自動淬鍊" : "Auto forge", order: 15, open: () => { if (!window.__d2autoforgeUI?.open()) alert(zhUI ? "請先進入遊戲（選好職業）再開啟自動淬鍊" : "Enter the game (pick a class) first"); } });
-registerToolkitFeature({ id: "lang", label: zhUI ? "語言" : "Language", order: 20, open: () => document.getElementById("d2lang-btn")?.click() });
-registerToolkitFeature({ id: "editor", label: zhUI ? "修改器" : "Editor", order: 30, open: () => openEditor() });
+registerToolkitFeature({ id: "autobot", label: "輔助器", order: 10, open: () => document.getElementById("d2autobot-launcher")?.click() });
+registerToolkitFeature({ id: "autoforge", label: "自動淬鍊", order: 15, open: () => { if (!window.__d2autoforgeUI?.open()) alert("請先進入遊戲（選好職業）再開啟自動淬鍊"); } });
+registerToolkitFeature({ id: "lang", label: "中文化", order: 20, open: () => document.getElementById("d2lang-btn")?.click() });
+registerToolkitFeature({ id: "editor", label: "修改器", order: 30, open: () => openEditor() });
 // 效能頁面：全螢幕顯示即時指標（只讀取，不修改遊戲與存檔）。
-registerToolkitFeature({ id: "perf", label: zhUI ? "效能" : "Performance", order: 40, open: () => openPerfPage() });
+registerToolkitFeature({ id: "perf", label: "效能", order: 40, open: () => openPerfPage() });
 // 優化開關（效能頁）：只保留「掛機時略過主畫面繪製」。
 // 2026-11-10 實機同場對照（tests/live-harness/perf-ab-live.cjs）：「減少特效」「記憶體整理」「降低解析度」量不到效益，
 // 且降低解析度會與遊戲自己的動態解析度互相覆蓋，三項已移除；舊存檔設定裡的這些欄位直接忽略。
@@ -453,23 +452,22 @@ function setAfk(on) {
   if (afkEl?.isConnected) return;
   afkEl = document.createElement("div");
   afkEl.id = "d2autoforge-afk";
-  afkEl.title = zhUI ? "點擊畫面喚醒" : "Tap to wake";
+  afkEl.title = "點擊畫面喚醒";
   afkEl.style.cssText = "position:fixed;inset:0;z-index:2147483600;background:#000;cursor:pointer;color:#111;font:12px sans-serif;display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;user-select:none;";
-  afkEl.textContent = zhUI ? "掛機中（點擊畫面喚醒）" : "AFK (tap to wake)";
+  afkEl.textContent = "掛機中（點擊畫面喚醒）";
   afkEl.addEventListener("pointerdown", (e) => { e.stopPropagation(); e.preventDefault(); setAfk(false); });
   document.body.append(afkEl);
 }
 function enterAfk() {
   const g = window.__d2autobot?.game;
-  if (!g?.kit) { alert(zhUI ? "請先進入遊戲（選好職業）再掛機" : "Enter the game (pick a class) first"); return; }
+  if (!g?.kit) { alert("請先進入遊戲（選好職業）再掛機"); return; }
   if (pausedNow()) { try { g.resume(); } catch (e) { console.warn("[D2 工具包] 無法恢復遊戲", e); } }
   setAfk(true);
 }
-registerToolkitFeature({ id: "afk", label: zhUI ? "掛機" : "AFK", order: 16, open: () => enterAfk() });
+registerToolkitFeature({ id: "afk", label: "掛機", order: 16, open: () => enterAfk() });
 let perfPage = null;
 function openPerfPage() {
   if (perfPage) return;
-  const t = (zh, en) => (zhUI ? zh : en);
   const page = document.createElement("div");
   page.id = "d2perf-page";
   page.style.cssText = "position:fixed;inset:0;z-index:2147483647;overflow:auto;background:#14110d;color:#e8dcc4;font:15px 'Microsoft JhengHei',system-ui,sans-serif;padding:max(12px, env(safe-area-inset-top)) 16px 24px;box-sizing:border-box;touch-action:manipulation";
@@ -477,18 +475,18 @@ function openPerfPage() {
   const head = document.createElement("div");
   head.style.cssText = "display:flex;align-items:center;justify-content:space-between;max-width:520px;margin:0 auto 12px;";
   const title = document.createElement("div");
-  title.textContent = t("效能", "Performance");
+  title.textContent = "效能";
   title.style.cssText = "font:bold 20px 'Microsoft JhengHei',system-ui,sans-serif;color:#d4a84a";
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
-  closeBtn.textContent = t("關閉", "Close");
+  closeBtn.textContent = "關閉";
   closeBtn.style.cssText = "min-height:44px;min-width:72px;padding:0 14px;border:1px solid #d4a84a;border-radius:6px;background:transparent;color:#d4a84a;font:bold 15px 'Microsoft JhengHei',system-ui,sans-serif;cursor:pointer";
   head.append(title, closeBtn);
   const card = document.createElement("div");
   card.style.cssText = "max-width:520px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px;padding:14px 16px;border:1px solid #d4a84a;border-radius:8px;background:rgba(20,17,13,.95);font-variant-numeric:tabular-nums";
   const note = document.createElement("div");
   note.style.cssText = "max-width:520px;margin:10px auto 0;font-size:13px;color:#a89878;line-height:1.5";
-  note.textContent = t("畫面更新率與影格間隔由本頁面自己的動畫迴圈量測；遊戲暫停時仍會反映當前畫面的負載。數據每 0.5 秒更新。", "FPS and frame time are measured by this page's own animation loop. Updates every 0.5 seconds.");
+  note.textContent = "畫面更新率與影格間隔由本頁面自己的動畫迴圈量測；遊戲暫停時仍會反映當前畫面的負載。數據每 0.5 秒更新。";
   // 優化開關：目前只有掛機一組
   const optCard = document.createElement("div");
   optCard.style.cssText = "max-width:520px;margin:12px auto 0;padding:14px 16px;border:1px solid #d4a84a;border-radius:8px;background:rgba(20,17,13,.95)";
@@ -508,8 +506,8 @@ function openPerfPage() {
     return group;
   };
   const gTitle = (t) => { const d = document.createElement("div"); d.textContent = t; d.style.cssText = "font-weight:bold;color:#d4a84a;margin-top:6px"; optCard.append(d); };
-  gTitle(t("掛機（不需畫面）", "AFK (no visuals needed)"));
-  addToggle(0, t("掛機時略過主畫面繪製", "Skip main drawing while AFK"), t("掛機遮罩蓋住畫面時不畫主畫面，遊戲邏輯與淬鍊照常執行；離屏貼圖仍會繪製。", "While AFK the main scene is not drawn; game logic and forging keep running. Off-screen textures still render."), "afkSkipMain");
+  gTitle("掛機（不需畫面）");
+  addToggle(0, "掛機時略過主畫面繪製", "掛機遮罩蓋住畫面時不畫主畫面，遊戲邏輯與淬鍊照常執行；離屏貼圖仍會繪製。", "afkSkipMain");
   page.append(head, card, optCard, note);
 
   // 指標列：[名稱, 值的更新函式（僅在打開時與每 0.5 秒呼叫）]
@@ -524,14 +522,14 @@ function openPerfPage() {
     card.append(k, v);
     return (text) => { v.textContent = text; };
   };
-  const setFps = addRow(t("畫面更新率（FPS）", "FPS"));
-  const setFrame = addRow(t("影格間隔（平均／最慢）", "Frame time (avg / worst)"));
-  const setLong = addRow(t("長任務（>50ms，自開啟後）", "Long tasks (>50ms, since open)"));
-  const setHeap = addRow(t("JS 記憶體（已用／上限）", "JS heap (used / limit)"));
-  const setDom = addRow(t("DOM 節點數", "DOM nodes"));
-  const setRes = addRow(t("已載入資源（數量／約略大小）", "Resources (count / approx size)"));
-  const setLoad = addRow(t("頁面載入（DOMContentLoaded／load）", "Page load (DOMContentLoaded / load)"));
-  const setDev = addRow(t("視窗與裝置", "Viewport & device"));
+  const setFps = addRow("畫面更新率（FPS）");
+  const setFrame = addRow("影格間隔（平均／最慢）");
+  const setLong = addRow("長任務（>50ms，自開啟後）");
+  const setHeap = addRow("JS 記憶體（已用／上限）");
+  const setDom = addRow("DOM 節點數");
+  const setRes = addRow("已載入資源（數量／約略大小）");
+  const setLoad = addRow("頁面載入（DOMContentLoaded／load）");
+  const setDev = addRow("視窗與裝置");
 
   // 影格量測：記錄最近 1 秒的 rAF 時間戳。
   const stamps = [];
@@ -556,9 +554,9 @@ function openPerfPage() {
   const fmtMs = (n) => (Number.isFinite(n) ? Math.round(n) + " ms" : "—");
   const fmtMb = (n) => (Number.isFinite(n) ? (n / 1048576).toFixed(1) + " MB" : "—");
   const fmtKb = (n) => (Number.isFinite(n) ? (n / 1024).toFixed(0) + " KB" : "—");
-  setLoad(nav ? fmtMs(nav.domContentLoadedEventEnd) + " ／ " + fmtMs(nav.loadEventEnd) : t("不支援", "Not supported"));
+  setLoad(nav ? fmtMs(nav.domContentLoadedEventEnd) + " ／ " + fmtMs(nav.loadEventEnd) : "不支援");
   setDev(Math.round(innerWidth) + "×" + Math.round(innerHeight) + "，DPR " + devicePixelRatio + (navigator.hardwareConcurrency ? "，" + navigator.hardwareConcurrency + " 核心" : ""));
-  if (!observer) setLong(t("此瀏覽器不支援", "Not supported"));
+  if (!observer) setLong("此瀏覽器不支援");
 
   const update = () => {
     if (stamps.length >= 2) {
@@ -570,7 +568,7 @@ function openPerfPage() {
     } else setFps("—");
     if (observer) setLong(longCount + " 次，最長 " + Math.round(longMax) + " ms");
     const m = performance.memory;
-    setHeap(m ? fmtMb(m.usedJSHeapSize) + " ／ " + fmtMb(m.jsHeapSizeLimit) : t("此瀏覽器不提供", "Not available in this browser"));
+    setHeap(m ? fmtMb(m.usedJSHeapSize) + " ／ " + fmtMb(m.jsHeapSizeLimit) : "此瀏覽器不提供");
     setDom(String(document.getElementsByTagName("*").length));
     const res = performance.getEntriesByType?.("resource") || [];
     const bytes = res.reduce((s, e) => s + (e.transferSize || e.encodedBodySize || 0), 0);
@@ -653,15 +651,15 @@ window.__d2changelogPromise ??= fetch("/changelog.json", { cache: "no-cache" }).
   const loadBot = () => (botP ??= import(at("helper/autobot.js")));
   const loadSelfCheck = () => (selfCheckP ??= import(at("helper/selfcheck.js")));
   const steps = [
-    [zhUI ? "繁中字典" : "Dictionary", loadZhDict],
-    [zhUI ? "遊戲資料" : "Game data", loadGameData],
-    [zhUI ? "語言模組" : "Language module", loadLang],
-    [zhUI ? "輔助器" : "Assistant", loadBot],
-    [zhUI ? "自動淬鍊" : "Auto forge", async () => { await import(at("helper/autoforge.js")); await import(at("helper/autoforge-ui.js")); }],
-    [zhUI ? "物品引擎（遊戲裝備產生器）" : "Item engine", () => engine()],
-    [zhUI ? "修改器頁面" : "Editor page", () => Promise.all([hostFetch(editorUrl(), "text"), backend.assets()])],
+    ["繁中字典", loadZhDict],
+    ["遊戲資料", loadGameData],
+    ["中文化模組", loadLang],
+    ["輔助器", loadBot],
+    ["自動淬鍊", async () => { await import(at("helper/autoforge.js")); await import(at("helper/autoforge-ui.js")); }],
+    ["物品引擎（遊戲裝備產生器）", () => engine()],
+    ["修改器頁面", () => Promise.all([hostFetch(editorUrl(), "text"), backend.assets()])],
     // 自檢與其他步驟並行：載入進度條跑的同時檢查工具包與當前遊戲是否相符；問題只輸出，不阻擋遊玩。
-    [zhUI ? "相容性自檢" : "Compatibility self-check", async () => {
+    ["相容性自檢", async () => {
       const { runSelfCheck } = await loadSelfCheck();
       selfCheck = await runSelfCheck({ engine, engineInfo, backend, dict: loadZhDict, gamedata: loadGameData, gameScript: activeGameScript, ready: () => Promise.allSettled([loadLang(), loadBot()]) });
       window.__d2editSelfCheck = selfCheck;
@@ -669,25 +667,25 @@ window.__d2changelogPromise ??= fetch("/changelog.json", { cache: "no-cache" }).
   ];
   const warn = [];
   let done = 0, selfCheck = null;
-  text.textContent = (zhUI ? "D2 倖存者工具載入中（0/" : "Loading D2 Survivors tools (0/") + steps.length + (zhUI ? "）…" : ")…");
+  text.textContent = ("D2 倖存者工具載入中（0/") + steps.length + ("）…");
   await Promise.all(steps.map(async ([name, run]) => {
     try { await run(); } catch (err) { warn.push(name); console.warn("載入失敗：" + name, err); }
     done++;
-    text.textContent = (zhUI ? "D2 倖存者工具載入中（" : "Loading D2 Survivors tools (") + done + "/" + steps.length + (zhUI ? "）：" : "): ") + name + "…";
+    text.textContent = ("D2 倖存者工具載入中（") + done + "/" + steps.length + ("）：") + name + "…";
     fill.style.width = Math.round(done / steps.length * 100) + "%";
   }));
   fill.style.width = "100%";
   const issues = (selfCheck?.issues || []).filter((i) => i.level !== "info");
-  const label = { error: zhUI ? "錯誤" : "Error", warn: zhUI ? "注意" : "Warning" };
+  const label = { error: "錯誤", warn: "注意" };
   if (selfCheck?.issues?.length) {
     console.groupCollapsed("[D2 工具包自檢] " + (issues.length ? issues.length + " 項問題" : "通過（僅提示）"));
     for (const i of selfCheck.issues) console[i.level === "error" ? "error" : i.level === "warn" ? "warn" : "info"](`[${i.area}] ${i.msg}`);
     console.groupEnd();
   }
-  const problems = [...warn.map((n) => ({ level: "warn", area: n, msg: zhUI ? "載入失敗，相關功能可能無法使用" : "failed to load" })), ...issues];
+  const problems = [...warn.map((n) => ({ level: "warn", area: n, msg: "載入失敗，相關功能可能無法使用" })), ...issues];
   text.textContent = problems.length
-    ? (zhUI ? "載入完成，自檢發現以下問題（不影響繼續遊玩，點一下關閉）：" : "Loaded. Self-check found issues (you can keep playing; tap to dismiss):")
-    : (zhUI ? "載入完成，自檢通過，按暫停後左上角開啟修改器" : "Loaded, self-check passed. Pause the game to open the editor (top left)");
+    ? ("載入完成，自檢發現以下問題（不影響繼續遊玩，點一下關閉）：")
+    : ("載入完成，自檢通過，按暫停後左上角開啟修改器");
   const dismiss = () => { box.remove(); if (window.__d2editLoading === box) window.__d2editLoading = null; };
   if (problems.length) {
     const list = document.createElement("div");

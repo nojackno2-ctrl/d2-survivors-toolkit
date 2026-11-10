@@ -36,11 +36,4 @@ for (const font of ["font6", "font8", "font16"]) {
 const font = d2.ui.fonts.font6;
 font.foreignFont();
 const chineseSize = font.foreignSize;
-await window.__d2lang.set("en");
-font.foreignFont();
-const englishSize = font.foreignSize;
-if (englishSize !== font.__d2langBase || window.__d2lang.translate("Defense") !== "Defense") throw Error("切回英文後字型或翻譯未還原");
-await window.__d2lang.set("zh-TW");
-font.foreignFont();
-if (font.foreignSize !== chineseSize) throw Error("切回中文後字級未還原");
-return { translations, canvases: canvases.length, additionalCanvases: checked, durationMs: Math.round(durationMs), chineseSize, englishSize };
+return { translations, canvases: canvases.length, additionalCanvases: checked, durationMs: Math.round(durationMs), chineseSize };

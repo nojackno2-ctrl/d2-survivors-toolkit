@@ -55,9 +55,8 @@ function lineList(g, cls, level, id) {
 const itemKey = (it) => [it.rarity, it.name, it.base].join("|");
 
 // 名稱繁中化（序列、背包列表、狀態標題）：沿用共用字典 zh-TW.json。
-// 字典尚未載入、或遊戲介面為英文時顯示英文原名；字典載入後會自動重繪。
+// 字典尚未載入時顯示英文原名；字典載入後會自動重繪。
 let zhDictAF = null, zhDictReq = false;
-const zhUILang = () => (window.__d2lang ? window.__d2lang.get() === "en" : window.LANG === "en");
 function ensureZhDict() {
   if (zhDictAF || zhDictReq || !window.__d2zhUrl) return;
   zhDictReq = true;
@@ -66,7 +65,7 @@ function ensureZhDict() {
 }
 function zhItemName(it) {
   const name = String(it?.name || ""), base = String(it?.base || "");
-  if (!zhDictAF || zhUILang()) return `${name}（${base}）`;
+  if (!zhDictAF) return `${name}（${base}）`;
   const zt = (s) => zhDictAF[s] || s;
   return `${zt(name)}（${zt(base)}）`;
 }

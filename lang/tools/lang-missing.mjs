@@ -1,7 +1,7 @@
 // 遊戲更新後找出語言包缺漏：下載遊戲目前的韓文字典（= 遊戲全部可翻譯字串）與原生翻譯器，
-// 用繁中共用 zh-TW.json 或其他語言 locales/<語言>.json 逐條翻一次，列出翻不到的英文。
+// 用繁中共用 zh-TW.json 逐條翻一次，列出翻不到的英文。
 // 用法：node lang/tools/lang-missing.mjs [語言代碼，預設 zh-TW] [輸出檔，預設印出]
-// 繁中缺漏補進 zh-TW.json，其他語言補進 locales/<語言>.json（英文原文 → 譯文，數字位置寫 #，譯文以 {0} {1} 代回）。
+// 缺漏補進 zh-TW.json（英文原文 → 譯文，數字位置寫 #，譯文以 {0} {1} 代回）。
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -30,7 +30,7 @@ const ko = (await import(pathToFileURL(path.join(dir, "ko.mjs")))).default;
 fs.rmSync(dir, { recursive: true, force: true });
 
 const read = (f) => (fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : {});
-const dict = code === "zh-TW" ? read(path.join(root, "zh-TW.json")) : read(path.join(root, "locales", `${code}.json`));
+const dict = read(path.join(root, "zh-TW.json"));
 const tr = new T([dict]);
 // 帶前綴（item:、title: 等）與樣板鍵由其他鍵組合使用，只檢查畫面上會直接出現的整句
 const keys = Object.keys(ko).filter((k) => !/[#*]/.test(k) && !/^[a-z]+:/.test(k));

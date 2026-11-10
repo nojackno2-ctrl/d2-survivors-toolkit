@@ -202,14 +202,11 @@
   }
   // 物品名稱繁中化（狀態列用）：沿用修改器的字典與 zh.js 規則——整句查字典；魔法物品拆成字尾＋字首＋底材；稀有兩個字分開翻。
   let zhDict = null;
-  const isEn = () => (window.__d2lang ? window.__d2lang.get() === "en" : window.LANG === "en");
-  const trAuto = (s) => (isEn() && typeof window.tr === "function" ? window.tr(s) : s);
-  if (!isEn() && (window.__d2zhPromise || window.__d2zhUrl)) (window.__d2zhPromise ??= fetch(window.__d2zhUrl).then((r) => r.ok ? r.json() : null).catch(() => null)).then((d) => { zhDict = d; });
-  const zt = (en) => (isEn() ? en : zhDict?.[en] || en);
+  if (window.__d2zhPromise || window.__d2zhUrl) (window.__d2zhPromise ??= fetch(window.__d2zhUrl).then((r) => r.ok ? r.json() : null).catch(() => null)).then((d) => { zhDict = d; });
+  const zt = (en) => zhDict?.[en] || en;
   function itemZh(item) {
     if (!item) return "";
     const name = String(item.name || ""), base = String(item.base || "");
-    if (isEn()) return name || base;
     if (!zhDict) return name || base;
     if (!name) return zt(base);
     if (zhDict[name]) return zhDict[name];
@@ -2179,7 +2176,7 @@
   function showTab(name) { for (const [k, el] of Object.entries(panes)) el.hidden = k !== name; for (const b of root.querySelectorAll("[data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === name)); }
   for (const b of root.querySelectorAll("[data-tab]")) b.onclick = () => showTab(b.dataset.tab);
   function field(path, label, choices) {
-    const row = document.createElement("label"), text = document.createElement("span"); text.textContent = trAuto(label);
+    const row = document.createElement("label"), text = document.createElement("span"); text.textContent = label;
     const toggle = !choices && typeof get(path) === "boolean";
     const input = document.createElement(toggle ? "button" : choices ? "select" : "input");
     input.dataset.setting = path; input.id = "setting-" + path.replaceAll(".", "-"); text.id = input.id + "-label";
@@ -2188,13 +2185,13 @@
       input.type = "button"; input.className = "toggle"; input.setAttribute("role", "switch");
       input.addEventListener("click", () => { put(path, !get(path)); release(); save(true); });
     } else {
-      if (choices) for (const [value, label] of choices) { const option = document.createElement("option"); option.value = value; option.textContent = trAuto(label); input.append(option); }
+      if (choices) for (const [value, label] of choices) { const option = document.createElement("option"); option.value = value; option.textContent = label; input.append(option); }
       else { input.type = "number"; const [min, max] = bounds[path]; input.min = min; input.max = max; input.step = path.endsWith("Sec") || path.endsWith("Factor") ? "0.1" : "1"; }
       input.addEventListener("change", () => { put(path, input.type === "number" ? Number(input.value) : input.value); release(); save(true); refreshControls(); });
     }
     row.append(text, input); fields.append(row); controls.set(path, input);
   }
-  function group(label) { const h = document.createElement("h3"); h.textContent = trAuto(label); fields.append(h); groupEls[label] = h; }
+  function group(label) { const h = document.createElement("h3"); h.textContent = label; fields.append(h); groupEls[label] = h; }
   const groupEls = {};
   group("一般與安全"); field("enabled", "戰鬥輔助總開關");;
   group("生命與藥水");
@@ -2247,7 +2244,7 @@
     for (const [path, input] of controls) {
       if (input.getAttribute("role") === "switch") {
         input.setAttribute("aria-checked", String(get(path)));
-        input.textContent = get(path) ? trAuto("開啟") : trAuto("關閉");
+        input.textContent = get(path) ? "開啟" : "關閉";
       } else {
         input.value = String(get(path));
       }
@@ -2280,20 +2277,20 @@
     if (gameplayCompatible) { recoverOrphanLevelUp(game); recoverStalledTicker(game, performance.now()); }
     const editorOpen = !!window.__d2editIsOpen?.(), menuOpen = toolsMenuOpen();
     // 每 200 毫秒執行：只在內容不同時才寫入 DOM，避免無謂觸發語言模組的 MutationObserver 與重排。
-    setText(launcher, trAuto("輔助"));
-    setText(stopButton, trAuto("停止自動戰鬥"));
+    setText(launcher, "輔助");
+    setText(stopButton, "停止自動戰鬥");
     setDisplay(launcher, menuOpen && !editorOpen && panel.hidden);
     // 只在戰鬥中顯示：角色／物品欄（character）、商店與倉庫（town、camp）、技能樹與任務日誌開啟時隱藏，避免蓋住視窗按鈕。
     const gameWindowOpen = !game || !["playing", "levelUp"].includes(game.state) || !!(game.hud?.skillsOpen || game.hud?.questLogOpen);
     setDisplay(stopButton, settings.progressEnabled && !menuOpen && !editorOpen && panel.hidden && !gameWindowOpen);
     setDisplay(statusLine, (settings.enabled || settings.progressEnabled) && !menuOpen && !editorOpen && panel.hidden);
     // 依使用者要求：狀態列顯示目前自動戰鬥模式。
-    setText(statusLine, trAuto((settings.progressEnabled ? "【" + modeLabel() + "】" : "") + lastAction));
+    setText(statusLine, ((settings.progressEnabled ? "【" + modeLabel() + "】" : "") + lastAction));
     if (!menuOpen || editorOpen) panel.hidden = true;
     if (!game) guarded(null, performance.now());
     if (panel.hidden) return;
     const s = readState(game);
-    setText(status, trAuto(["戰鬥輔助：" + (settings.enabled ? "啟用" : "關閉") + "／自動戰鬥：" + (settings.progressEnabled ? "啟用（" + modeLabel() + "）" : "關閉"), game ? questLine(game) : "", game ? "掛鉤：原版 Game／" + game.state : hookNote, s.hp ? `生命：${Math.ceil(s.hp.now)}／${Math.ceil(s.hp.max)}` : "生命：無法讀取", s.mp ? `魔力：${Math.ceil(s.mp.now)}／${Math.ceil(s.mp.max)}` : "魔力：未啟用或無法讀取", game?.kit?.id ? "職業：" + ({ amazon: "亞馬遜", assassin: "刺客", barbarian: "野蠻人", druid: "德魯伊", necromancer: "死靈法師", paladin: "聖騎士", sorceress: "法師" }[game.kit.id] || game.kit.id) + "（" + (isMelee() ? "近戰" : "遠程") + "）" : "", game?.world?.terror ? "恐怖層數：" + game.world.terror.tier : "", "最近動作：" + lastAction, storageNote].filter(Boolean).join("\n")));
+    setText(status, (["戰鬥輔助：" + (settings.enabled ? "啟用" : "關閉") + "／自動戰鬥：" + (settings.progressEnabled ? "啟用（" + modeLabel() + "）" : "關閉"), game ? questLine(game) : "", game ? "掛鉤：原版 Game／" + game.state : hookNote, s.hp ? `生命：${Math.ceil(s.hp.now)}／${Math.ceil(s.hp.max)}` : "生命：無法讀取", s.mp ? `魔力：${Math.ceil(s.mp.now)}／${Math.ceil(s.mp.max)}` : "魔力：未啟用或無法讀取", game?.kit?.id ? "職業：" + ({ amazon: "亞馬遜", assassin: "刺客", barbarian: "野蠻人", druid: "德魯伊", necromancer: "死靈法師", paladin: "聖騎士", sorceress: "法師" }[game.kit.id] || game.kit.id) + "（" + (isMelee() ? "近戰" : "遠程") + "）" : "", game?.world?.terror ? "恐怖層數：" + game.world.terror.tier : "", "最近動作：" + lastAction, storageNote].filter(Boolean).join("\n")));
   }, 200);
   const api = {
     destroy() { if (!alive) return; alive = false; restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); setPickupRadius(pickupOwner, false); release(); abort.abort(); clearInterval(timer); for (const restore of restores.reverse()) restore(); launcher.remove(); stopButton.remove(); statusLine.remove(); host.remove(); if (window.__d2autobot === api) delete window.__d2autobot; }, stop,

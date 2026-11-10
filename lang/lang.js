@@ -1,6 +1,7 @@
 // D2 Survivors 遊戲內語言模組 (lang.js)
-// 支援即時切換遊戲語言（預設繁體中文 zh-TW）、以 MutationObserver 翻譯遊戲 DOM（文字、placeholder、title、aria-label）、
-// 樣板替換（數字 -> #/*）、保存原文 WeakMap 以便切回英文 en 還原、略過特定節點與修改器/輔助器 Shadow Host。
+// 只提供繁體中文：載入後直接把遊戲翻成中文（字典 zh-TW.json，譯名以原版暗黑破壞神 II 官方繁中為準）。
+// 以 MutationObserver 翻譯遊戲 DOM（文字、placeholder、title、aria-label）、接上遊戲的點陣字型與翻譯器翻譯畫布文字，
+// 略過修改器／輔助器自己的介面。
 (() => {
   "use strict";
 
@@ -13,27 +14,14 @@
 
   if (window.__d2lang?.version) return;
 
-  const STORAGE_KEY = "d2lang";
-  // 繁體中文統一使用 zh-TW.json；其他語言使用 locales/<code>.json。
-  const LOCALES = [
-    { code: "zh-TW", name: "繁體中文", base: "zh-TW.json", file: null },
-    { code: "en", name: "English (Original)", file: null },
-  ];
+  // 清單串接用字
+  const SEP = { comma: " ", and: " ", or: " / " };
+  // 舊版留下的語言選擇（已無語言切換）
+  try { localStorage.removeItem("d2lang"); localStorage.removeItem("d2se:lang"); } catch {}
+  // 量原文寬度時暫時不翻譯（redrawStaticCanvases 比對遊戲原本用哪個字型畫的）
+  let passthrough = false;
 
-  // 清單串接用字（新增語言可在此加一行；沒有的語言用 default）
-  const LIST_SEP = {
-    "zh-TW": { comma: " ", and: " ", or: " / " },
-    default: { comma: ", ", and: " & ", or: " / " },
-  };
-
-  const registry = new Map();
-  let currentLang = "zh-TW";
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) currentLang = saved;
-  } catch {}
-
-  // 原始文字與屬性保存（WeakMap），以便切回 en 還原
+  // 原始文字與屬性保存（WeakMap）：字典晚到或重新翻譯時，以原文再翻一次
   const originalTexts = new WeakMap();
   const originalAttrs = new WeakMap(); // Map<string, string> per element
   const translatedTexts = new WeakMap();
@@ -237,7 +225,6 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     };
     P.find = keepFunctionName(origFind, function (e, depth) {
       if (this !== gameTr || depth > 3) return origFind.call(this, e, depth);
-      const sep = LIST_SEP[currentLang] || LIST_SEP.default;
       const part = (s) => {
         const m = /^([+-]?\d[\d.,]*%?) of (.+)$/.exec(s.trim());
         if (m) { const n = origFind.call(this, m[2], depth + 1); return n === null ? null : `${n} ${m[1]}`; }
@@ -258,7 +245,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       if (/ of /.test(e)) { const it = itemName.call(this, e); if (it !== null) return it; }
       const r = origFind.call(this, e, depth);
       if (r !== null) return r;
-      for (const [re, glue] of [[/, (?:and )?/, sep.comma], [/ and /, sep.and], [/ or /, sep.or]]) {
+      for (const [re, glue] of [[/, (?:and )?/, SEP.comma], [/ and /, SEP.and], [/ or /, SEP.or]]) {
         if (!re.test(e)) continue;
         const outList = e.split(re).map(part);
         if (outList.every((x) => x !== null)) return outList.join(glue);
@@ -275,13 +262,13 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       const P = GameTranslator.prototype;
       if (nativeKo) {
         const orig = { translate: P.translate, translateAs: P.translateAs, translateMagic: P.translateMagic };
-        const via = (name, self, args, raw) => currentLang === "en" || !gameTr ? orig[name].apply(self, args) : orig[name].apply(gameTr, args);
-        P.translate = keepFunctionName(orig.translate, function (s) { return cleanCJK(via("translate", this, [s], s)); });
-        P.translateAs = keepFunctionName(orig.translateAs, function (kind, s) { return cleanCJK(via("translateAs", this, [kind, s], s)); });
-        P.translateMagic = keepFunctionName(orig.translateMagic, function (s, base) { return cleanCJK(via("translateMagic", this, [s, base], s)); });
+        const via = (name, self, args) => (gameTr ? orig[name].apply(gameTr, args) : orig[name].apply(self, args));
+        P.translate = keepFunctionName(orig.translate, function (s) { return cleanCJK(via("translate", this, [s])); });
+        P.translateAs = keepFunctionName(orig.translateAs, function (kind, s) { return cleanCJK(via("translateAs", this, [kind, s])); });
+        P.translateMagic = keepFunctionName(orig.translateMagic, function (s, base) { return cleanCJK(via("translateMagic", this, [s, base])); });
       }
       composeFind(P);
-      document.documentElement.lang = currentLang === "zh-TW" ? "zh-Hant" : currentLang;
+      document.documentElement.lang = "zh-Hant";
       gameHooked = true;
     } catch (e) { console.warn("[d2lang] 無法接上遊戲翻譯流程，只翻譯 DOM 與 Canvas 文字", e); }
   }
@@ -330,48 +317,6 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
   }
 
 
-  // 只存弱參照：戰鬥中遊戲不斷建立文字畫布（傷害數字、地上物品名…），用完就丟。
-  // 舊版用 Set 直接存畫布，等於永遠不釋放（實機量到 GPU 行程每分鐘多約 270 MB、分頁行程約 130 MB，JS 堆積不變）。
-  const liveCanvases = new Set();
-  let liveAdds = 0;
-  function trackLiveCanvas(canvas) {
-    if (canvas.__d2langTracked) return;
-    canvas.__d2langTracked = true;
-    liveCanvases.add(new WeakRef(canvas));
-    // 每新增 500 個清一次已被回收的項目，集合大小不會無限成長
-    if (++liveAdds % 500 === 0) for (const ref of liveCanvases) if (!ref.deref()) liveCanvases.delete(ref);
-  }
-  // 用記下的原文與參數，以目前語言重畫遊戲建立的文字畫布
-  function redrawLiveCanvases() {
-    for (const ref of [...liveCanvases]) {
-      const c = ref.deref();
-      if (!c || !c.isConnected) { liveCanvases.delete(ref); if (c) c.__d2langTracked = false; continue; }
-      const src = c.__d2langSrc; if (!src) continue;
-      try {
-        const next = src.font.canvas(src.text, ...src.rest);
-        if (next instanceof HTMLCanvasElement && next !== c) {
-          copyCanvasStyle(c, next);
-          c.replaceWith(next); liveCanvases.delete(ref);
-        }
-      } catch {}
-    }
-  }
-  window.__d2langLiveCount = () => liveCanvases.size; // 診斷用：追蹤中的文字畫布數量
-  // 記下遊戲最後一次建立升級畫面的參數：即時換語言時請遊戲用同樣參數重建，整張卡片以新語言重畫
-  // （卡片的「進化為…」是分段畫的，逐段重畫只能逐字翻）
-  let lastLevelUp = null;
-  function wrapHud() {
-    const hud = getGame()?.hud;
-    if (!hud || hud.__d2langWrapped || typeof hud.showLevelUp !== "function") return;
-    const orig = hud.showLevelUp;
-    hud.showLevelUp = keepFunctionName(orig, function (...args) { lastLevelUp = args; return orig.apply(this, args); });
-    hud.__d2langWrapped = true;
-  }
-  function rebuildScreens() {
-    const g = getGame();
-    if (g?.state === "levelUp" && lastLevelUp) try { g.hud.showLevelUp(...lastLevelUp); return true; } catch (e) { console.warn("[d2lang] 升級畫面重建失敗", e); }
-    return false;
-  }
   const replacedCanvases = new Map();
   let cachedFonts = null, cachedFontGame = null;
   function redrawStaticCanvases(target = null) {
@@ -382,7 +327,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       replacedCanvases.clear();
     }
     const game = getGame(), d2 = game?.hud?.d2;
-    if (currentLang === "en" || !d2 || !fontPatched) return;
+    if (passthrough || !d2 || !fontPatched) return;
     let fonts = cachedFontGame === game && cachedFonts?.length ? cachedFonts : null;
     if (!fonts) {
       fonts = [];
@@ -402,11 +347,10 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       const text = [...canvas.childNodes].map(n => originalTexts.get(n) ?? n.textContent).join("");
       if (!/[A-Za-z]/.test(text) || translateString(text) === text) continue;
       let font;
-      const saved = currentLang;
       // 帶陰影的畫布寬高各多 1 像素；多行的高度是行高的倍數，所以只比對單行寬度與高度的誤差
       let shadow = false;
       try {
-        currentLang = "en";
+        passthrough = true;
         // 依原版換行規則（含「 · 」分隔的提示會一段一行）試兩種：不換行、以畫布寬度換行
         font = fonts.find(f => { try {
           for (const lines of [text.split("\n"), f.wrapLines(text, canvas.width)]) {
@@ -416,7 +360,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
           return false;
         } catch { return false; } });
       }
-      finally { currentLang = saved; }
+      finally { passthrough = false; }
       if (!font) continue;
       let color = null;
       try {
@@ -435,13 +379,11 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       const next = font.canvas(translateString(text), { color, align: "center", maxWidth: canvas.width, balance: true, shadow });
       if (next instanceof HTMLCanvasElement) {
         copyCanvasStyle(canvas, next);
-        // 重畫時傳入的是譯文，原文要記成英文，切回 English 才畫得回來
-        if (next.__d2langSrc) next.__d2langSrc.text = text;
         canvas.replaceWith(next); replacedCanvases.set(next, canvas);
       }
     } catch (e) { console.warn("[d2lang] 畫布重畫失敗", e); }
   }
-  // 換語言後讓已快取的文字畫布重畫
+  // 字典或字型備好後讓已快取的文字畫布重畫
   function clearTextCaches() { for (const m of textCaches) try { m.clear(); } catch {} }
   function patchBitmapFont() {
     if (fontPatched) return true;
@@ -450,7 +392,6 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     const { protos, caches } = scanGame(game);
     if (!protos.length) return false;
     textCaches = caches;
-    wrapHud();
     let ok = false;
     for (const P of protos) ok = patchFontProto(P) || ok;
     if (!ok) return false;
@@ -480,30 +421,30 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       });
     }
     // 中文等外文字：原版只在點陣字型本身有描邊時才加外框，戰鬥中的世界文字（區域名、地上物品、拾取金幣）
-    // 因此是無框細字，壓在亮的技能特效上看不清。非英文時改用粗體，並先畫一圈深色描邊。
+    // 因此是無框細字，壓在亮的技能特效上看不清。改用粗體，並先畫一圈深色描邊。
     if (typeof P.foreignFont === "function" && typeof P.drawForeign === "function") {
       const origFont = P.foreignFont, origDraw = P.drawForeign;
       P.foreignFont = keepFunctionName(origFont, function (...a) {
         let f = origFont.apply(this, a);
-        // 中文字級放大：原版字級是為韓文算的，中文筆畫多、偏小。記下原字級，依語言切換倍率（寬度快取一併清掉）
+        // 中文字級放大：原版字級是為韓文算的，中文筆畫多、偏小。記下原字級再乘上倍率（寬度快取一併清掉）
         if (this.foreignSize) {
           this.__d2langBase ??= this.foreignSize;
           // 小字畫布有固定高度；放大超過畫布會裁掉筆畫並擠壓角色屬性頁。
-          const want = currentLang === "en" ? this.__d2langBase : Math.min(Math.round(this.__d2langBase * CJK_SCALE), this.info?.height || Infinity);
+          const want = passthrough ? this.__d2langBase : Math.min(Math.round(this.__d2langBase * CJK_SCALE), this.info?.height || Infinity);
           if (this.foreignSize !== want) {
             this.foreignSize = want;
             try { this.foreignWidths?.clear?.(); } catch {}
             f = f.replace(/\d+px/, `${want}px`);
           }
         }
-        if (currentLang === "en" || /^bold /.test(f)) return f;
+        if (passthrough || /^bold /.test(f)) return f;
         // 寬度快取是用原本字重量的，第一次換粗體時清掉重量
         if (!this.__d2langBold) { this.__d2langBold = true; try { this.foreignWidths?.clear?.(); } catch {} }
         return "bold " + f;
       });
       const RING = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
       P.drawForeign = keepFunctionName(origDraw, function (ctx, text, x, y, ...rest) {
-        if (currentLang !== "en" && ctx && typeof text === "string") try {
+        if (!passthrough && ctx && typeof text === "string") try {
           const foreign = window.__d2langForeign;
           if ([...text].some(foreign)) {
             ctx.font = this.foreignFont(); ctx.textBaseline = "alphabetic";
@@ -523,14 +464,10 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       const orig = P[name];
       if (typeof orig !== "function") continue;
       P[name] = keepFunctionName(orig, function (text, ...rest) {
-        const raw = text, out = orig.call(this, typeof text === "string" && currentLang !== "en" ? translateString(text) : text, ...rest);
-        // 記下原文與繪製參數，換語言（含切回 English）時可原地以新語言重畫，不必重新整理
-        if (name === "canvas" && typeof raw === "string" && out instanceof HTMLCanvasElement) {
-          // 點陣圖與瀏覽器文字混畫後同步讀取，避免部分環境批次繪製時出現黑塊。
-          if (currentLang !== "en" && HAS_CJK.test(out.textContent || "")) {
-            try { out.getContext("2d")?.getImageData(0, 0, 1, 1); } catch {}
-          }
-          out.__d2langSrc = { font: this, text: raw, rest }; trackLiveCanvas(out);
+        const out = orig.call(this, typeof text === "string" && !passthrough ? translateString(text) : text, ...rest);
+        // 點陣圖與瀏覽器文字混畫後同步讀取，避免部分環境批次繪製時出現黑塊。
+        if (name === "canvas" && !passthrough && out instanceof HTMLCanvasElement && HAS_CJK.test(out.textContent || "")) {
+          try { out.getContext("2d")?.getImageData(0, 0, 1, 1); } catch {}
         }
         return out;
       });
@@ -577,7 +514,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
   const CJK_CHAR = /[\u4e00-\u9fa5\u3400-\u4dbf]/, CJK_GAP = /([\u4e00-\u9fa5\u3400-\u4dbf])[^\S\u00a0]+(?=[\u4e00-\u9fa5\u3400-\u4dbf])/g;
   // 淨化中文字串：移除怪物名稱中文字之間的空格、精英怪屬性中間的逗號／頓號
   function cleanCJK(str) {
-    if (!str || typeof str !== "string" || currentLang === "en") return str;
+    if (!str || typeof str !== "string" || passthrough) return str;
     let s = str;
     // 將逗號、頓號替換為空格，多餘空格縮減
     if (CJK_PUNCT.test(s)) {
@@ -596,7 +533,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
   const cache = new Map();
   const HAS_LETTER = /[A-Za-z]/, HAS_CJK = /[　-鿿가-힣＀-￯]/;
   function translateString(str) {
-    if (!str || typeof str !== "string" || currentLang === "en" || !HAS_LETTER.test(str)) return str;
+    if (!str || typeof str !== "string" || passthrough || !HAS_LETTER.test(str)) return str;
     // 淬鍊後綴：遊戲以不換行空白把「×N」接在屬性句尾（如 "+28% Faster Cast Rate ×2"）。
     // 後綴會讓整句查不到字典，所以先剝掉只翻核心句，再把「×N」原樣接回。
     const temper = /^(.*\S)(\s×\d+)$/.exec(str);
@@ -636,6 +573,13 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       // 原版在韓文模式下才會逐項翻譯，中文模式會原樣保留英文
       if (r === str && /^[A-Za-z][A-Za-z' -]*$/.test(str.trim()) && str.includes(" ")) {
         const words = str.trim().split(/\s+/);
+        // 唯一怪的隨機名稱「字首 字尾 the 稱號」：各段查 unique: 鍵（與稀有名稱、一般用語同字不同譯），
+        // 照原版繁中的格式排成「稱號＋字首＋字尾」
+        if (gameTr && (words.length === 2 || (words.length === 4 && words[2] === "the"))) {
+          const pre = exactOf(gameTr, "unique", words[0]), suf = exactOf(gameTr, "unique", words[1]);
+          const title = words.length === 4 ? exactOf(gameTr, "unique", `the ${words[3]}`) : "";
+          if (pre !== null && suf !== null && title !== null && `unique:${words[0]}` in dict && `unique:${words[1]}` in dict) { r = title + pre + suf; words.length = 0; }
+        }
         // 冠軍怪、唯一怪的屬性列（遊戲把各屬性以空白串起）：逐項切開，屬性之間保留一個空格（不換行空白，cleanCJK 不刪）
         const traits = [];
         for (let i = 0; i < words.length;) {
@@ -741,7 +685,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     const tag = parent.tagName ? parent.tagName.toUpperCase() : "";
     if (tag === "SCRIPT" || tag === "STYLE" || tag === "CODE" || tag === "PRE" || tag === "CANVAS") return true;
 
-    // 略過我們自己的輔助器與修改器介面、語言選擇按鈕
+    // 略過我們自己的輔助器與修改器介面、中文化設定按鈕
     if (parent.closest?.("#d2autobot-panel, #d2autobot-launcher, #d2autobot-status, #d2lang-menu, #d2lang-btn") ||
         parent.id === "d2autobot-panel" || parent.id === "d2lang-menu" || parent.id === "d2lang-btn") {
       return true;
@@ -761,14 +705,6 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       if (node.parentNode?.tagName === "TEXTAREA" || node.parentNode?.tagName === "INPUT") return;
       const curVal = node.nodeValue;
       if (!curVal || !curVal.trim()) return;
-
-      if (currentLang === "en") {
-        if (originalTexts.has(node)) {
-          const orig = originalTexts.get(node);
-          if (node.nodeValue !== orig) node.nodeValue = orig;
-        }
-        return;
-      }
 
       // 如果尚未記錄原文，先記錄
       if (!originalTexts.has(node)) {
@@ -795,21 +731,9 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
             originalAttrs.set(node, map);
           }
 
-          if (currentLang === "en") {
-            if (map.has(attr)) {
-              const orig = map.get(attr);
-              if (node.getAttribute(attr) !== orig) node.setAttribute(attr, orig);
-            }
-          } else {
-            if (!map.has(attr)) {
-              map.set(attr, curVal);
-            }
-            const orig = map.get(attr);
-            const translated = translateString(orig);
-            if (translated !== curVal) {
-              node.setAttribute(attr, translated);
-            }
-          }
+          if (!map.has(attr)) map.set(attr, curVal);
+          const translated = translateString(map.get(attr));
+          if (translated !== curVal) node.setAttribute(attr, translated);
         }
       }
 
@@ -868,77 +792,32 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     }
   }
 
-  // 語言載入與登錄
   const api = {
-    version: 1,
-    register(code, { name, dict: customDict }) {
-      registry.set(code, { name, dict: customDict || null });
-    },
-    async set(code) {
-      if (!registry.has(code)) return;
-      currentLang = code;
-      try { localStorage.setItem(STORAGE_KEY, code); } catch {}
-
-      if (code === "en") {
-        useDict({});
-      } else {
-        const item = registry.get(code);
-        if (!item.dict) item.dict = await loadLocale(code);
-        useDict(item.dict);
-        // 從 English 即時切換過來：字典備好後才接上遊戲翻譯流程
-        if (!gameHooked && fontPatched) await hookGameTranslation();
-      }
-      missing.clear();
-
-      // 同步設定到 window.LANG 與修改器
-      window.LANG = code === "zh-TW" ? "zh" : code;
-      try { localStorage.setItem("d2se:lang", window.LANG); } catch {}
-
-      // 觸發全頁重新套用翻譯
-      if (document.body) {
-        processNode(document.body);
-      }
-      clearTextCaches();
-      rebuildScreens();
-      redrawLiveCanvases();
-      redrawStaticCanvases();
-      updateButtonText();
-    },
-    get() {
-      return currentLang;
-    },
-    list() {
-      return Array.from(registry.entries()).map(([code, data]) => ({ code, name: data.name }));
-    },
+    version: 2,
     translate: translateString,
     useFontBytes: installFont,
     // 測試與除錯用：目前掛接到的遊戲物件（沒有輔助器的桌面版也能取得）
     game: () => getGame(),
     debug: () => ({ translator: !!GameTranslator, gameTr: !!gameTr, fontPatched, gameHooked, game: !!getGame(), assets: assetSeen.size }),
     // 目前畫面上出現過、字典沒有的英文（遊戲更新後找缺漏用：copy(__d2lang.missing().join("\n"))）
-    // 排除本模組自己的語言選單（語言名稱本來就以各自的語言顯示）
-    missing() { const own = [...registry.values()].map((r) => r.name); return [...new Set([...missing, ...(gameTr?.missing ?? [])])].filter((s) => !/[　-鿿가-힣＀-￯]/.test(s) && !own.some((n) => s.includes(n))); },
+    missing() { return [...new Set([...missing, ...(gameTr?.missing ?? [])])].filter((s) => !/[　-鿿가-힣＀-￯]/.test(s)); },
   };
 
-  // 讀語言檔：base 大字典 + file 補充（後者覆蓋前者）
-  async function loadLocale(code) {
-    const conf = LOCALES.find((l) => l.code === code) || { file: `locales/${code}.json` };
-    const out = {};
-    for (const f of [conf.base, conf.file]) {
-      if (!f) continue;
-      try {
-        if (f === "zh-TW.json" && window.__d2zhPromise) {
-          const shared = await window.__d2zhPromise.catch(() => null);
-          if (shared && typeof shared === "object") { Object.assign(out, shared); continue; }
-        }
-        // 書籤入口提供的重試讀取（手機網路不穩時 fetch 會 Load failed）
-        if (window.__d2hostFetch) { Object.assign(out, await window.__d2hostFetch(new URL(f, BASE_URL).href + "?v=" + Date.now())); continue; }
-        const res = await fetch(new URL(f, BASE_URL).href);
-        if (res.ok) Object.assign(out, await res.json());
-        else console.warn("[d2lang] 載入語言檔失敗: " + f, res.status);
-      } catch (err) { console.warn("[d2lang] 載入語言檔失敗: " + f, err); }
-    }
-    return out;
+  // 讀字典（與修改器、輔助器共用同一份 zh-TW.json）
+  async function loadDict() {
+    try {
+      if (window.__d2zhPromise) {
+        const shared = await window.__d2zhPromise.catch(() => null);
+        if (shared && typeof shared === "object") return shared;
+      }
+      const url = new URL("zh-TW.json", BASE_URL).href;
+      // 書籤入口提供的重試讀取（手機網路不穩時 fetch 會 Load failed）
+      if (window.__d2hostFetch) return await window.__d2hostFetch(url + "?v=" + Date.now());
+      const res = await fetch(url);
+      if (res.ok) return await res.json();
+      console.warn("[d2lang] 載入字典失敗", res.status);
+    } catch (err) { console.warn("[d2lang] 載入字典失敗", err); }
+    return {};
   }
 
   // 遊戲畫在 Canvas 上的文字（PixiJS 以 2D context 量字與繪字）：量與畫都換成譯文，寬度才一致
@@ -948,15 +827,10 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
       const orig = C.prototype[fn];
       if (typeof orig !== "function") continue;
       C.prototype[fn] = keepFunctionName(orig, function (text, ...rest) {
-        if (currentLang !== "en" && typeof text === "string" && text.length > 1) text = translateString(text);
+        if (!passthrough && typeof text === "string" && text.length > 1) text = translateString(text);
         return orig.call(this, text, ...rest);
       });
     }
-  }
-
-  // 註冊內建語言
-  for (const loc of LOCALES) {
-    registry.set(loc.code, { name: loc.name, dict: null });
   }
 
   window.__d2lang = api;
@@ -968,15 +842,9 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     return !!p && !p.classList.contains("hidden") && getComputedStyle(p).display !== "none";
   };
 
-  // 建立左上角的語言按鈕與下拉選單
+  // 建立左上角的「中文化」按鈕與選單（比較框排版、D2R 原版字型）
   let btn = null;
   let menu = null;
-
-  function updateButtonText() {
-    if (!btn) return;
-    btn.textContent = "語言";
-    btn.setAttribute("aria-label", "語言");
-  }
 
   function createUI() {
     if (btn) return;
@@ -984,7 +852,8 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     btn = document.createElement("button");
     btn.id = "d2lang-btn";
     btn.type = "button";
-    updateButtonText();
+    btn.textContent = "中文化";
+    btn.setAttribute("aria-label", "中文化設定");
     btn.style.cssText = "position:fixed;top:calc(max(12px, env(safe-area-inset-top)) + 50px);left:max(12px, env(safe-area-inset-left));z-index:2147483646;display:none;" +
       "padding:8px 14px;min-height:44px;border:1px solid #d4a84a;border-radius:6px;background:rgba(20,17,13,.95);color:#d4a84a;" +
       "font:bold 15px 'Microsoft JhengHei',system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.5);touch-action:manipulation;";
@@ -996,30 +865,6 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
 
     function renderMenu() {
       menu.innerHTML = "";
-      for (const loc of api.list()) {
-        const item = document.createElement("div");
-        item.textContent = (loc.code === currentLang ? "✓ " : "  ") + loc.name;
-        item.style.cssText = "padding:8px 16px;color:#f2e5c6;font:14px system-ui,sans-serif;cursor:pointer;transition:background .15s;";
-        item.onmouseenter = () => { item.style.background = "#3a3127"; };
-        item.onmouseleave = () => { item.style.background = "transparent"; };
-        item.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          menu.style.display = "none";
-          if (loc.code === currentLang) return;
-          // 從原文 English 換成其他語言：即時切換，重建目前畫面並重畫畫面上的文字（不必重新整理、網頁版也不必再點書籤）。
-          // 從翻譯換成其他語言（含回到 English）：遊戲很多文字在建立時就已翻好、沒有原文可還原，
-          // 跟遊戲原生的語言切換一樣重新整理；桌面版重新整理後會自動再載入本模組，網頁版重新整理後就是原版英文
-          try { localStorage.setItem(STORAGE_KEY, loc.code); } catch {}
-          // 遊戲的文字畫布都記下了原文，任何方向都即時切換；只有接不上遊戲（例如遊戲改版）時才重新整理
-          if (fontPatched || loc.code !== "en") { api.set(loc.code); return; }
-          location.reload();
-        };
-        for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) {
-          item.addEventListener(ev, (e) => e.stopPropagation());
-        }
-        menu.appendChild(item);
-      }
       for (const [mode, label] of [["top", "比較框上方並列"], ["game", "比較框原版位置"]]) {
         const layoutItem = document.createElement("div");
         layoutItem.textContent = (tipLayout === mode ? "✓ " : "  ") + label;
@@ -1084,7 +929,7 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
 
   // ===== 裝備比較框排版（觸控裝置）=====
   // 遊戲把物品框 #tooltip 與比較框 .worn-box 放在物品旁邊，手機上會蓋住下方的「丟下／出售／移動」鍵。
-  // 預設改為：可見的框上緣對齊畫面上方、並排放在一起，縮放到不超過按鈕上緣；可在「語言」選單切回原版位置。
+  // 預設改為：可見的框上緣對齊畫面上方、並排放在一起，縮放到不超過按鈕上緣；可在「中文化」選單切回原版位置。
   const TIP_LAYOUT_KEY = "d2lang:tipLayout";
   let tipLayout = "top";
   try { if (localStorage.getItem(TIP_LAYOUT_KEY) === "game") tipLayout = "game"; } catch {}
@@ -1199,20 +1044,16 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     if (tipLayout === "game") restoreTipLayout();
   }
 
-  // 初始化並套用預設語言
+  // 初始化：載入字典後直接翻譯
   (async () => {
     try { const bytes = await fontStorage("readonly"); if (bytes) await installFont(bytes, false); } catch (e) { console.warn("[d2lang] 無法讀取已儲存字型", e); }
     await loadGameTranslator();
-    if (!registry.has(currentLang)) currentLang = "zh-TW";
-    if (currentLang !== "en") {
-      const item = registry.get(currentLang);
-      item.dict = await loadLocale(currentLang);
-      useDict(item.dict);
-    }
+    useDict(await loadDict());
+    if (document.body) processNode(document.body);
     // 點陣字型能畫中文後才接上遊戲翻譯流程（否則 Canvas 上會變成「??」；DOM 與一般 Canvas 文字照常由本模組翻譯）
     (async () => {
       for (let i = 0; i < 260 && !patchBitmapFont(); i++) { await captureGame(); await new Promise((r) => setTimeout(r, i < 30 ? 100 : 500)); }
-      if (fontPatched) { if (currentLang !== "en") await hookGameTranslation(); clearTextCaches(); redrawStaticCanvases(); }
+      if (fontPatched) { await hookGameTranslation(); clearTextCaches(); redrawStaticCanvases(); }
       else console.warn("[d2lang] 找不到遊戲點陣字型，遊戲畫布上的選單維持原文");
     })();
 

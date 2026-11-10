@@ -52,8 +52,8 @@ if (has("desktop") && next === pkg.version) { console.error("桌面版發布需�
 const RELEASE_PATHS = new Set([
   "AI_HANDOFF.md", "README.md", "d2edit.js", "index.html", "version.json", ".nojekyll",
   "helper/autobot.js", "helper/selfcheck.js", "helper/tests/autobot.cjs", "helper/tests/selfcheck.cjs",
-  "lang/lang.js", "lang/d2rfont.js", "lang/zh-TW.json", "lang/locales/zh-TW.json", "lang/tests/test_lang.cjs",
-  "modifier/editor.html", "modifier/gamedata.json", "modifier/i18n.js", "modifier/patch.mjs", "modifier/signatures.json", "modifier/webapi.js", "modifier/zh.js", "modifier/engine-page.js",
+  "lang/lang.js", "lang/d2rfont.js", "lang/zh-TW.json", "lang/tests/test_lang.cjs",
+  "modifier/editor.html", "modifier/gamedata.json", "modifier/patch.mjs", "modifier/signatures.json", "modifier/webapi.js", "modifier/zh.js", "modifier/engine-page.js",
   "modifier/tests/weapon-sets.cjs", "modifier/tests/weapon-sets-ui.cjs", "modifier/tests/version-gate-web.cjs",
   "site/index.html", "site/install.html", "site/install.template.html", "tools/build-web.js", "lang/tools/desktop-lang.mjs", "lang/tools/lang-missing.mjs", "tools/tests/build-web.cjs", "modifier/tests/item-db.cjs", "modifier/tests/skill-mods.cjs", "modifier/tests/runeword-class-base.cjs", "modifier/tests/load-patch.cjs", "verify/state.json",
 ]);

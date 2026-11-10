@@ -1,6 +1,6 @@
 # D2倖存者工具包
 
-《D2 Survivors》（d2survivors.lol）的非官方存檔修改器，介面支援繁體中文與英文（依系統語言自動切換）。物品直接使用遊戲本身的產生器製作，數值範圍與遊戲一致。
+《D2 Survivors》（d2survivors.lol）的非官方存檔修改器，介面為繁體中文。物品直接使用遊戲本身的產生器製作，數值範圍與遊戲一致。
 
 - **網頁版（電腦／手機）**：<https://nojackno2-ctrl.github.io/d2-survivors-toolkit/>
 - **Windows 桌面版**：到 [Releases](https://github.com/nojackno2-ctrl/d2-survivors-toolkit/releases) 下載 `D2.exe`（可攜版，免安裝）
@@ -19,27 +19,21 @@
 | 反修改偵測 | 合規檢查：依遊戲本身的規則（金幣上限、物品合法性、稀有物品 +技能、屬性點上限、角色等級、簽章、匯入痕跡等）掃描存檔，標出會被排行榜拒絕的項目 |
 | 存檔管理 | 快照備份、還原、建立全新存檔 |
 | 原始 JSON | 直接檢視與編輯存檔內容 |
-| 設定 | 介面語言（自動依系統語言切換繁體中文／English）；「解除修改限制」：預設關閉，依原版規則限制數值與裝備屬性 |
+| 設定 | 「解除修改限制」：預設關閉，依原版規則限制數值與裝備屬性 |
 
-## 語言功能與遊戲中文化
+## 遊戲中文化
 
-桌面版可執行 `node lang/tools/desktop-lang.mjs` 注入語言模組；安裝於系統目錄時需要系統管理員權限，遊戲更新後須重新執行。使用 `node tools/desktop-lang.mjs --restore` 還原備份。語言選單中的「使用 D2R 原版字型…」可從本機《暗黑破壞神 II：獄火重生》擷取字型。
+只提供繁體中文：載入後直接把遊戲翻成中文，沒有語言切換。**譯名以原版《暗黑破壞神 II》官方繁中為準**（裝備、屬性、技能、怪物、地名等），字典 `lang/zh-TW.json` 由本機安裝的《暗黑破壞神 II：獄火重生》字串表核對產生。
 
-載入修改器後，遊戲暫停時（#paused 可見或選單開啟）畫面**中間上方**會出現「🌐 語言」按鈕：
-- **切換語言**：點擊展開下拉選單，可即時切換遊戲語言（預設為「繁體中文」`zh-TW`，亦可切換回原文「English」`en`）。選擇會自動保存在 `localStorage["d2lang"]`。
-- **全面 DOM 翻譯**：透過 `MutationObserver` 監看遊戲畫面，翻譯包含浮動文字、HUD Banner、UI 按鈕標籤、`placeholder`、`title`、`aria-label` 等，並支援數字樣板（例如 `# seconds left` → `剩餘{0}秒`）。切換至 `en` 時利用 `WeakMap` 原文快取精確還原。
-- **翻譯範圍**：使用遊戲原生的翻譯器（遊戲韓文版用的同一套比對規則）查我們的字典；除 DOM 外也翻譯畫在 Canvas 上的文字。遊戲及網頁／桌面修改器共用 `zh-TW.json`；舊版 `locales/zh-TW.json` 僅保留作歷史資料，不再載入。以遊戲 20261101.1 全部 11826 條介面字串比對，繁中全部有譯文（DPS、Discord 保留原文）。切換語言後，已畫在 Canvas 上的文字要等畫面重畫才會更新。
-- **遊戲更新後補字**：執行 `node lang/tools/lang-missing.mjs zh-TW 缺漏.json` 會下載遊戲目前的字串清單與翻譯器（會在本機執行遊戲的翻譯器程式碼），列出翻不到的英文，翻好後補進 `zh-TW.json`，並同步桌面來源。遊戲中也可在主控台執行 `__d2lang.missing()` 查看畫面上出現過但沒翻到的文字。
-- **即時切換語言**：繁中與 English 雙向即時切換，不重新整理頁面、網頁版也不必再點書籤；遊戲文字畫布都記下原文，切換時以新語言原地重畫。
-- **物品名稱**：魔法物品依「字尾＋字首＋底材」、兩個字的稀有名稱依兩字分別翻譯。
-- **工具聯動**：切換為英文時，輔助器（autobot）介面與修改器（editor）亦會同步切換為英文顯示；切換為繁體中文時全面恢復繁中。
-- **如何擴充新語言**：
-  1. 在 `lang/locales/` 目錄新增語言字典檔（例如 `lang/locales/ja.json`，格式與 `zh-TW.json` 相同：英文原文 → 譯文，數字位置寫 `#`，譯文以 `{0}`、`{1}` 代回）。可先用 `node lang/tools/lang-missing.mjs ja ja-待翻.json` 產生全部待翻字串。
-  2. 在 `lang/lang.js` 的 `LOCALES` 清單常數中加入該語言代碼與名稱，例如：
-     ```js
-     { code: "ja", name: "日本語", file: "locales/ja.json" },
-     ```
-  3. 亦可在執行階段透過 `window.__d2lang.register(code, { name, dict })` 動態註冊新語言。
+桌面版可執行 `node lang/tools/desktop-lang.mjs` 注入語言模組；安裝於系統目錄時需要系統管理員權限，遊戲更新後須重新執行。使用 `node tools/desktop-lang.mjs --restore` 還原備份。暫停時左上角「中文化」按鈕可切換比較框排版，或「使用 D2R 原版字型…」從本機 D2R 擷取字型。
+
+- **全面 DOM 翻譯**：透過 `MutationObserver` 監看遊戲畫面，翻譯浮動文字、HUD、按鈕標籤、`placeholder`、`title`、`aria-label`，並支援數字樣板（例如 `# seconds left` → `剩餘{0}秒`）。
+- **翻譯範圍**：使用遊戲原生的翻譯器（遊戲韓文版用的同一套比對規則）查字典；除 DOM 外也翻譯畫在 Canvas 上的文字。遊戲、輔助器與修改器共用同一份 `zh-TW.json`。
+- **物品名稱**：依原版繁中格式——魔法物品「字尾＋字首＋底材」、稀有名稱「字首＋字尾」、怪物稱號與名稱直接相接。字典用 `item:`／`affix:`／`monster:`／`unique:` 前綴區分同英文不同譯名（例如 Spirit：符文之語「精神」、魔法字尾「魂靈之」）。
+- **以官方資料更新字典**（需本機安裝 D2R）：
+  1. `node lang/tools/d2r-strings.mjs`：讀取 D2R 的 CASC 資料（只讀不改），匯出官方字串與 excel 表到 `backups/d2r-strings/`（Git 忽略，不放官方資料進倉庫）。
+  2. `node lang/tools/d2r-align.mjs`：列出字典名稱類詞條與官方的差異；加 `--write` 寫回。
+- **遊戲更新後補字**：執行 `node lang/tools/lang-missing.mjs zh-TW 缺漏.json` 列出翻不到的英文，翻好後補進 `zh-TW.json`。遊戲中也可在主控台執行 `__d2lang.missing()` 查看畫面上沒翻到的文字。
 
 未解除修改限制時，修改器依原版規則限制可製作內容：不能製作暗金、套裝、符文之語；魔法最多 1 前綴＋1 後綴，稀有 2～6 個詞綴（前後綴各最多 3 個、稀有珠寶最多 4 個、同類不重複，依 Diablo II 原版規則）；稀有物品最多一條職業／技能樹 +技能（遊戲 10/20 起的規則）；屬性點不超過等級應得上限；屬性下拉選單只列出依規則還能加入的屬性；金幣不超過 100 億；恰西升級單次花費不超過 100 億。這些限制不代表排行榜會接受成績。
 
@@ -178,7 +172,7 @@ npm run dist       # 封裝 Windows 可攜版（僅 editor/ 改動時需要）
 |---|---|
 | 根目錄 | 共用檔：`d2edit.js`（書籤入口，網址不可變）、`index.html`（轉址到 `site/install.html`）、`version.json`、README、授權、`wrangler.jsonc` |
 | `helper/` | 輔助器：`autobot.js`、設計文件、排行榜學習工具、模擬測試 |
-| `lang/` | 語言：`lang.js`、`d2rfont.js`、字典 `zh-TW.json`、`locales/`、補字與桌面注入工具（`lang/tools/`）、測試 |
+| `lang/` | 語言：`lang.js`、`d2rfont.js`、字典 `zh-TW.json`、官方字串匯出與核對、補字與桌面注入工具（`lang/tools/`）、測試 |
 | `modifier/` | 存檔修改器：`editor.html`、`engine-page.js`、`patch.mjs`、`signatures.json`、`gamedata.json`、`webapi.js`、`i18n.js`、`zh.js`、測試 |
 | `site/` | 網站：公告站 `index.html` 與書籤安裝頁 `install.html`（Cloudflare 自動部署 `site/`） |
 | `editor/` | 桌面啟動器（Electron）：`main.js`、`core.js`（存檔讀寫）、`engine.js`（物品引擎）、`remote.js`（從網站抓取資源）與版號 `package.json` |
