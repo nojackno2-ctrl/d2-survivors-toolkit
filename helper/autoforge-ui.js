@@ -194,12 +194,30 @@ async function stepOnce(g, cls) {
 // 伺服器無回應：每次等 1 分鐘再重試，最多重試 3 次；仍無回應就放棄這一件（序列換下一件）。
 const RETRY_PAUSE_MS = 60 * 1000;
 const MAX_RETRIES = 3;
+// 伺服器限流（429）會附 Retry-After（實測 3600 秒）：記下來，等滿該時間才重試，不再每分鐘白敲。
+let lastRetryAfterMs = 0;
+function hookForgeFetch() {
+  if (window.__d2afFetchHooked || typeof window.fetch !== "function") return;
+  window.__d2afFetchHooked = true;
+  const rf = window.fetch;
+  window.fetch = async function (u, o) {
+    const r = await rf.apply(this, arguments);
+    try {
+      if (r.status === 429 && String(u?.url || u).includes("/forge")) {
+        const sec = Number(r.headers.get("retry-after"));
+        lastRetryAfterMs = sec > 0 ? Math.min(sec, 7200) * 1000 : 0;
+      }
+    } catch (e) { /* 讀不到標頭就維持 1 分鐘重試 */ }
+    return r;
+  };
+}
+hookForgeFetch();
 // 暫停採分段等待，按「停止」時可立即中斷，不必等滿 1 分鐘。
-async function pauseBeforeRetry() {
-  state.pauseUntil = Date.now() + RETRY_PAUSE_MS;
+async function pauseBeforeRetry(ms = RETRY_PAUSE_MS) {
+  state.pauseUntil = Date.now() + ms;
   render();
   try {
-    for (let t = 0; t < RETRY_PAUSE_MS && state.running; t += 1000) await sleep(Math.min(1000, RETRY_PAUSE_MS - t));
+    for (let t = 0; t < ms && state.running; t += 1000) await sleep(Math.min(1000, ms - t));
   } finally {
     state.pauseUntil = 0;
   }
@@ -242,6 +260,13 @@ async function loop() {
   while (state.running) {
     let r;
     try { r = await stepOnce(g, state.cls); } catch (e) { r = { done: true, result: "錯誤：" + String(e?.message || e) }; }
+    if (r.retry && lastRetryAfterMs > 0) {
+      // 伺服器明講要等多久：等滿再繼續同一件，不算重試次數。
+      const ms = lastRetryAfterMs + 5000; lastRetryAfterMs = 0;
+      push(`伺服器限流（429），依 Retry-After 等待 ${Math.round(ms / 60000)} 分鐘後繼續`);
+      await pauseBeforeRetry(ms);
+      continue;
+    }
     if (r.retry) {
       retries++;
       stepGap = Math.min(SLEEP_MAX, stepGap * 2);
