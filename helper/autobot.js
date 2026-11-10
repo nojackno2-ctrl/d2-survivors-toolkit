@@ -49,7 +49,7 @@
       summonCloneOnTerror: false
     },
   };
-  // 由 d2survivors.lol 排行榜 API 產生（helper/tools/ladder-learn.js）：各職業前 50 位不同玩家，每人只取最高恐懼層紀錄（依使用者要求），不足 20 位以地獄榜補：技能／被動 [id, 名稱, 權重]、常用變體、配點比例、各欄常用暗金套裝。
+  // 由 d2survivors.lol 排行榜 API 產生（helper/tools/ladder-learn.js）：各職業前 50 位不同玩家，每人只取最高恐懼層紀錄（依使用者要求），不足 20 位以地獄榜補：技能／被動 [id, 名稱, 權重]、常用變體、配點比例、各欄常用獨特套裝。
   const LADDER = {"source":"d2survivors.lol/api/leaderboard（各職業前 50 位不同玩家，每人取最高恐懼層紀錄；不足 20 位以地獄榜補）","generatedAt":"2026-11-01","classes":{"amazon":{"runs":50,"players":50,"tiers":[118,103,94,87,84],"skills":[["fireArrow","Fire Arrow",1.68],["explodingArrow","Exploding Arrow",1.64],["guidedArrow","Guided Arrow",1.44],["magicArrow","Magic Arrow",1.4],["seekerArrow","Widowmaker",1.13],["strafe","Strafe",1.1],["immolationArrow","Immolation Arrow",1.03],["coldArrow","Cold Arrow",1],["freezingArrow","Freezing Arrow",0.99],["iceArrow","Ice Arrow",0.99],["lightningFury","Lightning Fury",0.9],["multipleShot","Multiple Shot",0.8],["valkyrie","Valkyrie",0.48],["lightningBolt","Lightning Bolt",0.16],["plagueJavelin","Plague Javelin",0.11],["impale","Impale",0.08],["lightningStrike","Lightning Strike",0.05],["jab","Jab",0.04],["fend","Fend",0.02],["chargedStrike","Charged Strike",0.02]],"mods":{"seekerArrow":"blackArrow","plagueJavelin":"lingering","strafe":"bullseye","guidedArrow":"bounty","lightningFury":"chain","freezingArrow":"frostField","iceArrow":"deepFreeze","immolationArrow":"pyre","explodingArrow":"focused","fireArrow":"frostfire","magicArrow":"ricochet","coldArrow":"split","valkyrie":"huntress","multipleShot":"narrow","impale":"slayer","fend":"spearwind","jab":"heavy","lightningStrike":"frostEdge","chargedStrike":"frostCharge","lightningBolt":"frostJavelin"},"passives":[["criticalStrike","Critical Strike",2],["penetrate","Penetrate",2],["pierce","Pierce",2],["innerSight","Inner Sight",2],["dodge","Dodge",1.96],["avoid","Avoid",1.96],["dopplezon","Decoy",1.88],["slowMissiles","Slow Missiles",1.84],["evade","Evade",1.76],["fcr","Faster Cast Rate",1.68],["frw","Faster Run/Walk",0.44],["vitality","Vitality",0.32],["telekinesis","Telekinesis",0.1],["replenish","Replenish Life",0.04]],"attributes":{"strength":0.02,"dexterity":0.78,"vitality":0.13,"energy":0.07},"gear":{"belt":["Arachnid Mesh","Thundergod's Vigor","M'avina's Tenet"],"boots":["Gore Rider","Marrowwalk","Goblin Toe"],"amulet":["Mara's Kaleidoscope","Atma's Scarab","Highlord's Wrath"],"ring1":["Wisp Projector","Bul-Kathos' Wedding Band","The Stone of Jordan"],"ring2":["Wisp Projector","Bul-Kathos' Wedding Band","Carrion Wind"],"weapon":["Blood Raven's Charge","Gimmershred","Kuko Shakaku"],"head":["Harlequin Crest","Andariel's Visage","Kira's Guardian"],"body":["Skin of the Vipermagi","Arkaine's Valor","M'avina's Embrace"],"gloves":["Soul Drainer","Dracul's Grasp","Laying of Hands"],"shield":["The Ward","Spirit Ward"]}},"assassin":{"runs":50,"players":50,"tiers":[100,84,82,72,66],"skills":[["cloakOfShadows","Cloak of Shadows",1.52],["cobraStrike","Cobra Strike",1.48],["dragonFlight","Dragon Flight",1.1],["bladesOfIce","Blades of Ice",1.1],["royalStrike","Phoenix Strike",1.1],["tigerStrike","Tiger Strike",1.04],["clawsOfThunder","Claws of Thunder",0.88],["deathSentry","Death Sentry",0.77],["dragonTail","Dragon Tail",0.65],["mindBlast","Mind Blast",0.61],["fistsOfFire","Fists of Fire",0.6],["bladeShield","Blade Shield",0.59],["shadowMaster","Shadow Master",0.59],["infernoSentry","Wake of Inferno",0.27],["dragonClaw","Dragon Claw",0.25],["shockField","Shock Web",0.24],["bladeFury","Blade Fury",0.23],["lightningSentry","Lightning Sentry",0.18],["wakeOfFireSentry","Wake of Fire",0.09],["chargedBoltSentry","Charged Bolt Sentry",0.08],["dragonTalon","Dragon Talon",0.08],["psychicHammer","Psychic Hammer",0.04]],"mods":{"cobraStrike":"spit","dragonFlight":"hunter","cloakOfShadows":"shroud","mindBlast":"focus","bladesOfIce":"shards","deathSentry":"chainBlast","dragonTail":"wideTail","clawsOfThunder":"chain","royalStrike":"tempest","bladeShield":"burst","tigerStrike":"shockwave","shadowMaster":"stalker","fistsOfFire":"flare","dragonClaw":"cleave","infernoSentry":"fan","lightningSentry":"fork","bladeFury":"bullseye","wakeOfFireSentry":"ring","shockField":"wideNet","chargedBoltSentry":"lance","dragonTalon":"sweep"},"passives":[["vitality","Vitality",2],["fcr","Faster Cast Rate",2],["frw","Faster Run/Walk",2],["clawMastery","Claw Mastery",2],["weaponBlock","Weapon Block",2],["quickness","Burst of Speed",2],["fade","Fade",2],["venom","Venom",2],["replenish","Replenish Life",1.96],["telekinesis","Telekinesis",1.6]],"attributes":{"strength":0.22,"dexterity":0.27,"vitality":0.31,"energy":0.2},"gear":{"weapon":["Firelizard's Talons","Bartuc's Cut-Throat","Mang Song's Lesson"],"head":["Harlequin Crest","Andariel's Visage","Griffon's Eye"],"belt":["Arachnid Mesh","Verdungo's Hearty Cord","String of Ears"],"boots":["Gore Rider","Shadow Dancer","Goblin Toe"],"amulet":["Mara's Kaleidoscope","Atma's Scarab","Highlord's Wrath"],"ring1":["Bul-Kathos' Wedding Band","Wisp Projector","Raven Frost"],"ring2":["Wisp Projector","Bul-Kathos' Wedding Band","The Stone of Jordan"],"gloves":["Dracul's Grasp","Laying of Hands","Magefist"],"body":["Arkaine's Valor","Skin of the Vipermagi","Naj's Light Plate"],"shield":["Bartuc's Cut-Throat","Jade Talon","Firelizard's Talons"]}},"barbarian":{"runs":50,"players":50,"tiers":[260,235,233,228,223],"skills":[["battleCry","Battle Cry",2],["doubleThrow","Double Throw",2],["grimWard","Grim Ward",2],["doubleSwing","Double Swing",2],["taunt","Taunt",1.72],["whirlingAxes","Lacerator",1.13],["frenzy","Frenzy",1.13],["berserk","Berserk",1.13],["battleCommand","Battle Command",1.13],["concentrate","Concentrate",1.03],["whirlwind","Whirlwind",0.36],["stun","Stun",0.08]],"mods":{"whirlwind":"blazingPath","whirlingAxes":"stormAxes","frenzy":"flameEdge","berserk":"gore","battleCry":"contagion","doubleThrow":"venom","battleCommand":"warBanner","grimWard":"lure","doubleSwing":"stormEdge","taunt":"rabble","concentrate":"stormBlow","stun":"concussion"},"passives":[["vitality","Vitality",2],["axeMastery","Axe Mastery",2],["throwingMastery","Throwing Mastery",2],["ironSkin","Iron Skin",2],["naturalResistance","Natural Resistance",2],["increasedSpeed","Increased Speed",2],["findItem","Find Item",2],["fcr","Faster Cast Rate",1.96],["increasedStamina","Increased Stamina",1.96],["swordMastery","Sword Mastery",1.16],["maceMastery","Mace Mastery",0.52],["telekinesis","Telekinesis",0.19],["poleArmMastery","Pole Arm Mastery",0.04],["replenish","Replenish Life",0.04],["frw","Faster Run/Walk",0.04],["spearMastery","Spear Mastery",0.04]],"attributes":{"strength":0.23,"dexterity":0.01,"vitality":0.76,"energy":0},"gear":{"gloves":["Dracul's Grasp","Steelrend","Laying of Hands"],"belt":["Arachnid Mesh","Verdungo's Hearty Cord"],"boots":["Gore Rider","Goblin Toe","War Traveler"],"amulet":["Atma's Scarab","Mara's Kaleidoscope","Highlord's Wrath"],"ring1":["Wisp Projector","Bul-Kathos' Wedding Band","The Stone of Jordan"],"ring2":["Bul-Kathos' Wedding Band","Wisp Projector","The Stone of Jordan"],"head":["Wolfhowl","Arreat's Face"],"weapon":["Azurewrath"]}},"druid":{"runs":50,"players":50,"tiers":[174,129,100,97,70],"skills":[["twister","Twister",1.36],["arcticBlast","Arctic Blast",1.28],["spiritOfBarbs","Spirit of Barbs",0.99],["hurricane","Hurricane",0.99],["fury","Fury",0.92],["tornado","Tornado",0.92],["shockWave","Shock Wave",0.86],["moltenBoulder","Molten Boulder",0.86],["armageddon","Armageddon",0.81],["volcano","Volcano",0.81],["vines","Solar Creeper",0.77],["firestorm","Firestorm",0.72],["summonGrizzly","Summon Grizzly",0.63],["eruption","Fissure",0.56],["raven","Raven",0.12],["cycleOfLife","Carrion Vine",0.09],["oakSage","Oak Sage",0.08],["summonFenris","Summon Dire Wolf",0.07],["heartOfWolverine","Heart of Wolverine",0.07],["plaguePoppy","Poison Creeper",0.04]],"mods":{"shockWave":"earthquake","fury":"stormFangs","armageddon":"wrath","vines":"sunburst","hurricane":"galeForce","volcano":"caldera","tornado":"maelstrom","moltenBoulder":"magmaCore","twister":"vortex","summonGrizzly":"wildPack","spiritOfBarbs":"thornNova","firestorm":"firewall","arcticBlast":"iceLance","cycleOfLife":"nourish","eruption":"wideFissure","raven":"nightwing","oakSage":"sap","heartOfWolverine":"loneWolf","summonFenris":"frenzied"},"passives":[["shapeShifting","Lycanthropy",1.92],["cycloneArmor","Cyclone Armor",1.92],["replenish","Replenish Life",1.88],["spiritKeeper","Spirit Keeper",1.88],["fcr","Faster Cast Rate",1.84],["frw","Faster Run/Walk",1.84],["feralRage","Feral Rage",1.72],["fireClaws","Fire Claws",1.68],["vitality","Vitality",1.52],["ravenlore","Ravenlore",1.4],["hunger","Hunger",1.32],["rabies","Rabies",0.56],["telekinesis","Telekinesis",0.42]],"attributes":{"strength":0.44,"dexterity":0.03,"vitality":0.34,"energy":0.18},"gear":{"weapon":["Azurewrath","Islestrike","Earth Shifter"],"shield":["Tiamat's Rebuke","Stormshield","The Ward"],"head":["Jalal's Mane","Harlequin Crest","Cerebus' Bite"],"gloves":["Dracul's Grasp","Soul Drainer","Magefist"],"belt":["Arachnid Mesh","Goldwrap","Verdungo's Hearty Cord"],"boots":["Gore Rider","War Traveler","Goblin Toe"],"amulet":["Mara's Kaleidoscope","Atma's Scarab","Highlord's Wrath"],"ring1":["Bul-Kathos' Wedding Band","Raven Frost","The Stone of Jordan"],"ring2":["Bul-Kathos' Wedding Band","Raven Frost","The Stone of Jordan"],"body":["Skin of the Vipermagi","Skullder's Ire","Arkaine's Valor"]}},"necromancer":{"runs":50,"players":50,"tiers":[144,129,120,103,102],"skills":[["corpseExplosion","Corpse Explosion",2],["teeth","Teeth",1.44],["raiseSkeletalMage","Raise Skeletal Mage",1.44],["bonePrison","Bone Prison",1.2],["boneSpirit","Bone Spirit",1.1],["lifeTap","Life Tap",1.08],["revive","Revive",1.06],["boneSpear","Bone Spear",0.97],["decrepify","Decrepify",0.77],["ironMaiden","Iron Maiden",0.68],["attract","Attract",0.65],["poisonNova","Poison Nova",0.61],["fireGolem","Fire Golem",0.45],["amplifyDamage","Amplify Damage",0.44],["bloodGolem","Blood Golem",0.41],["weaken","Weaken",0.28],["poisonExplosion","Poison Explosion",0.27],["poisonDagger","Poison Dagger",0.16],["terror","Terror",0.08],["confuse","Confuse",0.02]],"mods":{"boneSpirit":"reaper","boneSpear":"impaler","teeth":"clench","attract":"sacrifice","amplifyDamage":"contagion","revive":"legion","bloodGolem":"bloodbond","raiseSkeletalMage":"legion","bonePrison":"crushing","corpseExplosion":"chain","fireGolem":"forge","ironMaiden":"spite","lifeTap":"feast","poisonNova":"plagueWave","decrepify":"contagion","poisonExplosion":"miasma","poisonDagger":"venomPuff","terror":"cower","weaken":"contagion","confuse":"contagion"},"passives":[["fcr","Faster Cast Rate",2],["boneArmor","Bone Armor",2],["boneWall","Bone Wall",2],["lowerResist","Lower Resist",2],["skeletonMastery","Skeleton Mastery",1.96],["vitality","Vitality",1.88],["golemMastery","Golem Mastery",1.72],["replenish","Replenish Life",1.56],["frw","Faster Run/Walk",1.56],["telekinesis","Telekinesis",1.47],["summonResist","Summon Resist",1.32]],"attributes":{"strength":0,"dexterity":0,"vitality":0.15,"energy":0.84},"gear":{"shield":["Trang-Oul's Wing","Homunculus","Boneflame"],"head":["Harlequin Crest","Trang-Oul's Guise","Kira's Guardian"],"body":["Trang-Oul's Scales","Skullder's Ire","Tal Rasha's Guardianship"],"gloves":["Trang-Oul's Claws","Magefist","Chance Guards"],"belt":["Arachnid Mesh","Trang-Oul's Girth"],"boots":["Marrowwalk","War Traveler","Silkweave"],"amulet":["Mara's Kaleidoscope"],"ring1":["The Stone of Jordan","Wisp Projector","Bul-Kathos' Wedding Band"],"ring2":["Wisp Projector","Bul-Kathos' Wedding Band","The Stone of Jordan"],"weapon":["Boneshade","Death's Web","Gravenspine"]}},"paladin":{"runs":49,"players":50,"tiers":[166,127,123,122,119],"skills":[["holyShield","Holy Shield",2],["smite","Smite",2],["zeal","Zeal",1.99],["sacrifice","Sacrifice",1.96],["charge","Charge",1.88],["vengeance","Vengeance",1.22],["holyCharge","Herald of Zakarum",1.13],["fanaticZeal","Passion",1.13],["almaNegra","Alma Negra",1.13],["rusthandle","Rusthandle",0.83],["blessedHammer","Blessed Hammer",0.57],["hammerOfZakarum","Zakarum's Hand",0.39],["conversion","Conversion",0.08],["fistOfTheHeavens","Fist of the Heavens",0.05],["bloodrise","Bloodrise",0.02]],"mods":{"holyCharge":"lance","fanaticZeal":"fervor","almaNegra":"wideWave","rusthandle":"cascade","zeal":"holyEdge","smite":"pin","charge":"lance","vengeance":"attuned","holyShield":"retribution","sacrifice":"bloodletting","hammerOfZakarum":"swarm","conversion":"legion","fistOfTheHeavens":"storm","blessedHammer":"return"},"passives":[["might","Might",2],["concentration","Concentration",2],["fanaticism","Fanaticism",2],["conviction","Conviction",2],["vigor","Vigor",2],["holyShock","Holy Shock",1.96],["resistFire","Resist Fire",1.88],["resistLightning","Resist Lightning",1.84],["resistCold","Resist Cold",1.51],["holyFire","Holy Fire",1.35],["holyFreeze","Holy Freeze",0.73],["salvation","Salvation",0.53],["blessedAim","Blessed Aim",0.16],["redemption","Redemption",0.04]],"attributes":{"strength":0.07,"dexterity":0.08,"vitality":0.85,"energy":0},"gear":{"weapon":["Heaven's Light","The Redeemer","Azurewrath"],"shield":["Herald of Zakarum","Alma Negra","Steelclash"],"head":["Andariel's Visage","Harlequin Crest","Guillaume's Face"],"gloves":["Dracul's Grasp","Soul Drainer","Steelrend"],"belt":["Arachnid Mesh","String of Ears"],"boots":["Marrowwalk","Gore Rider","War Traveler"],"ring1":["Bul-Kathos' Wedding Band","Wisp Projector","The Stone of Jordan"],"ring2":["Wisp Projector","Bul-Kathos' Wedding Band","Carrion Wind"],"amulet":["Highlord's Wrath","Mara's Kaleidoscope","Seraph's Hymn"],"body":["Arkaine's Valor","Guardian Angel","Skullder's Ire"]}},"sorceress":{"runs":50,"players":50,"tiers":[119,109,97,87,76],"skills":[["staticField","Static Field",1.92],["lightning","Lightning",1.88],["hydra","Hydra",1.32],["chainLightning","Chain Lightning",1.1],["meteor","Meteor",1.1],["blizzard","Blizzard",0.92],["thunderStorm","Thunder Storm",0.92],["frostNova","Frost Nova",0.88],["fireBall","Fire Ball",0.88],["teleport","Teleport",0.68],["frozenOrb","Frozen Orb",0.61],["fireBolt","Fire Bolt",0.56],["chargedBolt","Charged Bolt",0.48],["chillingArmor","Chilling Armor",0.41],["fireWall","Fire Wall",0.36],["glacialSpike","Glacial Spike",0.25],["nova","Nova",0.24],["frozenArmor","Frozen Armor",0.2],["blaze","Blaze",0.08],["inferno","Inferno",0.08],["iceBlast","Ice Blast",0.04]],"mods":{"frozenOrb":"shatter","frozenArmor":"brittle","staticField":"wider","chainLightning":"stormChain","blizzard":"hailstorm","frostNova":"deepFreeze","lightning":"thunderbolt","meteor":"shower","fireBall":"cluster","fireBolt":"split","fireWall":"crossfire","hydra":"triHydra","thunderStorm":"wrath","glacialSpike":"avalanche","teleport":"frostStep","chillingArmor":"lastStand","nova":"coldSnap","chargedBolt":"split","iceBlast":"ricochet","blaze":"frostTrail"},"passives":[["energyShield","Energy Shield",2],["fireMastery","Fire Mastery",2],["coldMastery","Cold Mastery",2],["lightningMastery","Lightning Mastery",2],["warmth","Warmth",2],["enchant","Enchant",2],["fcr","Faster Cast Rate",1.96],["replenish","Replenish Life",1.88],["frw","Faster Run/Walk",1.64],["vitality","Vitality",1.48],["telekinesis","Telekinesis",0.83]],"attributes":{"strength":0,"dexterity":0,"vitality":0.01,"energy":0.99},"gear":{"weapon":["Eschuta's Temper","The Oculus","Mang Song's Lesson"],"gloves":["Magefist","Trang-Oul's Claws","Frostburn"],"belt":["Arachnid Mesh","Trang-Oul's Girth","Nightsmoke"],"boots":["Marrowwalk","War Traveler","Silkweave"],"amulet":["Mara's Kaleidoscope","Highlord's Wrath","Seraph's Hymn"],"ring1":["The Stone of Jordan","Wisp Projector","Bul-Kathos' Wedding Band"],"ring2":["The Stone of Jordan","Wisp Projector","Bul-Kathos' Wedding Band"],"head":["Harlequin Crest","Griffon's Eye","Andariel's Visage"],"body":["Skin of the Vipermagi","Arkaine's Valor","Ormus' Robes"],"shield":["Lidless Wall","Spirit Ward","The Ward"]}}}};
   // 僅接受已知欄位與型別，不接收原型屬性或任意指令。
   function merge(base, value) {
@@ -709,7 +709,7 @@
     if (elite && dist(elite, s.p) > m.attackRange) { const back = unit(elite.x - s.p.x, elite.y - s.p.y); x += back.x * 6; y += back.y * 6; }
     const dodging = m.enabled && m.dodgeProjectiles && Math.hypot(danger.dodgeX, danger.dodgeY) > 0;
     if (dodging) { x += danger.dodgeX; y += danger.dodgeY; }
-    // 王／精英掉的寶箱與暗金以上裝備還在附近時，最多等 20 秒撿完再走通關門。
+    // 王／精英掉的寶箱與獨特以上裝備還在附近時，最多等 20 秒撿完再走通關門。
     const treasure = s.pickups.some((e) => (e.kind === "chest" || ["unique", "set", "runeword"].includes(e.item?.rarity)) && (blockedLoot.get(e) || 0) < now && dist(e, s.p) <= settings.loot.searchRadius);
     // 通關後沒有要撿的東西就立刻走通關門，不等待。
     const portalDue = progressing && point(portal) && (!settings.loot.backtrackForLoot || !wantedLoot(s, now).length || now - clearAt >= (treasure ? 20000 : settings.terror.postClearWaitSec * 1000));
@@ -812,7 +812,7 @@
     } catch (err) { stop("切換關卡失敗：" + String(err.message || err)); }
     finally { transition = false; }
   }
-  // 全新存檔沒有恐怖層紀錄：在營地沿用原版傳送點流程（續玩存檔或開新局）。
+  // 全新存檔沒有恐怖層紀錄：在營地沿用原版傳送平台流程（續玩存檔或開新局）。
   let campSince = 0;
   const failStreak = {};
   // 中途「儲存並離開」會回主選單／選角畫面：有存著的進度就用原版 continueRun 繼續。
@@ -867,7 +867,7 @@
     let view = null;
     try { view = g.waypointView?.(g.kit); } catch { view = null; }
     actionAt = now;
-    // 實測（2026-11-01）：回傳傳送點介面模型 tabs[].rows[].start = { kind: continue|new|terror|replay|training, ... }，open 表示可選。
+    // 實測（2026-11-01）：回傳傳送平台介面模型 tabs[].rows[].start = { kind: continue|new|terror|replay|training, ... }，open 表示可選。
     const starts = (view?.tabs || []).flatMap((t) => t?.rows || []).filter((r) => r?.open !== false && r?.start).map((r) => r.start);
     const order = ["normal", "nightmare", "hell"];
     const resume = starts.find((s) => s.kind === "continue" && (s.whose ?? "hero") === "hero");
@@ -943,7 +943,7 @@
         // 依使用者要求：武器被擠空不得降傷；降傷超過一成僅在半血以下或平均負抗且生存分數至少提升 20 分時放行。
         if (!trial.weapon && damage < baseDamage) continue;
         if (damage < baseDamage * 0.9 && !((p.maxLife > 0 && p.life / p.maxLife < 0.5 || averageRes < 0) && survival(numbers) - baseSurvival >= 20)) continue;
-        // 依使用者要求：優先穿排行榜高手常用的暗金／套裝（LADDER gear 該欄前三名），只要通過上面的降傷護欄且總分不降超過 5 分；沒有推薦裝備才依分數挑。
+        // 依使用者要求：優先穿排行榜高手常用的獨特／套裝（LADDER gear 該欄前三名），只要通過上面的降傷護欄且總分不降超過 5 分；沒有推薦裝備才依分數挑。
         const ladderGear = LADDER.classes[p.cls]?.gear?.[to] || [], recommended = ladderGear.includes(item.name) && !ladderGear.includes(worn[to]?.name);
         const gain = gearScore(g, trial, numbers) - base + (recommended ? 10 : 0), empty = !worn[to] && displaced.every((s) => !worn[s]);
         if ((empty ? gain >= 0 : gain >= settings.gear.minGainPercent) && (!best || gain > best.gain)) best = { item, gain, slot: to };
@@ -952,7 +952,7 @@
     return best;
   }
   let charmTried = new WeakSet();
-  // 護符評分（依屬性）：本職業技能／全技能高分，別職業技能 0 分；生命、抗性、跑速、魔法尋寶等；四項屬性依排行榜配點比例加權。
+  // 咒符評分（依屬性）：本職業技能／全技能高分，別職業技能 0 分；生命、抗性、跑速、魔法尋寶等；四項屬性依排行榜配點比例加權。
   // 技能詞綴對應職業（遊戲 itemArt 的 T6 順序）：classskillsN → T6[N]、skilltabN → T6[floor(N/3)]。
   const CLASS_ORDER = ["amazon", "sorceress", "necromancer", "paladin", "barbarian", "druid", "assassin"];
   function charmValue(item, cls) {
@@ -985,18 +985,18 @@
     if (!["playing", "camp"].includes(g.state) || typeof g.gearActions !== "function" || typeof g.heroNumbers !== "function" || typeof g.makePlayer !== "function") return;
     gearAt = now;
     const p = g.world.player;
-    // 依使用者要求：護符看屬性，不是有空位就放（實測亞馬遜放了加野蠻人技能的護符）。
-    // 原版 equip 遇到護符改呼叫 moveCharm：背包→護符格；對護符格裡的護符再呼叫則移回背包。
-    // 沒用的護符（分數 ≤ 0，例如只有別職業技能）移出；背包有更好的就放入；護符格滿時比最差的高 20％ 以上才換。
+    // 依使用者要求：咒符看屬性，不是有空位就放（實測亞馬遜放了加野蠻人技能的咒符）。
+    // 原版 equip 遇到咒符改呼叫 moveCharm：背包→咒符格；對咒符格裡的咒符再呼叫則移回背包。
+    // 沒用的咒符（分數 ≤ 0，例如只有別職業技能）移出；背包有更好的就放入；咒符格滿時比最差的高 20％ 以上才換。
     const worn = g.save?.charmsByClass?.[p.cls] || [], acts = g.gearActions(p.cls, () => {}, false);
     const useless = worn.find((x) => charmValue(x, p.cls) <= 0);
-    if (useless) { acts.equip(useless); if (!(g.save.charmsByClass[p.cls] || []).includes(useless)) { lastAction = "移出沒用的護符：" + itemZh(useless); return; } }
+    if (useless) { acts.equip(useless); if (!(g.save.charmsByClass[p.cls] || []).includes(useless)) { lastAction = "移出沒用的咒符：" + itemZh(useless); return; } }
     const cand = g.inventoryOf(p.cls).filter((x) => isCharm(x) && !charmTried.has(x) && charmValue(x, p.cls) > 0).sort((a, b) => charmValue(b, p.cls) - charmValue(a, p.cls))[0];
     if (cand) {
       acts.equip(cand);
-      if (!g.inventoryOf(p.cls).includes(cand)) { lastAction = "已放入護符：" + itemZh(cand); return; }
+      if (!g.inventoryOf(p.cls).includes(cand)) { lastAction = "已放入咒符：" + itemZh(cand); return; }
       const worst = [...(g.save.charmsByClass[p.cls] || [])].sort((a, b) => charmValue(a, p.cls) - charmValue(b, p.cls))[0];
-      if (worst && charmValue(cand, p.cls) > charmValue(worst, p.cls) * 1.2) { acts.equip(worst); if (!(g.save.charmsByClass[p.cls] || []).includes(worst)) { lastAction = "換掉較差的護符：" + itemZh(worst); return; } }
+      if (worst && charmValue(cand, p.cls) > charmValue(worst, p.cls) * 1.2) { acts.equip(worst); if (!(g.save.charmsByClass[p.cls] || []).includes(worst)) { lastAction = "換掉較差的咒符：" + itemZh(worst); return; } }
       charmTried.add(cand);
     }
     const best = bestGear(g, [...g.inventoryOf(p.cls)]);
@@ -1006,7 +1006,7 @@
         const rank = { normal: 0, magic: 1, rare: 2, set: 3, unique: 4 }, junk = g.inventoryOf(p.cls).filter((x) => x?.base && !keepType(x) && !isCharm(x) && x.rarity in rank).sort((a, b) => rank[a.rarity] - rank[b.rarity])[0];
         if (junk) { g.gearActions(p.cls, () => {}, false).sell(junk); g.lastInventoryFull = -Infinity; lastAction = "背包已滿，賣掉 " + (junk.name || junk.base); return; }
       }
-      // 沒用的裝備（普通／魔法／稀有且不比身上好）撿到就賣，不等背包滿；暗金、套裝、符文之語、護符留給收藏與倉庫。
+      // 沒用的裝備（普通／魔法／稀有且不比身上好）撿到就賣，不等背包滿；獨特、套裝、符文之語、咒符留給收藏與倉庫。
       if (settings.town.sellJunk) {
         const junk = g.inventoryOf(p.cls).find((x) => x?.base && (!keepType(x) && !isCharm(x) && ["normal", "magic", "rare"].includes(x.rarity) || isCharm(x) && x.rarity !== "unique" && charmValue(x, p.cls) <= 0));
         if (junk) { g.gearActions(p.cls, () => {}, false).sell(junk); if (!g.inventoryOf(p.cls).includes(junk)) lastAction = "賣掉用不到的裝備 " + (junk.name || junk.base); }
@@ -1070,12 +1070,12 @@
       if (!a) return true;
       if (settings.gear.autoEquip) {
         const charm = stashItems(view).find((x) => isCharm(x) && !shop.tried.has(x));
-        if (charm) { shop.tried.add(charm); a.equip(charm); lastAction = "整備：從倉庫放入護符 " + itemZh(charm); return false; }
+        if (charm) { shop.tried.add(charm); a.equip(charm); lastAction = "整備：從倉庫放入咒符 " + itemZh(charm); return false; }
         // 倉庫與收藏庫的裝備一起評估；原版 equip 在倉庫情境可直接從倉庫或收藏庫取出穿上。
         const best = bestGear(g, [...g.inventoryOf(cls), ...stashItems(view)].filter((x) => !shop.tried.has(x)));
         if (best) { shop.tried.add(best.item); a.equip(best.item, best.slot); lastAction = "整備：換上較佳裝備 " + itemZh(best.item); return false; }
       }
-      if (settings.town.collect && (view ? view.collect > 0 : shop.smith) && !shop.collected && typeof a.collectAll === "function") { shop.collected = true; a.collectAll(); lastAction = "整備：把暗金／套裝收進收藏庫"; return false; }
+      if (settings.town.collect && (view ? view.collect > 0 : shop.smith) && !shop.collected && typeof a.collectAll === "function") { shop.collected = true; a.collectAll(); lastAction = "整備：把獨特／套裝收進收藏庫"; return false; }
       if (settings.town.stash && typeof a.toStash === "function") {
         const item = g.inventoryOf(cls).find((x) => x?.base && !shop.tried.has(x) && !keepType(x) && ["unique", "set", "runeword", "rare"].includes(x.rarity));
         if (item) { shop.tried.add(item); a.toStash(item); lastAction = "整備：存入倉庫 " + itemZh(item); return false; }
@@ -1679,7 +1679,7 @@
   }
   // 遊戲修改：無敵、致命攻擊、一擊必殺、技能99等、怪物數量最大化、全精英、無限重抽、極限掉寶金幣
   // 召喚暗黑破壞神分身（作弊）：不必出售喬丹之石，直接在目前恐懼階呼叫遊戲原本的分身登場函式。
-  // 不寫入存檔的 soj 紀錄（遊戲的 cloneCame 只在 soj 存在時才記錄），擊殺後的毀滅之符掉落沿用遊戲原流程。
+  // 不寫入存檔的 soj 紀錄（遊戲的 cloneCame 只在 soj 存在時才記錄），擊殺後的滅絕掉落沿用遊戲原流程。
   function summonClone() {
     const g = game, w = g?.world;
     if (!settings.cheat?.enabled) return "請先開啟「遊戲修改總開關」";
@@ -1780,7 +1780,7 @@
   }
   function applyCheats(g) {
     if (!g || !settings.cheat?.enabled) { restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); return; }
-    // 補充背包中的精華（恐怖燃燒精華、拉蘇克精華）；關閉後保留已寫入的物品。
+    // 補充背包中的精華（燃燒的恐懼精華、拉蘇克精華）；關閉後保留已寫入的物品。
     // 遊戲的精華格式：type 為 "essence"、base 為名稱，數量存在 count（單疊上限 99）。
     const essenceCheats = [["forgeMax", "Burning Essence of Terror"], ["larzukMax", "Larzuk's Essence"]];
     for (const [key, name] of essenceCheats) {
@@ -2207,7 +2207,7 @@
   group("關卡進程"); field("quest.prioritizeBoss", "優先接近任務頭目"); field("quest.autoStart", "在營地自動開局／續玩（全新存檔可用）");
   group("排行榜學習"); field("build.ladder", "依排行榜高手配法選升級卡"); field("build.autoStats", "依高手比例自動配屬性點"); field("build.redraft", "技能配置和排行榜差太多時向阿卡拉付費重置技能（普通通關後可用，重置後立刻重新選卡）"); field("build.autoReroll", "自動重抽（升級候選卡評分偏低時自動使用重抽）");
   group("裝備"); field("gear.autoEquip", "自動穿上較佳裝備"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）");
-  group("營地整備（每次回營地自動變強）"); field("town.enabled", "回營地自動整備"); field("town.collect", "暗金／套裝收進收藏庫"); field("town.stash", "較好的裝備存入倉庫"); field("town.sellJunk", "賣掉用不到的裝備"); field("town.buyPotions", "用金幣向阿卡拉買生命藥水"); field("town.charsiUpgrades", "用金幣升級恰西永久能力"); field("town.buyGear", "向商人買較佳裝備");
+  group("營地整備（每次回營地自動變強）"); field("town.enabled", "回營地自動整備"); field("town.collect", "獨特／套裝收進收藏庫"); field("town.stash", "較好的裝備存入倉庫"); field("town.sellJunk", "賣掉用不到的裝備"); field("town.buyPotions", "用金幣向阿卡拉買生命藥水"); field("town.charsiUpgrades", "用金幣升級恰西永久能力"); field("town.buyGear", "向商人買較佳裝備");
   tab("assist"); group("死亡保護"); field("deathProtection.enabled", "死亡保護（緊急離開本局）"); field("deathProtection.emergencyHpPercent", "緊急生命門檻（％）"); field("deathProtection.disableAutomation", "觸發後關閉兩頁總開關");
   tab("cheat");
   group("修改總控制");
@@ -2221,12 +2221,12 @@
   field("cheat.maxMonsterDensity", "怪物數量最大化（地圖怪物生成速度與數量拉滿）");
   field("cheat.allElites", "一般怪物全部變成精英以上等級（全圖小怪升階為金/藍怪）");
   group("流程與掉落修改");
-  field("cheat.forgeMax", "恐怖燃燒精華數量 99（鍛造機率無法修改）");
+  field("cheat.forgeMax", "燃燒的恐懼精華數量 99（鍛造機率無法修改）");
   field("cheat.larzukMax", "拉蘇克精華數量 99（加入背包，可用來增加物品鑲孔）");
   field("cheat.pauseStageTime", "關卡時間暫停（本關計時不前進，可一直戰鬥刷怪）");
   field("cheat.summonAllBosses", "關卡內持續召喚頭目（輪流召喚鑰匙頭目、各幕首領與 Uber 首領 Lilith、Duriel、Izual；Uber 首領掉器官，恐懼階中鑰匙可掉落）");
   field("cheat.infiniteRerolls", "選技能的重抽無限次數（升級選卡無限重抽、跳過與排除）");
-  field("cheat.maxDropRate", "掉寶率最高（大幅提升暗金/套裝/稀有尋寶率）");
+  field("cheat.maxDropRate", "掉寶率最高（大幅提升獨特/套裝/稀有尋寶率）");
   field("cheat.maxXp", "經驗值加成最大（擊殺與任務獲得的經驗值乘以 1000 倍，升級極快）");
   field("cheat.maxGoldRate", "金幣掉落率最高（偵測玩家金幣超過 90 億自動關閉）");
   group("首領召喚");

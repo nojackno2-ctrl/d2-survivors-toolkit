@@ -79,4 +79,4 @@ function baseZh(it) {
   return cleanName(look("item:" + it.base) ?? T(it.base));
 }
 const nameZhQuest = (it) => cleanName(T(it.name));
-const rarityZh = { normal: "普通", magic: "魔法", rare: "稀有", set: "套裝", unique: "暗金", runeword: "符文之語" };
+const rarityZh = { normal: "普通", magic: "魔法", rare: "稀有", set: "套裝", unique: "獨特", runeword: "符文之語" };

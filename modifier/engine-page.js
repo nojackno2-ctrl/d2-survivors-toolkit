@@ -106,7 +106,7 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
     return { item: best, legit: true, max: true };
   }
 
-  // ---------- 固定品質（暗金／套裝／符文之語）自訂 ----------
+  // ---------- 固定品質（獨特／套裝／符文之語）自訂 ----------
   // 遊戲以 stats（原始屬性列）為準重新計算 mods，且只逐列檢查「在該列原版範圍內」。
   // 所以自訂只改 stats 的數值／隨機參數，再交給遊戲自己的整理函式重算 mods，最後用遊戲的檢查確認。
   const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -229,7 +229,7 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
         }
         if (!valid) continue;
         if (!d.also) { out.push({ affix: a, used }); continue; }
-        // 同一屬性可能出現多組（例如兩個閃電傷害詞綴），每個可能的搭配都列出
+        // 同一屬性可能出現多組（例如兩個電擊$1詞綴），每個可能的搭配都列出
         mods.forEach((x, j) => { if (!used.includes(j) && x.stat === d.also.stat && x.value >= d.also.min && x.value <= d.also.max) out.push({ affix: a, used: [...used, j] }); });
       }
       return out;

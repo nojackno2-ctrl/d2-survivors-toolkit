@@ -1,6 +1,6 @@
 // 自動淬鍊：一次只處理鐵砧上的一件裝備。
 // 直接讀取遊戲的鐵砧（g.anvil）上的裝備，用 g.forgeTry 執行淬鍊／清除／熔爐；不寫入存檔、不複製、不生成。
-// 屬性目標依「稀有度＋名稱＋底材」記住，同一件暗金／套裝／符文之語再次放上鐵砧時自動帶入。
+// 屬性目標依「稀有度＋名稱＋底材」記住，同一件獨特／套裝／符文之語再次放上鐵砧時自動帶入。
 // 只要進入遊戲（有職業）就顯示面板。仰賴 window.__d2autoforge（決策）與 window.__d2autobot.game（遊戲）。
 // 每步間隔：先用最短間隔衝速度；遇到伺服器限流（無回應）就自動放慢，之後連續成功再慢慢加快。
 const SLEEP_MIN = 60;
@@ -31,7 +31,7 @@ function essenceCount(g, cls) {
   return inv.filter((i) => i?.type === "essence" && i.base === ESSENCE_NAME).reduce((s, i) => s + (i.count ?? 1), 0);
 }
 
-// 可淬鍊：暗金、套裝、符文之語，且有屬性。
+// 可淬鍊：獨特、套裝、符文之語，且有屬性。
 const eligible = (it) => !!it && ["unique", "set", "runeword"].includes(it.rarity) && Array.isArray(it.mods) && it.mods.length > 0;
 
 // 該角色的個人倉庫（與遊戲 stashTabs[角色] 相同）。
@@ -188,7 +188,7 @@ async function stepOnce(g, cls, ctx = state) {
   const item = solo ? anvilItem(g, cls) : ownItem(g, cls, ctx.itemId);
   if (!item) return { done: true, result: solo ? "鐵砧上沒有裝備，已停止" : "找不到裝備，已停止" };
   if (item.id !== ctx.itemId) return { done: true, result: "鐵砧裝備已更換，已停止" };
-  if (essenceCount(g, cls) < 1) return { done: true, result: "恐怖燃燒精華不足，已停止" };
+  if (essenceCount(g, cls) < 1) return { done: true, result: "燃燒的恐懼精華不足，已停止" };
   const d = AF().decideNext(AF().normalizeTargets(ctx.targets), { counts: item.forge?.t ?? {}, hellforgeUsed: !!item.forge?.hf });
   if (d.action === "done") return { done: true, result: d.reason };
   g.anvil = item.id;
@@ -199,7 +199,7 @@ async function stepOnce(g, cls, ctx = state) {
   // 成功淬煉（Raised）才計入「未升級」統計。
   if (d.action === "temper" && /^Raised/i.test(text)) trackUpgrade(ownItem(g, cls, item.id), beforeT, ctx);
   // 同時淬鍊時多件一起扣精華，可能在檢查之後才不足：遊戲回「You need … Essence」。
-  if (/You need .*Essence/i.test(text)) return { done: true, result: "恐怖燃燒精華不足，已停止" };
+  if (/You need .*Essence/i.test(text)) return { done: true, result: "燃燒的恐懼精華不足，已停止" };
   // 連線失敗時遊戲不會扣精華但也沒有結果，必須停止，避免無限重試。
   // 伺服器暫時無回應（實測多為 429 速率限制）：精華已暫存、不會遺失，改為暫停 1 分鐘後重試（最多 3 次）。
   if (/No reply|No connection/i.test(text)) return { done: false, retry: true, result: "伺服器暫時無回應" };
@@ -555,7 +555,7 @@ function render() {
   const autoSellBox = `<label style="display:flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input id="af-autosell" type="checkbox"${state.autoSell ? " checked" : ""}> 地獄熔爐失敗就自動售出</label>`;
   const itemLine = state.itemId
     ? `<div><b>${esc(state.itemObj ? zhItemName(state.itemObj) : "")}</b> <span id="af-steps" style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85"><span id="af-result">${esc(state.result || "")}</span> <b id="af-cd" style="color:#d4a84a">${pauseCountdownText()}</b></div>`
-    : `<div style="opacity:.8">${g.forgeUp ? "請把暗金、套裝或符文之語放到恰西的鐵砧上。" : "請在下方「背包可淬鍊」點「選取」，挑一件暗金、套裝或符文之語。"}</div>`;
+    : `<div style="opacity:.8">${g.forgeUp ? "請把獨特、套裝或符文之語放到恰西的鐵砧上。" : "請在下方「背包可淬鍊」點「選取」，挑一件獨特、套裝或符文之語。"}</div>`;
   // 控制列放在面板最上方：標題與「開始／停止／收合」同一排（按鈕加大），淬鍊狀態獨立一排。
   // 「開始」有序列就依序淬鍊，沒有序列就淬鍊鐵砧上這件。
   const bigBtn = "font-size:17px;padding:6px 16px;min-height:38px;";
@@ -659,7 +659,7 @@ function queueHtml(g) {
     <div style="border-top:1px solid #4a3d25;margin-top:8px;padding-top:6px">
       <b style="color:#d4a84a">${state.source === "stash" ? "個人倉庫" : "背包"}可淬鍊（${bag.length}）</b>
       ${sourceRow}
-      ${bagRows || `<div style="opacity:.7">${state.source === "stash" ? "個人倉庫" : "背包"}沒有暗金、套裝或符文之語</div>`}
+      ${bagRows || `<div style="opacity:.7">${state.source === "stash" ? "個人倉庫" : "背包"}沒有獨特、套裝或符文之語</div>`}
     </div>`;
 }
 
