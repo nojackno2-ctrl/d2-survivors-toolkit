@@ -178,22 +178,23 @@ async function stepOnce(g, cls) {
   // 成功淬煉（Raised）才計入「未升級」統計。
   if (d.action === "temper" && /^Raised/i.test(text)) trackUpgrade(anvilItem(g, cls), beforeT);
   // 連線失敗時遊戲不會扣精華但也沒有結果，必須停止，避免無限重試。
-  // 伺服器暫時無回應（實測多為 429 速率限制）：精華已暫存、不會遺失，改為暫停 5 分鐘後繼續。
-  if (/No reply|No connection/i.test(text)) return { done: false, retry: true, result: "伺服器暫時無回應，暫停 5 分鐘後繼續" };
+  // 伺服器暫時無回應（實測多為 429 速率限制）：精華已暫存、不會遺失，改為暫停 1 分鐘後重試（最多 3 次）。
+  if (/No reply|No connection/i.test(text)) return { done: false, retry: true, result: "伺服器暫時無回應" };
   // 伺服器與本地紀錄不同步時，遊戲會先把裝備改成伺服器上的最新結果（不扣精華），重新判斷即可。
   if (/updated to its last Forge result/i.test(text)) return { done: false, result: "已同步伺服器上的淬鍊紀錄" };
   // 只接受遊戲已知的鍛造結果；其他文字（例如「此裝備已鎖定」）代表遊戲拒絕，必須停止，否則會無限重試。
   if (!KNOWN_RESULT.test(text)) return { done: true, result: "遊戲拒絕或異常，已停止：" + text };
   if (d.action === "hellforge") {
     const h = AF().afterHellforge(text);
-    return { done: true, failed: h.status === "failed", item, result: h.status === "done" ? "熔爐倍增，達成" : h.status === "failed" ? "熔爐清空，失敗" : "熔爐結果：" + text };
+    return { done: true, failed: h.status === "failed", hfOk: h.status === "done", item, result: h.status === "done" ? "熔爐倍增，達成" : h.status === "failed" ? "熔爐清空，失敗" : "熔爐結果：" + text };
   }
   return { done: false, result: `${d.action === "temper" ? "淬鍊" : "清除"}：${text || "（無回應）"}` };
 }
 
-// 伺服器無回應：暫停 5 分鐘後自動繼續，不停止序列。
-const RETRY_PAUSE_MS = 5 * 60 * 1000;
-// 暫停採分段等待，按「停止」時可立即中斷，不必等滿 5 分鐘。
+// 伺服器無回應：每次等 1 分鐘再重試，最多重試 3 次；仍無回應就放棄這一件（序列換下一件）。
+const RETRY_PAUSE_MS = 60 * 1000;
+const MAX_RETRIES = 3;
+// 暫停採分段等待，按「停止」時可立即中斷，不必等滿 1 分鐘。
 async function pauseBeforeRetry() {
   state.pauseUntil = Date.now() + RETRY_PAUSE_MS;
   render();
@@ -223,7 +224,12 @@ async function loop() {
     if (r.retry) {
       retries++;
       stepGap = Math.min(SLEEP_MAX, stepGap * 2);
-      push(`${r.result}（第 ${retries} 次，5 分鐘後繼續）`);
+      if (retries > MAX_RETRIES) {
+        state.running = false;
+        state.result = `伺服器無回應，已重試 ${MAX_RETRIES} 次，放棄此件`;
+        out = { result: state.result, fatal: false }; push("結束：" + state.result); break;
+      }
+      push(`${r.result}（1 分鐘後重試，第 ${retries}/${MAX_RETRIES} 次）`);
       await pauseBeforeRetry();
       continue;
     }
@@ -236,7 +242,7 @@ async function loop() {
         r.result = ok ? "熔爐失敗，已自動售出" : "熔爐失敗，自動售出未成功（遊戲拒絕或商人不收）";
       }
       state.result = r.result;
-      out = { result: r.result, fatal: /精華不足/.test(r.result) }; push("結束：" + r.result); break;
+      out = { result: r.result, fatal: /精華不足/.test(r.result), hfOk: r.hfOk }; push("結束：" + r.result); break;
     }
     push(`第 ${state.steps} 步 ${r.result}`);
     if (state.steps % 10 === 0) stepGap = Math.max(SLEEP_MIN, Math.round(stepGap * 0.8));
@@ -264,10 +270,17 @@ async function runQueue() {
   const cls = g.kit?.id;
   state.queueRunning = true;
   for (const q of state.queue) q.status = q.status === "完成" ? q.status : "等待";
+  // 同款裝備（稀有度＋名稱＋底材）只要有一件地獄熔爐成功，其餘同款就跳過。
+  const hfDone = new Set();
+  for (const q of state.queue) {
+    const o = ownItem(g, cls, q.id);
+    if (o && AF().hellforgeSucceeded(o.forge)) hfDone.add(itemKey(o));
+  }
   for (const q of state.queue) {
     if (!state.queueRunning) break;
     if (q.status === "完成") continue;
     const raw = ownItem(g, cls, q.id);
+    if (raw && hfDone.has(itemKey(raw)) && !usedHellforge(raw)) { q.status = "同款已熔爐成功，略過"; render(); continue; }
     if (raw && usedHellforge(raw)) { q.status = "已用過地獄熔爐，略過"; render(); continue; }
     const item = raw && eligible(raw) ? raw : null;
     if (!item) { q.status = "不在背包或倉庫，略過"; render(); continue; }
@@ -279,6 +292,7 @@ async function runQueue() {
     state.running = true; push(`序列：開始 ${zhItemName(q)}`);
     const r = await loop();
     q.status = r.result;
+    if (r.hfOk) hfDone.add(itemKey(item));
     if (r.fatal) break;
     await sleep(stepGap);
   }
