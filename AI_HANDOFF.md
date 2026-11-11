@@ -67,6 +67,10 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+0000000000000g. **【已實機驗證 2026-11-11，僅記錄、未改程式】傭兵（與玩家）裝備給的靈氣不吃「+所有技能」**：使用者問「傭兵穿裝備賦予靈氣、其他裝備有 +所有技能，裝備靈氣等級會提升嗎」。
+   - **實機（官方 `/play/`，隔離設定檔、使用者 D2S1 存檔副本：法師、沙漠傭兵穿無限＝信念 12，技能池選神聖冰凍；腳本 `tests/live-harness/merc-aura-allskills-live.js`，經 `craft-live.cjs` 執行）**：改傭兵頭盔的「所有技能」並直接讀各靈氣來源物件的 `level`：傭兵所有技能 4→6 時，自帶靈氣神聖冰凍 9→11（有吃加成），裝備的信念靈氣固定 3（d2Level 12，不變）。
+   - **原始碼對照（`game-bundles/20261105.3`）**：傭兵自帶靈氣 `Game-DPAk-Rvc.js` 的 `cD` 有加 `e.player?.allSkills`；裝備靈氣 `Z_` 為 `n.auras[l]=Rt(c,max)`、`itemArt` 的 `hQ` 以物品數值建來源，皆無 `allSkills`。玩家自穿的裝備靈氣走同一段，同樣不加成。
+   - **未驗證／待決**：鐵狼、野蠻人傭兵與其他靈氣未單獨測（同一段程式）；原版 D2 規則未查證，不確定是設計或遺漏；未動工具包任何功能。
 0000000000000f. **【已實作 2026-11-11，未提交、未實機驗證】自動淬鍊「可淬鍊」判斷改為原版規則**（反編譯 `game-bundles/20261105.3`：`pack-_pWog-fz.js` 的 `z／B／ge／k`、`itemArt` 的 `dke／l6`、`saveTransfer` 的 `ma`；移植為 `helper/autoforge.js` 的 `temperLines／canTemper`，`helper/autoforge-ui.js` 的 `eligible` 改用它）。
    - **原版規則**：① 類型不是咒符／珠寶／精華／任務物品；② 稀有度**只排除魔法**（普通、**稀有**、套裝、獨特、符文之語都可以；舊版只收獨特／套裝／符文之語，稀有被誤排除）；③ 至少一條可淬鍊屬性：略過隱含、值 ≤ 0、`cannotBeFrozen／halfFreeze／knockback／ignoreDefense／preventHeal／restInPeace／lightRadius／proc:／charge:`；有 `item.stats` 時 stats 只收白名單、mods 只收 auto／staff；最小／最大傷害成對算一行。遊戲鐵砧放上時只檢查①（`Ot`），②③ 決定面板有沒有可淬鍊行。
    - **對照**：The Stone of Jordan 移植結果為 s0～s3 四行，與先前實測「s4 從未出現」一致。單元測試 `helper/tests/autoforge.cjs`（50 項）、`toolkit-1105.cjs` 通過；`autobot.cjs` 在改動前就缺模組無法執行（與本次無關）。
