@@ -12,7 +12,7 @@ for (const file of sources) {
     const SLOT_ZH = {weapon:'武器',shield:'副手',head:'頭盔'};
     let save; let counter = 0; let supportsWeaponSets = true;
     const newId = () => 'new-' + (++counter), unlocked = () => true;
-    ${take('function containers()', 'function renderTree()')}
+    ${take('const sharedCont = ', 'function renderTree()')}
     ${take('function alternateWeaponItems(s)', 'async function unlockAndMax(')}
     ${take('function placeInto(', 'function removeFrom(')}
     ${take('function allItems(s)', '// 遊戲對')}

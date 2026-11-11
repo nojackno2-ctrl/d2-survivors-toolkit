@@ -90,7 +90,7 @@
    - **開關**（遊戲修改 →「流程與掉落修改」）：`cheat.forgeLocal`（本地化，機率同原版：淬鍊 `1/(1+n/4)`、熔爐 40% 倍增）；`cheat.forgeLocalSure`（淬鍊必成功、熔爐必倍增；自動淬鍊執行時經 `__d2forgeLocal.setWant` 只淬面板上未達標且非 X 的屬性）。生效條件＝總開關＋`forgeLocal`。
    - **本機帳本** localStorage `d2forgeLocal.ledger`（物品 ID → 本機 forge，上限 2000）：帳本內物品的 `look`／`claim` 不論開關一律本機回覆；載入後 0／6／25 秒各 `restore()` 一次，把被伺服器同步蓋掉的 forge 套回。開關關閉時操作類請求放行，伺服器回應帶 forge 就把該物品移出帳本。
    - **實機（官方 `/play/`，隔離設定檔、全新存檔，The Stone of Jordan）**：`tests/live-harness/forge-local-live.cjs`（`H_PASS=1`）四階段全過——A：10 次淬鍊全中、精華 99→89、第 11 次「Temper stops at 10」、熔爐「All tempers doubled」總數 20、再熔爐「used」，真實 `/forge` 請求 0；B（不開必成功）：20 次中 10 次、clean 清空，請求 0；C：重新整理後記憶體與 localStorage 的 forge 仍為 20／hf，帳本物品的 look 由本機回覆，請求 0；D：關閉本地化後新裝備淬鍊送出真實請求 1 次（伺服器回 `h`）。`tests/live-harness/autoforge-live.cjs`（新增 `H_LOCAL=1`）：目標 s0=5、s1=5、其餘 X → 11 步 0.75 秒，結果 `s0:10、s1:10、hf:1`。`node helper/tests/forge-local.cjs`、`autoforge.cjs`、`build-web.cjs` 通過；`verify --quick` 16／17。
-   - **既有失敗（非本次造成）**：`modifier/tests/weapon-sets.cjs` 丟 `sharedCont is not defined`（本次未動 `modifier/`，推測來自 a0b1eaa 放置位置改動，待修）。
+   - **`weapon-sets` 測試已修（同日）**：a0b1eaa 把 `sharedCont`／`personalCont`／`bagCont` 抽到 `containers()` 之前，測試仍從 `function containers()` 擷取而缺定義；擷取起點改為 `const sharedCont = `。修改器本身無誤，`verify --quick` 17／17。
    - **未驗證**：面板兩個開關的畫面目視與手機版；`upgrade`（底材升級）本機回覆；穿戴中／傭兵裝備的本機淬鍊與遊戲自己觸發的 `syncForge`（只以直接送 look 驗證）；帳本物品在「未載入工具包」時被伺服器同步覆蓋後的 `restore()` 實際還原；專家模式；同時淬鍊多件的 want；桌面 App 的 bridge 通道（`yC()` 不經 fetch，攔不到）；發布後線上版（GitHub Pages）的實際載入。
    - **已知限制**：本機淬鍊的結果伺服器不知道。停用工具包（或關掉本地化後對同一件裝備送真實請求）時，伺服器可能回 stale 並以它的紀錄覆蓋（已寫入玩家公告）。
    - **子代理環境**：Codex 的別名工作區 `C:\Users\nojac\codex-ws\6902755a1eb8` 原本是殘留的普通資料夾（非連結），導致 Codex 無法寫入本倉庫（先前 slice-10 未動也是此因）；已改名為 `…\6902755a1eb8.stale-20261111` 保留，包裝器重建連結後恢復正常。
