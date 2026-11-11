@@ -14,6 +14,7 @@ module.exports = [
   { id: "weapon-sets",        tier: "static",      kind: "node",     file: "modifier/tests/weapon-sets.cjs",   timeout: 60 },
   { id: "selfcheck",          tier: "static",      kind: "node",     file: "helper/tests/selfcheck.cjs",       timeout: 60 },
   { id: "autoforge",          tier: "static",      kind: "node",     file: "helper/tests/autoforge.cjs",       timeout: 60 },
+  { id: "stash-sort",         tier: "static",      kind: "node",     file: "helper/tests/stash-sort.cjs",      timeout: 60 },
     { id: "forge-local",        tier: "static",      kind: "node",     file: "helper/tests/forge-local.cjs",     timeout: 60 },
   { id: "weapon-sets-ui",     tier: "integration", kind: "electron", file: "modifier/tests/weapon-sets-ui.cjs", timeout: 120 },
   { id: "save-faults-ui",     tier: "integration", kind: "electron", file: "modifier/tests/save-faults-ui.cjs", timeout: 120 },

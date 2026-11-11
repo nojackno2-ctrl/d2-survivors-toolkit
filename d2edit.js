@@ -675,6 +675,7 @@ window.__d2changelogPromise ??= fetch("/changelog.json", { cache: "no-cache" }).
     ["遊戲資料", loadGameData],
     ["中文化模組", loadLang],
     ["輔助器", loadBot],
+    ["倉庫整理", () => import(at("helper/stash-sort.js"))],
     ["自動淬鍊", async () => { await import(at("helper/forge-local.js")); await import(at("helper/autoforge.js")); await import(at("helper/autoforge-ui.js")); }],
     ["物品引擎（遊戲裝備產生器）", () => engine()],
     ["修改器頁面", () => Promise.all([hostFetch(editorUrl(), "text"), backend.assets()])],

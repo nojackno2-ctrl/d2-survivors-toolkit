@@ -67,6 +67,10 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+0000000000000l. **【2026-11-12 Codex：倉庫當前頁自動整理，已實機驗證並提交、未發布】**：`helper/stash-sort.js` 在遊戲倉庫加入「整理」，依目前頁面實際顯示的尺寸排列；密集頁無法依尺寸順序重排時改由現有位置向左上收攏，全部排妥才寫入；收藏庫隱藏，手上持物或淬鍊忙碌時停用。`d2edit.js` 接入，建置來源與 `verify/suite.cjs` 登記測試。`node helper/tests/stash-sort.cjs`、`node tools/tests/build-web.cjs`、相關 `node --check` 通過。
+   - 官方 `/play/` 最新 `20261105.3`，隔離 Electron 與 D2S1 副本，載入本機工具包：營地個人／共享 1～3 四頁分別整理 7／9／21／5 件，物品內容與其他頁不變、無重疊、當前頁不切走；localStorage 與重新載入後遊戲記憶體位置一致。收藏頁隱藏、持物時停用；桌面與 390×844、844×390 視窗按鈕可見且中心未被遮擋。指令 `node editor/node_modules/electron/cli.js tests/live-harness/stash-sort-probe.cjs`，需以 `H_SAVE_SOURCE` 指定存檔副本。
+   - **商店角色畫面**：直接開啟 `openCampTrade('store')` 沒有倉庫分頁；從商店開啟 `openCharacter('town', cls)` 後，實測共享頁按鈕可用、重複整理結果不變且維持當前分頁。
+   - **限制**：未測實體手機；在上述模擬直向／橫向尺寸中按鈕隨原版介面縮放為約 18×10／24×14 CSS 像素，實體觸控便利性尚未確認。其他代理的未提交修改保留，尚未發布。
 0000000000000k. **【2026-11-11 已提交；存檔格式與修改器介面皆已實機驗證】修改器「技能配置」**：使用者要的是自己選角色帶的 10 主動＋10 被動，不是變體（`skillMods`，遊戲內可免費改）。
    - **存檔位置**：`heroes.<職業>.run.build`（進行中的冒險，遊戲接續時實際用這個）與 `heroes.<職業>.kept.build`（保留的角色）；`skills:[{id,level,cooldown}]`、`passives:{id:等級}`、`slots`（不寫＝6，只能 8 或 10）。
    - **遊戲讀檔規則（`saveTransfer` 的 `nS`／`Qx`）**：技能須為該職業 kit 內、不重複、等級 1～`maxLevel`（進化技為 1）；被動為職業被動＋共通 5 個（vitality／fcr／frw／replenish／telekinesis）；`history` 內 `passive:<id>` 次數必須等於等級，否則整筆 `kept`／`run` 被丟棄（`saveFaults` 不會報）。
