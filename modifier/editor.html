@@ -1889,6 +1889,7 @@ function renderEditor() {
       <span>底材</span><select id="e-base">${baseOptions(it.base)}</select>
       <span>品質</span><select id="e-rarity">${Object.entries(RARITY_ZH).map(([k, v]) => `<option value="${k}" ${k === it.rarity ? "selected" : ""}>${v}</option>`).join("")}</select>
       ${it.defense !== undefined ? `<span>防禦</span><input id="e-defense" type="number" value="${it.defense}">` : ""}
+      ${it.rarity === "runeword" ? `<span>無形</span><label><input id="e-eth" type="checkbox" ${it.ethereal ? "checked" : ""}> 無形（只改旗標，防禦與基礎傷害請自行調整，上限為 1.5 倍）</label>` : ""}
       ${it.at ? `<span>位置（橫, 直）</span><span><input id="e-x" type="number" style="width:60px" value="${it.at.x}"> <input id="e-y" type="number" style="width:60px" value="${it.at.y}"></span>` : ""}
     </div>
     <h2>孔數與珠寶</h2>
@@ -1916,6 +1917,7 @@ function renderEditor() {
       note: fixed ? "獨特／套裝的孔數由原版決定，這裡只能鑲嵌珠寶；符文之語的孔由符文使用。" : "魔法最多 2 孔、稀有最多 1 孔、普通依底材（最多 6 孔）；珠寶需為存檔裡的魔法／稀有珠寶，鑲進去後會從倉庫／背包移走，換下來的珠寶不會自動放回。" });
   };
   drawEditSockets();
+  if ($("#e-eth")) $("#e-eth").onchange = () => loadModLimits({ ...it, ethereal: $("#e-eth").checked });
   $("#e-base").onchange = $("#e-rarity").onchange = () => { drawEditSockets(); loadModLimits({ ...it, base: $("#e-base").value, rarity: $("#e-rarity").value }); };
   $("#mods").onclick = (e) => { if (e.target.classList.contains("rm")) e.target.closest("tr").remove(); };
   $("#dest").value = cur;
@@ -2065,6 +2067,7 @@ async function applyEdit(c, it, quiet) {
     it.name = resolved.name;
   }
   if ($("#e-defense")) it.defense = next.defense;
+  if ($("#e-eth")) { if ($("#e-eth").checked) it.ethereal = true; else delete it.ethereal; }
   if (sk) { applySockets(it, sk); detachJewels(sk.jewels); }
   if ($("#e-x")) it.at = { x: Number($("#e-x").value), y: Number($("#e-y").value) };
   if (JSON.stringify(mods) !== before) { it.mods = mods; delete it.stats; delete it.roll; } // 以 mods 為準，舊的顯示用數值與種子失效
