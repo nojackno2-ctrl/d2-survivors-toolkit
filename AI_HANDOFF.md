@@ -67,6 +67,7 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+0000000000000i. **【2026-11-11 Codex：狀態列避開遊戲介面，未實機驗證】**：`helper/autobot.js` 狀態列沿用停止按鈕的 `gameWindowOpen` 判斷；角色、營地、暫停、技能樹與任務日誌開啟時隱藏，關閉後恢復。`helper/tests/autobot.cjs` 新增對應顯示條件測試。`node --check helper/autobot.js`、`node --check helper/tests/autobot.cjs`、`node helper/tests/toolkit-1105.cjs` 通過；`node editor/node_modules/electron/cli.js helper/tests/autobot.cjs` 模擬測試 216 項通過。官方網址實機尚未驗證，未發布。
 0000000000000h. **【2026-11-11 已提交並部署（f710755 與後續提交）】公告站重新設計＋更新日誌依類別分組**：
    - `site/index.html` 全面改版（Codex 實作設計、Agy 依程式稽核並校對內容、主代理核實與修整）：暗黑 2 物品提示框風格，稀有度色＝模組色（修改器金 `--c-unique`、輔助器綠 `--c-set`、自動淬鍊橘 `--c-rune`、遊戲修改紅 `--c-danger`、中文化藍 `--c-magic`、工具包／效能／相容性黃 `--c-rare`）；≥1200px 三欄（左導覽＋scroll-spy、右更新日誌），以下為頂部橫向導覽單欄。新增 `#forge` 自動淬鍊區段、官方遊戲連結（`https://d2survivors.lol/play/`）。`site/install.template.html` 同步換視覺，`site/install.html` 已用同一書籤字串重新產生（未跑 build-web，`version.json` 未動）。
    - **更新日誌新規則**：每天仍一則，則內依固定 8 類分組（修改器、輔助器、自動淬鍊、遊戲修改、中文化、效能、工具包、相容性）。公告站標記為 `article.log-entry[data-date] > section.log-group[data-cat] > h4.log-cat + ul`，修改器為 `h3 日期 / h4 類別 / ul`。合併邏輯移到 `verify/changelog.cjs`（`publish.cjs` 引用），`--log` 項目寫「類別：內容」，否則歸「工具包」；測試 `node tools/tests/changelog-merge.cjs`。手寫日誌時也要照這個結構，否則發布腳本會報錯。

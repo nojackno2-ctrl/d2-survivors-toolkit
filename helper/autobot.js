@@ -2332,7 +2332,7 @@
     // 只在戰鬥中顯示：角色／物品欄（character）、商店與倉庫（town、camp）、技能樹與任務日誌開啟時隱藏，避免蓋住視窗按鈕。
     const gameWindowOpen = !game || !["playing", "levelUp"].includes(game.state) || !!(game.hud?.skillsOpen || game.hud?.questLogOpen);
     setDisplay(stopButton, settings.progressEnabled && !menuOpen && !editorOpen && panel.hidden && !gameWindowOpen);
-    setDisplay(statusLine, (settings.enabled || settings.progressEnabled) && !menuOpen && !editorOpen && panel.hidden);
+    setDisplay(statusLine, (settings.enabled || settings.progressEnabled) && !menuOpen && !editorOpen && panel.hidden && !gameWindowOpen);
     // 依使用者要求：狀態列顯示目前自動戰鬥模式。
     setText(statusLine, ((settings.progressEnabled ? "【" + modeLabel() + "】" : "") + lastAction));
     if (!menuOpen || editorOpen) panel.hidden = true;
