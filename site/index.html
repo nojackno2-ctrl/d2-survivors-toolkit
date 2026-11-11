@@ -7,1563 +7,138 @@
   <meta name="description" content="專為《D2 Survivors》(d2survivors.lol) 打造的強大非官方存檔修改器與遊戲輔助工具。單機爽玩定位（排行榜上傳強制關閉），支援合法詞綴製作、裝備庫、存檔合規檢查、遊戲繁體中文化，以及全自動走位喝水、任務升級與天梯推關。">
   <meta name="color-scheme" content="dark">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&display=swap" rel="stylesheet">
   <style>
-    :root {
-      /* Theme: Survivor HUD / Tactical Toolkit */
-      --bg-base: #090d12;
-      --bg-surface: #0f1620;
-      --bg-card: #131c27;
-      --bg-card-hover: #172433;
-      --bg-inner: #0b1118;
-      --bg-code: #070b0f;
-
-      --border-dim: #1c2b3a;
-      --border-subtle: #273b4f;
-      --border-bright: #36536e;
-
-      /* Brand Accents */
-      --cyan: #3ee6b0;
-      --cyan-glow: rgba(62, 230, 176, 0.35);
-      --cyan-dim: #1dbf91;
-      --cyan-tint: rgba(62, 230, 176, 0.08);
-
-      --amber: #f59e0b;
-      --amber-light: #fbbf24;
-      --amber-glow: rgba(245, 158, 11, 0.3);
-      --amber-tint: rgba(245, 158, 11, 0.08);
-
-      --red-alert: #f43f5e;
-      --red-tint: rgba(244, 63, 94, 0.09);
-
-      /* Typography */
-      --text-main: #e2e8f0;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-      --text-bright: #ffffff;
-
-      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
-      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      background-color: var(--bg-base);
-      color: var(--text-main);
-      font-family: var(--font-sans);
-      line-height: 1.6;
-      padding: 0;
-      min-height: 100vh;
-      overflow-x: hidden;
-      background-image: 
-        radial-gradient(circle at 50% 0%, rgba(62, 230, 176, 0.07) 0%, transparent 45%),
-        radial-gradient(circle at 85% 30%, rgba(245, 158, 11, 0.04) 0%, transparent 40%),
-        linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-      background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
-    }
-
-    /* Container */
-    .container {
-      width: 100%;
-      max-width: 1160px;
-      margin: 0 auto;
-      padding: 0 20px;
-    }
-
-    /* Navigation Header */
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(9, 13, 18, 0.92);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-dim);
-    }
-    .nav-inner {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 0;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      text-decoration: none;
-      color: var(--text-bright);
-      font-weight: 700;
-      font-size: 1.08rem;
-      letter-spacing: 0.5px;
-    }
-    .brand img {
-      width: 32px;
-      height: 32px;
-      filter: drop-shadow(0 0 8px var(--cyan-glow));
-    }
-    .brand-meta {
-      display: flex;
-      flex-direction: column;
-    }
-    .brand-title {
-      color: #fff;
-      font-size: 1.02rem;
-      line-height: 1.2;
-    }
-    .brand-sub {
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
-      color: var(--cyan);
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-    }
-    .nav-links {
-      display: flex;
-      gap: 16px;
-      align-items: center;
-    }
-    .nav-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.88rem;
-      font-family: var(--font-mono);
-      padding: 4px 8px;
-      border-radius: 4px;
-      transition: all 0.2s ease;
-    }
-    .nav-links a:hover {
-      color: var(--cyan);
-      background: var(--cyan-tint);
-    }
-
-    /* Hero Section */
-    .hero {
-      text-align: center;
-      padding: 60px 0 35px;
-      position: relative;
-    }
-    .tag-mono {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 14px;
-      border-radius: 3px;
-      background: var(--cyan-tint);
-      border: 1px solid rgba(62, 230, 176, 0.3);
-      color: var(--cyan);
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      margin-bottom: 20px;
-    }
-    .tag-mono .dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--cyan);
-      box-shadow: 0 0 8px var(--cyan);
-      animation: pulseDot 2s infinite ease-in-out;
-    }
-    @keyframes pulseDot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
-    }
-
-    .hero-title {
-      font-size: 2.7rem;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      color: #fff;
-      margin-bottom: 12px;
-      line-height: 1.2;
-    }
-    .hero-title span {
-      color: var(--cyan);
-      text-shadow: 0 0 25px rgba(62, 230, 176, 0.4);
-      display: inline-block;
-      font-family: var(--font-mono);
-      font-weight: 700;
-      letter-spacing: 0px;
-      font-size: 2.1rem;
-    }
-    .hero-subtitle {
-      font-size: 1.15rem;
-      color: var(--amber-light);
-      margin-bottom: 16px;
-      font-weight: 600;
-      letter-spacing: 0.3px;
-    }
-    .hero-desc {
-      font-size: 1rem;
-      color: var(--text-muted);
-      max-width: 720px;
-      margin: 0 auto 30px;
-      line-height: 1.7;
-    }
-
-    /* Buttons */
-    .btn-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 14px;
-      justify-content: center;
-      align-items: center;
-      margin-bottom: 28px;
-    }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 11px 22px;
-      border-radius: 4px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      text-decoration: none;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-      cursor: pointer;
-      font-family: var(--font-mono);
-      letter-spacing: 0.3px;
-    }
-    .btn-primary {
-      background: #112d2b;
-      color: #ffffff;
-      border: 1px solid var(--cyan);
-      box-shadow: 0 0 16px rgba(62, 230, 176, 0.25);
-    }
-    .btn-primary:hover {
-      background: var(--cyan);
-      color: #090d12;
-      box-shadow: 0 0 24px rgba(62, 230, 176, 0.5);
-      transform: translateY(-2px);
-    }
-    .btn-secondary {
-      background: #1b1911;
-      color: var(--amber-light);
-      border: 1px solid var(--amber);
-      box-shadow: 0 0 14px rgba(245, 158, 11, 0.15);
-    }
-    .btn-secondary:hover {
-      background: var(--amber);
-      color: #090d12;
-      box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
-      transform: translateY(-2px);
-    }
-    .btn-github {
-      background: var(--bg-surface);
-      color: var(--text-muted);
-      border: 1px solid var(--border-subtle);
-    }
-    .btn-github:hover {
-      color: #fff;
-      border-color: var(--border-bright);
-      background: var(--bg-card);
-      transform: translateY(-2px);
-    }
-
-    /* Simulated HUD Autobot Status Bar */
-    .hud-statusbar-wrap {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 0 10px;
-    }
-    .hud-statusbar {
-      background: rgba(11, 17, 24, 0.95);
-      border: 1px solid var(--border-subtle);
-      border-left: 3px solid var(--cyan);
-      border-radius: 4px;
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      flex-wrap: wrap;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-      font-family: var(--font-mono);
-      font-size: 0.82rem;
-    }
-    .hud-status-main {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .hud-indicator {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 2px 8px;
-      background: rgba(62, 230, 176, 0.12);
-      border: 1px solid rgba(62, 230, 176, 0.3);
-      color: var(--cyan);
-      border-radius: 2px;
-      font-weight: 700;
-    }
-    .hud-indicator-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--cyan);
-      box-shadow: 0 0 6px var(--cyan);
-      animation: pulseDot 1.5s infinite;
-    }
-    .hud-stat-item {
-      color: var(--text-muted);
-    }
-    .hud-stat-item strong {
-      color: var(--text-bright);
-      font-weight: 600;
-    }
-    .hud-stat-divider {
-      color: var(--border-bright);
-      user-select: none;
-    }
-    .hud-status-right {
-      color: var(--amber);
-      font-size: 0.78rem;
-      letter-spacing: 0.5px;
-    }
-
-    /* Section Header */
-    .section {
-      padding: 48px 0;
-      position: relative;
-    }
-    .section-title-wrap {
-      text-align: center;
-      margin-bottom: 34px;
-    }
-    .section-tag {
-      font-size: 0.74rem;
-      color: var(--cyan);
-      font-family: var(--font-mono);
-      font-weight: 700;
-      letter-spacing: 2.5px;
-      text-transform: uppercase;
-      margin-bottom: 6px;
-    }
-    .section-title {
-      font-size: 1.85rem;
-      color: #fff;
-      font-weight: 800;
-      letter-spacing: -0.3px;
-      position: relative;
-      display: inline-block;
-      padding-bottom: 10px;
-    }
-    .section-title::after {
-      content: "";
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 48px;
-      height: 2px;
-      background: var(--cyan);
-      box-shadow: 0 0 8px var(--cyan);
-    }
-    .section-desc {
-      color: var(--text-muted);
-      margin-top: 10px;
-      font-size: 0.92rem;
-    }
-
-    /* HUD Corner Box Style */
-    .hud-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-dim);
-      border-radius: 4px;
-      padding: 22px;
-      position: relative;
-      transition: all 0.22s ease;
-      overflow: hidden;
-    }
-    /* Technical corner brackets */
-    .hud-card::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 10px;
-      height: 10px;
-      border-top: 2px solid var(--border-bright);
-      border-left: 2px solid var(--border-bright);
-      pointer-events: none;
-      transition: all 0.22s ease;
-    }
-    .hud-card::after {
-      content: "";
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 10px;
-      height: 10px;
-      border-bottom: 2px solid var(--border-bright);
-      border-right: 2px solid var(--border-bright);
-      pointer-events: none;
-      transition: all 0.22s ease;
-    }
-    .hud-card:hover {
-      background: var(--bg-card-hover);
-      border-color: var(--border-subtle);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    }
-    .hud-card:hover::before,
-    .hud-card:hover::after {
-      border-color: var(--cyan);
-      box-shadow: 0 0 6px var(--cyan-glow);
-    }
-
-    /* Grid Layouts */
-    .grid-cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-      gap: 18px;
-    }
-
-    .card-header-line {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-    .card-icon {
-      font-size: 1.5rem;
-      line-height: 1;
-    }
-    .card-badge-mono {
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
-      color: var(--cyan-dim);
-      background: rgba(62, 230, 176, 0.08);
-      border: 1px solid rgba(62, 230, 176, 0.2);
-      padding: 2px 6px;
-      border-radius: 2px;
-      letter-spacing: 0.5px;
-    }
-    .card-title {
-      font-size: 1.15rem;
-      color: #fff;
-      margin-bottom: 8px;
-      font-weight: 700;
-    }
-    .card-text {
-      font-size: 0.9rem;
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
-
-    /* Autobot Modes */
-    .modes-container {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 18px;
-      margin-top: 20px;
-    }
-    .mode-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-dim);
-      border-top: 2px solid var(--cyan);
-      border-radius: 4px;
-      padding: 22px;
-      position: relative;
-      transition: all 0.22s ease;
-    }
-    .mode-card:hover {
-      border-color: var(--border-bright);
-      border-top-color: var(--cyan);
-      background: var(--bg-card);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-      transform: translateY(-2px);
-    }
-    .mode-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      border-radius: 2px;
-      background: var(--cyan-tint);
-      color: var(--cyan);
-      border: 1px solid rgba(62, 230, 176, 0.3);
-      font-family: var(--font-mono);
-      letter-spacing: 0.8px;
-      margin-bottom: 10px;
-    }
-    .mode-title {
-      color: #fff;
-      font-size: 1.2rem;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .mode-desc {
-      color: var(--text-muted);
-      font-size: 0.88rem;
-      line-height: 1.65;
-    }
-
-    /* Autobot Highlights */
-    .features-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 14px;
-      margin-top: 22px;
-    }
-    .feature-item {
-      display: flex;
-      gap: 12px;
-      background: var(--bg-inner);
-      border: 1px solid var(--border-dim);
-      border-radius: 4px;
-      padding: 14px 16px;
-    }
-    .feature-bullet {
-      color: var(--cyan);
-      font-family: var(--font-mono);
-      font-size: 0.95rem;
-      font-weight: 700;
-      line-height: 1.2;
-    }
-    .feature-content h4 {
-      font-size: 0.95rem;
-      color: #fff;
-      margin-bottom: 4px;
-      font-weight: 600;
-    }
-    .feature-content p {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      line-height: 1.5;
-    }
-
-    /* Gallery / Actual Screenshots Section */
-    .gallery-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
-      gap: 20px;
-      margin-top: 20px;
-    }
-    .gallery-item {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-dim);
-      border-radius: 4px;
-      padding: 12px;
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      transition: all 0.22s ease;
-    }
-    .gallery-item::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 8px;
-      height: 8px;
-      border-top: 2px solid var(--border-bright);
-      border-left: 2px solid var(--border-bright);
-      pointer-events: none;
-    }
-    .gallery-item::after {
-      content: "";
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 8px;
-      height: 8px;
-      border-bottom: 2px solid var(--border-bright);
-      border-right: 2px solid var(--border-bright);
-      pointer-events: none;
-    }
-    .gallery-item:hover {
-      border-color: var(--border-subtle);
-      background: var(--bg-card);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    }
-    .gallery-item:hover::before,
-    .gallery-item:hover::after {
-      border-color: var(--cyan);
-    }
-    .gallery-img-wrap {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      background: #06090c;
-      border: 1px solid var(--border-dim);
-      border-radius: 3px;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: zoom-in;
-      position: relative;
-    }
-    .gallery-img-wrap img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
-      transition: transform 0.25s ease;
-    }
-    .gallery-img-wrap:hover img {
-      transform: scale(1.02);
-    }
-    .gallery-caption {
-      margin-top: 10px;
-      font-size: 0.88rem;
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-weight: 500;
-    }
-    .gallery-caption-tag {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--cyan);
-      background: var(--cyan-tint);
-      padding: 1px 6px;
-      border-radius: 2px;
-      border: 1px solid rgba(62, 230, 176, 0.25);
-    }
-
-    /* Inline feature screenshots */
-    .feature-shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 32px; }
-    .feature-shot { margin: 0; background: var(--bg-surface); border: 1px solid var(--border-dim); border-radius: 4px; padding: 12px; }
-    .feature-shot figcaption { margin-top: 10px; font-size: 0.88rem; color: var(--text-main); font-weight: 500; }
-
-    /* Simple Lightbox */
-    .lightbox-modal {
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      background: rgba(4, 7, 10, 0.94);
-      backdrop-filter: blur(8px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      cursor: zoom-out;
-    }
-    .lightbox-modal.active {
-      display: flex;
-      animation: fadeIn 0.15s ease-out;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    .lightbox-content {
-      max-width: 92vw;
-      max-height: 88vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      cursor: default;
-    }
-    .lightbox-img {
-      max-width: 90vw;
-      max-height: 80vh;
-      object-fit: contain;
-      border: 1px solid var(--cyan);
-      border-radius: 4px;
-      box-shadow: 0 0 30px rgba(62, 230, 176, 0.2);
-    }
-    .lightbox-caption {
-      color: #fff;
-      font-size: 0.95rem;
-      font-family: var(--font-mono);
-      background: var(--bg-surface);
-      padding: 6px 14px;
-      border-radius: 3px;
-      border: 1px solid var(--border-subtle);
-    }
-    .lightbox-close {
-      position: absolute;
-      top: 20px;
-      right: 24px;
-      background: transparent;
-      border: 1px solid var(--border-bright);
-      color: var(--text-muted);
-      font-size: 1.5rem;
-      width: 40px;
-      height: 40px;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-family: var(--font-mono);
-      transition: all 0.2s;
-    }
-    .lightbox-close:hover {
-      color: var(--cyan);
-      border-color: var(--cyan);
-    }
-
-    /* Warning Alert Card */
-    .alert-card {
-      background: rgba(244, 63, 94, 0.06);
-      border: 1px solid rgba(244, 63, 94, 0.35);
-      border-left: 3px solid var(--red-alert);
-      border-radius: 4px;
-      padding: 20px;
-      margin-top: 20px;
-    }
-    .alert-card-title {
-      font-size: 1.05rem;
-      color: #fca5a5;
-      margin-bottom: 8px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .alert-card-list {
-      padding-left: 1.2em;
-      line-height: 1.75;
-      font-size: 0.88rem;
-      color: #cbd5e1;
-    }
-
-    /* Steps Section */
-    .steps-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 18px;
-      margin-top: 20px;
-    }
-    .step-box {
-      background: var(--bg-card);
-      border: 1px solid var(--border-dim);
-      border-radius: 4px;
-      padding: 22px;
-      position: relative;
-    }
-    .step-box::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 10px;
-      height: 10px;
-      border-top: 2px solid var(--border-bright);
-      border-left: 2px solid var(--border-bright);
-    }
-    .step-box::after {
-      content: "";
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 10px;
-      height: 10px;
-      border-bottom: 2px solid var(--border-bright);
-      border-right: 2px solid var(--border-bright);
-    }
-    .step-num {
-      position: absolute;
-      top: 14px;
-      right: 16px;
-      font-size: 1.8rem;
-      font-weight: 800;
-      color: rgba(62, 230, 176, 0.15);
-      font-family: var(--font-mono);
-      line-height: 1;
-    }
-    .step-title {
-      font-size: 1.05rem;
-      color: #fff;
-      margin-bottom: 10px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .step-desc {
-      font-size: 0.88rem;
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
-    .code-preview {
-      margin-top: 12px;
-      background: var(--bg-code);
-      border: 1px solid var(--border-dim);
-      border-left: 2px solid var(--cyan);
-      border-radius: 3px;
-      padding: 10px 12px;
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      color: var(--cyan);
-      word-break: break-all;
-      user-select: all;
-    }
-
-    /* Compliance & Modes Notice Box */
-    .compliance-box {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: 4px;
-      padding: 26px;
-      margin: 30px 0;
-      position: relative;
-    }
-    .compliance-box::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 12px;
-      height: 12px;
-      border-top: 2px solid var(--amber);
-      border-left: 2px solid var(--amber);
-    }
-    .compliance-box::after {
-      content: "";
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 12px;
-      height: 12px;
-      border-bottom: 2px solid var(--amber);
-      border-right: 2px solid var(--amber);
-    }
-    .compliance-title {
-      color: var(--amber-light);
-      font-size: 1.25rem;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 700;
-    }
-    .compliance-columns {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 22px;
-    }
-    .comp-col h4 {
-      font-size: 1rem;
-      color: #fff;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .comp-col h4::before {
-      content: "■";
-      color: var(--cyan);
-      font-size: 0.8rem;
-    }
-    .comp-col p {
-      font-size: 0.88rem;
-      color: var(--text-muted);
-      line-height: 1.65;
-    }
-
-    /* Disclaimer Section */
-    .disclaimer-box {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-dim);
-      border-left: 3px solid var(--amber);
-      border-radius: 4px;
-      padding: 18px 22px;
-      margin-top: 30px;
-    }
-    .disclaimer-box h3 {
-      font-size: 1.05rem;
-      color: var(--amber-light);
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .disclaimer-box p {
-      font-size: 0.86rem;
-      color: var(--text-muted);
-      line-height: 1.65;
-    }
-
-    /* Footer */
-    footer {
-      border-top: 1px solid var(--border-dim);
-      background: #06090d;
-      padding: 32px 0;
-      margin-top: 50px;
-      text-align: center;
-    }
-    .footer-links {
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      margin-bottom: 14px;
-      flex-wrap: wrap;
-    }
-    .footer-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.86rem;
-      font-family: var(--font-mono);
-      transition: color 0.2s;
-    }
-    .footer-links a:hover {
-      color: var(--cyan);
-    }
-    .footer-text {
-      font-size: 0.8rem;
-      color: var(--text-dim);
-      font-family: var(--font-mono);
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 768px) {
-      .hero-title {
-        font-size: 2rem;
-      }
-      .hero-title span {
-        font-size: 1.55rem;
-      }
-      .hero-subtitle {
-        font-size: 1rem;
-      }
-      .btn {
-        width: 100%;
-      }
-      .btn-group {
-        flex-direction: column;
-      }
-      .hud-statusbar {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-      .compliance-columns {
-        grid-template-columns: 1fr;
-        gap: 16px;
-      }
-      .nav-inner {
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-      .nav-links {
-        display: flex;
-        width: 100%;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        gap: 8px;
-        padding-bottom: 4px;
-      }
-      .nav-links::-webkit-scrollbar {
-        display: none;
-      }
-      .nav-links a {
-        white-space: nowrap;
-        font-size: 0.8rem;
-        padding: 4px 10px;
-        background: var(--bg-inner);
-        border: 1px solid var(--border-dim);
-      }
-      .gallery-grid, .modes-container, .steps-grid {
-        grid-template-columns: 1fr;
-      }
-      .hero {
-        padding: 36px 0 24px;
-      }
-      .compliance-box, .step-box, .mode-card {
-        padding: 16px;
-      }
-      .container {
-        padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
-      }
-    }
-
-    /* ===== 電腦版三欄：左側快捷導覽、中間內容、右側更新日誌（手機版不受影響） ===== */
-    @media (min-width: 1200px) {
-      body { padding-left: 232px; padding-right: 360px; }
-      header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        width: 232px;
-        height: 100vh;
-        overflow-y: auto;
-        border-bottom: none;
-        border-right: 1px solid var(--border-dim);
-        background: transparent;
-        z-index: 100;
-      }
-      header .container { max-width: none; padding: 0 16px; }
-      header .nav-inner {
-        flex-direction: column;
-        align-items: stretch;
-        justify-content: flex-start;
-        gap: 22px;
-        padding: 22px 0;
-      }
-      header .brand { padding-bottom: 14px; border-bottom: 1px solid var(--border-dim); }
-      header .nav-links { flex-direction: column; align-items: stretch; gap: 2px; }
-      header .nav-links a { display: block; padding: 7px 10px; font-size: 0.86rem; }
-      #changelog {
-        position: fixed;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        width: 360px;
-        height: 100vh;
-        overflow-y: auto;
-        margin: 0;
-        padding: 24px 20px;
-        border-top: none;
-        border-left: 1px solid var(--border-dim);
-        background: transparent;
-        z-index: 90;
-      }
-      #changelog .container { max-width: none; padding: 0; }
-      #changelog .section-title { font-size: 1.3rem; }
-      #changelog .section-desc { font-size: 0.85rem; }
-      #changelog .log { max-width: none; margin: 0; padding-left: 20px; }
-      .back-top { right: 388px; }
-    }
-
-    /* ===== 詳細說明擴充元件 ===== */
-    a { color: var(--cyan); }
-    code {
-      font-family: var(--font-mono);
-      font-size: 0.85em;
-      background: var(--bg-code);
-      border: 1px solid var(--border-dim);
-      border-radius: 3px;
-      padding: 1px 5px;
-      color: var(--cyan);
-      word-break: break-all;
-    }
-    kbd {
-      font-family: var(--font-mono);
-      font-size: 0.8em;
-      border: 1px solid var(--border-bright);
-      border-bottom-width: 2px;
-      border-radius: 3px;
-      padding: 0 5px;
-      color: var(--text-bright);
-      background: var(--bg-inner);
-    }
-
-    /* 快速導覽 */
-    .quick-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 14px;
-      margin-top: 34px;
-      text-align: left;
-    }
-    .quick-card {
-      display: block;
-      text-decoration: none;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-dim);
-      border-left: 3px solid var(--cyan);
-      border-radius: 4px;
-      padding: 14px 16px;
-      transition: all 0.2s ease;
-    }
-    .quick-card:hover {
-      background: var(--bg-card);
-      border-color: var(--border-subtle);
-      border-left-color: var(--cyan);
-      transform: translateY(-2px);
-    }
-    .quick-card.amber { border-left-color: var(--amber); }
-    .quick-card h3 {
-      color: #fff;
-      font-size: 1rem;
-      margin-bottom: 4px;
-    }
-    .quick-card p {
-      color: var(--text-muted);
-      font-size: 0.84rem;
-      line-height: 1.55;
-    }
-    .quick-card .go {
-      display: inline-block;
-      margin-top: 8px;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--cyan);
-      letter-spacing: 0.5px;
-    }
-    .quick-card.amber .go { color: var(--amber-light); }
-
-    /* 卡片內細項清單 */
-    .detail-list {
-      list-style: none;
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px dashed var(--border-dim);
-      display: grid;
-      gap: 7px;
-    }
-    .detail-list li {
-      position: relative;
-      padding-left: 16px;
-      font-size: 0.85rem;
-      color: #c4cfdb;
-      line-height: 1.55;
-    }
-    .detail-list li::before {
-      content: "▸";
-      position: absolute;
-      left: 0;
-      top: 0;
-      color: var(--cyan);
-      font-size: 0.8rem;
-    }
-    .detail-list li b { color: #fff; font-weight: 600; }
-    .card-foot {
-      margin-top: 12px;
-      font-size: 0.78rem;
-      color: var(--amber-light);
-      background: var(--amber-tint);
-      border: 1px solid rgba(245, 158, 11, 0.25);
-      border-radius: 3px;
-      padding: 6px 10px;
-      line-height: 1.5;
-    }
-
-    /* 子標題 */
-    .sub-title {
-      font-size: 1.2rem;
-      color: #fff;
-      margin: 40px 0 6px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 700;
-    }
-    .sub-title::before {
-      content: "";
-      width: 4px;
-      height: 1.1em;
-      background: var(--cyan);
-      box-shadow: 0 0 8px var(--cyan-glow);
-    }
-    .sub-desc {
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      margin-bottom: 16px;
-    }
-
-    /* 分頁 */
-    .tabs {
-      display: flex;
-      gap: 6px;
-      border-bottom: 1px solid var(--border-subtle);
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .tabs::-webkit-scrollbar { display: none; }
-    .tab-btn {
-      flex: none;
-      background: transparent;
-      border: 1px solid transparent;
-      border-bottom: none;
-      color: var(--text-muted);
-      font-family: var(--font-sans);
-      font-size: 0.92rem;
-      font-weight: 600;
-      padding: 10px 16px;
-      border-radius: 4px 4px 0 0;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-bottom: -1px;
-    }
-    .tab-btn:hover { color: #fff; }
-    .tab-btn[aria-selected="true"] {
-      color: var(--cyan);
-      background: var(--bg-card);
-      border-color: var(--border-subtle);
-      border-bottom: 1px solid var(--bg-card);
-    }
-    .tab-btn:focus-visible, .faq summary:focus-visible, .quick-card:focus-visible {
-      outline: 2px solid var(--cyan);
-      outline-offset: 2px;
-    }
-    .tab-pane {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-top: none;
-      border-radius: 0 0 4px 4px;
-      padding: 22px;
-    }
-    .tab-pane[hidden] { display: none; }
-    .pane-intro {
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      margin-bottom: 18px;
-    }
-    .setting-groups {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 14px;
-    }
-    .setting-group {
-      background: var(--bg-inner);
-      border: 1px solid var(--border-dim);
-      border-radius: 4px;
-      padding: 14px 16px;
-    }
-    .setting-group h4 {
-      font-size: 0.95rem;
-      color: #fff;
-      margin-bottom: 4px;
-    }
-    .setting-group .detail-list {
-      margin-top: 8px;
-      padding-top: 8px;
-    }
-
-    /* 開關標籤 */
-    .pill {
-      display: inline-block;
-      font-family: var(--font-mono);
-      font-size: 0.68rem;
-      padding: 0 6px;
-      border-radius: 2px;
-      margin-left: 4px;
-      vertical-align: 1px;
-      white-space: nowrap;
-    }
-    .pill.on { color: var(--cyan); border: 1px solid rgba(62, 230, 176, 0.35); background: var(--cyan-tint); }
-    .pill.off { color: var(--text-muted); border: 1px solid var(--border-bright); }
-    .pill.warn { color: var(--amber-light); border: 1px solid rgba(245, 158, 11, 0.4); background: var(--amber-tint); }
-
-    /* 表格 */
-    .table-wrap {
-      overflow-x: auto;
-      border: 1px solid var(--border-subtle);
-      border-radius: 4px;
-      background: var(--bg-surface);
-    }
-    .ctl-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.87rem;
-      min-width: 760px;
-    }
-    .ctl-table th, .ctl-table td {
-      text-align: left;
-      padding: 11px 14px;
-      border-bottom: 1px solid var(--border-dim);
-      vertical-align: top;
-      line-height: 1.55;
-    }
-    .ctl-table th {
-      color: var(--cyan);
-      font-family: var(--font-mono);
-      font-size: 0.76rem;
-      letter-spacing: 1px;
-      background: var(--bg-inner);
-      font-weight: 700;
-    }
-    .ctl-table td { color: #c4cfdb; }
-    .ctl-table th, .ctl-table td:nth-child(-n+5) { white-space: nowrap; }
-    .ctl-table td:first-child { color: #fff; font-weight: 600; }
-    .ctl-table tr:last-child td { border-bottom: none; }
-    .yes { color: var(--cyan); font-weight: 700; }
-    .no { color: var(--text-dim); }
-
-    /* 流程步驟 */
-    .flow {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      margin-top: 10px;
-      font-size: 0.82rem;
-    }
-    .flow span.step {
-      background: var(--bg-inner);
-      border: 1px solid var(--border-subtle);
-      border-radius: 3px;
-      padding: 3px 9px;
-      color: #dbe4ee;
-    }
-    .flow span.arrow { color: var(--cyan); font-family: var(--font-mono); }
-
-    /* 平台安裝 */
-    .platform-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 14px;
-      margin-top: 18px;
-    }
-    .platform-grid ol {
-      padding-left: 1.3em;
-      margin-top: 8px;
-      font-size: 0.86rem;
-      color: #c4cfdb;
-      line-height: 1.75;
-    }
-
-    /* 常見問題 */
-    .faq {
-      max-width: 900px;
-      margin: 0 auto;
-      display: grid;
-      gap: 10px;
-    }
-    .faq details {
-      background: var(--bg-card);
-      border: 1px solid var(--border-dim);
-      border-radius: 4px;
-      transition: border-color 0.2s;
-    }
-    .faq details[open] { border-color: var(--border-bright); }
-    .faq summary {
-      cursor: pointer;
-      list-style: none;
-      padding: 14px 18px;
-      color: #fff;
-      font-weight: 600;
-      font-size: 0.95rem;
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-    }
-    .faq summary::-webkit-details-marker { display: none; }
-    .faq summary::after {
-      content: "+";
-      font-family: var(--font-mono);
-      color: var(--cyan);
-      font-size: 1.1rem;
-      flex: none;
-    }
-    .faq details[open] summary::after { content: "−"; }
-    .faq .answer {
-      padding: 0 18px 16px;
-      color: var(--text-muted);
-      font-size: 0.88rem;
-      line-height: 1.7;
-    }
-    .faq .answer p + p { margin-top: 6px; }
-
-    .alert-card p {
-      font-size: 0.88rem;
-      color: #cbd5e1;
-      line-height: 1.7;
-    }
-    .alert-card p + p { margin-top: 8px; }
-    .alert-card.info {
-      background: var(--cyan-tint);
-      border-color: rgba(62, 230, 176, 0.3);
-      border-left-color: var(--cyan);
-    }
-    .alert-card.info .alert-card-title { color: var(--cyan); }
-
-    .back-top {
-      position: fixed;
-      right: max(16px, env(safe-area-inset-right));
-      bottom: max(16px, env(safe-area-inset-bottom));
-      z-index: 90;
-      width: 42px;
-      height: 42px;
-      border-radius: 4px;
-      border: 1px solid var(--border-bright);
-      background: rgba(15, 22, 32, 0.92);
-      color: var(--cyan);
-      font-family: var(--font-mono);
-      font-size: 1rem;
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s;
-    }
-    .back-top.show { opacity: 1; pointer-events: auto; }
-
-    @media (max-width: 768px) {
-      .tab-pane { padding: 16px; }
-      .tab-btn { padding: 9px 12px; font-size: 0.86rem; }
-      .grid-cards { grid-template-columns: 1fr; }
-      .sub-title { font-size: 1.08rem; }
-    }
-    .nav-links a, .brand-title, .brand-sub { white-space: nowrap; }
-    @media (max-width: 1180px) and (min-width: 769px) {
-      .nav-inner { flex-wrap: wrap; gap: 6px; }
-      .nav-links { width: 100%; gap: 4px; overflow-x: auto; scrollbar-width: none; }
-      .nav-links::-webkit-scrollbar { display: none; }
-      .nav-links a { font-size: 0.8rem; padding: 3px 7px; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      *, *::before, *::after { animation: none !important; transition: none !important; }
-    }
-
-    button.gallery-img-wrap { padding: 0; font: inherit; color: inherit; }
-    button.gallery-img-wrap:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+    :root{--bg:#0c0a09;--surface:#151210;--raised:#1c1815;--inset:#090807;--line:#2b2520;--line-strong:#40372e;--text:#e8e2d6;--muted:#a59c8c;--dim:#8a8072;--c-unique:#c7b377;--c-set:#6fcf6f;--c-rune:#e8963a;--c-danger:#d9695a;--c-magic:#8b9bff;--c-rare:#e9dc7a}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at top,rgba(199,179,119,.04),transparent 55%),var(--bg);color:var(--text);font:1rem/1.75 system-ui,-apple-system,'Segoe UI',sans-serif}h1,h2,h3,.brand-title,.log-date{font-family:'Noto Serif TC','Songti TC','PMingLiU',serif;font-weight:700;line-height:1.35}h1{font-size:clamp(2rem,5vw,3.25rem)}h2{font-size:1.75rem}h3{font-size:1.15rem}h1,h2,h3,h4,p,figure{margin:0 0 1rem}a{color:var(--c-magic)}a:hover{color:var(--text)}button{font:inherit;color:inherit;cursor:pointer}a:focus-visible,button:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--c-unique);outline-offset:3px}[hidden]{display:none!important}.container{width:min(100% - 32px,880px);margin:auto}header{position:sticky;top:0;z-index:10;background:var(--surface);border-bottom:1px solid var(--line)}.nav-inner{display:flex;align-items:center;gap:24px;min-width:0}.brand{display:flex;align-items:center;gap:8px;color:var(--c-unique);text-decoration:none;white-space:nowrap}.brand img{width:32px;height:32px}.nav-links{display:flex;gap:16px;overflow-x:auto;min-width:0;white-space:nowrap;padding:14px 0}.nav-links a{color:var(--muted);text-decoration:none}.nav-links a:hover,.nav-links a[aria-current=true]{color:var(--text)}.section,.hero{padding:64px 0;border-bottom:1px solid var(--line);scroll-margin-top:80px}[data-mod=unique]{--accent:var(--c-unique)}[data-mod=set]{--accent:var(--c-set)}[data-mod=rune]{--accent:var(--c-rune)}[data-mod=danger]{--accent:var(--c-danger)}[data-mod=magic]{--accent:var(--c-magic)}[data-mod=rare]{--accent:var(--c-rare)}.eyebrow{color:var(--accent);font-size:.875rem;font-weight:700;margin-bottom:8px}.section-desc,.sub-desc,.hero-subtitle{color:var(--muted)}.section-title-wrap{margin-bottom:32px}.hero-layout{display:grid;grid-template-columns:1fr minmax(260px, .8fr);gap:40px;align-items:center}.hero-title{color:var(--c-unique)}.btn-group{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0}.btn{display:inline-block;padding:9px 15px;border:1px solid var(--c-unique);border-radius:2px;text-decoration:none;color:var(--c-unique)}.btn-primary{background:var(--c-unique);color:var(--bg);font-weight:700}.btn:hover{background:var(--raised);border-color:var(--text);color:var(--text)}.btn-github{border-color:transparent;color:var(--c-magic)}.item-tip{background:rgba(0,0,0,.85);border:1px solid var(--line-strong);padding:28px 18px;text-align:center}.item-tip p{margin:3px 0}.item-name{color:var(--c-unique);font:700 1.3rem 'Noto Serif TC','Songti TC','PMingLiU',serif}.item-base{color:var(--muted)}.item-stat{color:var(--c-magic)}.tip-range,.item-tip figcaption{color:var(--muted);font-size:.875rem}.item-tip figcaption{margin-top:18px}.quick-grid,.setting-groups,.gallery-grid,.compliance-columns,.feature-shots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.quick-grid{margin-top:40px}.quick-card,.setting-group,.alert-card,.compliance-box,.disclaimer-box,.faq-item,.test-card,.install-card{background:var(--surface);border:1px solid var(--line);border-radius:2px;padding:20px}.quick-card{border-left:2px solid var(--accent);text-decoration:none;color:var(--text)}.quick-card:hover{border-color:var(--accent);background:var(--raised)}.quick-card h3{color:var(--accent)}.quick-card p,.go,.card-foot,figcaption{font-size:.875rem;color:var(--muted)}.spec-row{display:grid;grid-template-columns:180px minmax(0,1fr);gap:24px;padding:22px 0;border-top:1px solid var(--line)}.spec-heading{color:var(--c-unique)}.spec-heading span{display:block;font-size:.875rem}.spec-heading h3{color:var(--c-unique)}.detail-list{padding-left:1.3em;margin:8px 0 16px}.detail-list li{margin:5px 0}.card-foot{margin-top:12px}.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.tab-btn,.log-filter button{border:1px solid var(--line-strong);border-radius:2px;background:var(--surface);padding:7px 12px}.tab-btn:hover,.log-filter button:hover{background:var(--raised);border-color:var(--accent)}.tab-btn[aria-selected=true],.log-filter button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}.tab-pane,.alert-card,.sub-title,.table-wrap,.feature-shots,.disclaimer-box{margin-top:24px}.setting-group h4,.alert-card-title{color:var(--accent)}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:620px}td,th{border:1px solid var(--line);padding:9px;text-align:left;vertical-align:top}th{background:var(--raised)}.feature-shot,.gallery-item{min-width:0}.gallery-img-wrap{display:block;border:1px solid var(--line);border-radius:2px;background:var(--inset);padding:0;width:100%}.gallery-img-wrap:hover{border-color:var(--accent);background:var(--raised)}img{max-width:100%;height:auto}.gallery-img-wrap img{display:block;width:100%}figcaption{margin-top:6px}.pill{display:inline-block;border:1px solid var(--line-strong);padding:0 6px;margin-left:5px;font-size:.875rem}.log-filter{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:24px}.log-entry{padding:20px 0;border-top:1px solid var(--line)}.log-date{color:var(--c-unique)}.log-group{--cat:var(--c-rare);margin:14px 0}.log-group[data-cat='修改器']{--cat:var(--c-unique)}.log-group[data-cat='輔助器']{--cat:var(--c-set)}.log-group[data-cat='自動淬鍊']{--cat:var(--c-rune)}.log-group[data-cat='遊戲修改']{--cat:var(--c-danger)}.log-group[data-cat='中文化']{--cat:var(--c-magic)}.log-cat{display:inline-block;color:var(--cat);border:1px solid var(--cat);font-size:.8rem;font-weight:700;padding:1px 8px;margin:0}.log-group ul{padding-left:1.3em;margin:8px 0}.log-group li{margin:6px 0}footer{padding:36px 0}.footer-links{display:flex;flex-wrap:wrap;gap:16px}.footer-text{color:var(--muted);font-size:.875rem}.back-top{position:fixed;right:16px;bottom:16px;padding:6px 12px;background:var(--raised);border:1px solid var(--line-strong);color:var(--c-unique);text-decoration:none;display:none}.back-top.show{display:block}.lightbox-modal{display:none;position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:30px}.lightbox-modal.active{display:flex}.lightbox-content{text-align:center;max-width:95vw;max-height:90vh}.lightbox-img{max-height:80vh}.lightbox-close{position:absolute;right:20px;top:15px;background:var(--raised);border:1px solid var(--line-strong)}code,kbd,.bookmark-code{font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere} .warning{color:var(--c-danger)}
+    .steps-grid,.platform-grid,.grid-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:24px 0}.step-box,.hud-card,.faq details{padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:2px}.step-num{color:var(--accent);font-size:.875rem}.code-preview{font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere;background:var(--inset);border:1px solid var(--line);padding:12px}.faq details{margin-bottom:8px}.faq summary{cursor:pointer}.faq .answer{padding-top:16px}.gallery-caption{font-size:.875rem;color:var(--muted)}.item-tip figcaption{color:var(--dim)}
+    @media(min-width:1200px){header{position:fixed;inset:0 auto 0 0;width:220px;border-right:1px solid var(--line);border-bottom:0;overflow:auto}.nav-inner{display:block;width:auto;margin:0;padding:24px 16px}.nav-links{display:flex;flex-direction:column;gap:0;white-space:normal;overflow:visible}.nav-links a{padding:7px 10px;border-left:2px solid transparent}.nav-links a[aria-current=true]{border-color:var(--c-unique)}body{padding-left:220px;padding-right:360px}#changelog{position:fixed;right:0;top:0;bottom:0;width:360px;overflow-y:auto;border-left:1px solid var(--line);background:var(--surface);padding:30px 0}.section,.hero{scroll-margin-top:0}}
+    @media(max-width:899px){.hero-layout{grid-template-columns:1fr}.quick-grid,.setting-groups,.gallery-grid,.compliance-columns,.feature-shots,.steps-grid,.platform-grid,.grid-cards{grid-template-columns:1fr}.spec-row{grid-template-columns:1fr;gap:0}.section,.hero{padding:44px 0}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}}
+  .nav-ext{color:var(--c-unique)!important}.item-name{font-family:"Noto Serif TC","Songti TC","PMingLiU",serif;font-weight:700;font-size:1.25rem;color:var(--c-unique)}.item-base{color:var(--muted)}.item-stat{color:var(--c-magic)}
+    .nav-links{scrollbar-width:none}.nav-links::-webkit-scrollbar{display:none}
+    @media(max-width:1199px){.nav-inner{flex-direction:column;align-items:stretch;gap:0;padding-top:10px}.nav-links{padding:8px 0 10px;gap:8px}.nav-links a{flex:none;padding:4px 10px;border:1px solid var(--line);border-radius:2px;font-size:.875rem}.nav-links a[aria-current=true]{border-color:var(--c-unique)}section[id]{scroll-margin-top:104px}}
+    @media(max-width:600px){.btn-group .btn{flex:1 1 100%;text-align:center}.item-tip{margin:0}}
+    @media(min-width:1200px){.back-top{right:376px}}
   </style>
 </head>
 <body>
 
-  <!-- Header -->
-  <header>
-    <div class="container nav-inner">
-      <a href="#top" class="brand">
-        <img src="favicon.svg" alt="Logo">
-        <div class="brand-meta">
-          <span class="brand-title">D2倖存者工具包</span>
-          <span class="brand-sub">SURVIVOR TOOLKIT HUD</span>
-        </div>
-      </a>
-      <nav class="nav-links" aria-label="頁面導覽">
-        <a href="#editor">// 存檔修改器</a>
-        <a href="#autobot">// 遊戲輔助器</a>
-        <a href="#lang">// 繁體中文化</a>
-        <a href="#gallery">// 實際畫面</a>
-        <a href="#install">// 安裝教學</a>
-        <a href="#known-issues">// 已知問題</a>
-        <a href="#faq">// 常見問題</a>
-        <a href="#changelog">// 更新日誌</a>
-        <a href="#compliance">// 合規原則</a>
-        <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit" target="_blank" rel="noopener">GitHub</a>
-      </nav>
-    </div>
-  </header>
-
-  <!-- Hero Section -->
-  <section class="hero" id="top">
+  <header><div class="container nav-inner"><a href="#top" class="brand"><img src="favicon.svg" alt=""><span class="brand-title">D2倖存者工具包</span></a><nav class="nav-links" aria-label="頁面導覽"><a href="#top">首頁</a><a href="#install">安裝教學</a><a href="#editor">存檔修改器</a><a href="#autobot">遊戲輔助器</a><a href="#forge">自動淬鍊</a><a href="#lang">繁體中文化</a><a href="#gallery">實際畫面</a><a href="#tests">測試資料</a><a href="#known-issues">已知問題</a><a href="#faq">常見問題</a><a href="#compliance">合規原則</a><a href="#changelog">更新日誌</a><a class="nav-ext" href="https://d2survivors.lol/play/" target="_blank" rel="noopener">官方遊戲 ↗</a></nav></div></header>
+  <section class="hero" id="top" data-mod="unique"><div class="container"><div class="hero-layout"><div><h1 class="hero-title">D2倖存者工具包</h1><p class="hero-subtitle">《D2 Survivors》（<a href="https://d2survivors.lol/play/" target="_blank" rel="noopener">d2survivors.lol</a>）非官方工具包：存檔修改器 × 遊戲輔助器 × 繁體中文化</p><p class="hero-desc"><strong>修改器</strong>用遊戲自己的物品產生器做裝備，數值範圍和遊戲完全一致；還能依遊戲自己的規則掃描存檔，列出問題位置與修正方式。<br><strong>輔助器</strong>只走遊戲原本的操作流程，幫你喝水、閃避、撿寶，並一路推任務與天梯。<br><strong>中文化</strong>即時翻譯介面與物品名稱，譯名對齊原版《暗黑破壞神 II》官方繁體中文。<br>不用安裝：電腦或手機瀏覽器加一個書籤就能用，也有免安裝的 Windows 可攜版。</p><div class="btn-group"><a class="btn btn-primary" href="https://nojackno2-ctrl.github.io/d2-survivors-toolkit/" target="_blank" rel="noopener">開啟網頁版安裝頁</a><a class="btn btn-secondary" href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit/releases" target="_blank" rel="noopener">下載 Windows 版</a><a class="btn btn-secondary" href="https://d2survivors.lol/play/" target="_blank" rel="noopener">前往官方遊戲 ↗</a><a class="btn btn-github" href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit" target="_blank" rel="noopener">GitHub 原始碼</a></div></div><figure class="item-tip"><p class="item-name">馬拉的萬花筒</p><p class="item-base">護身符</p><p class="item-stat">+2 所有技能 <span class="tip-range">[固定]</span></p><p class="item-stat">所有抗性 +25 <span class="tip-range">[範圍 20–30]</span></p><p class="item-stat">+5 所有屬性 <span class="tip-range">[固定]</span></p><figcaption>示意：修改器會在每條屬性旁顯示遊戲的數值範圍</figcaption></figure></div><div class="quick-grid"><a class="quick-card" data-mod="unique" href="#editor"><h3>存檔修改器</h3><p>9 個分頁：物品、製作裝備、裝備庫、帳號強化、存檔檢查、存檔管理、原始資料、設定、更新日誌。</p><span class="go">查看 9 個分頁 →</span></a><a class="quick-card" data-mod="set" href="#autobot"><h3>遊戲輔助器</h3><p>戰鬥輔助、自動戰鬥、遊戲修改三個分頁；任務、固定關卡、天梯三種自動模式；另有獨立的自動淬鍊面板。</p><span class="go">查看所有設定 →</span></a><a class="quick-card" data-mod="magic" href="#lang"><h3>遊戲繁體中文化</h3><p>遊戲介面、畫布文字、物品名稱即時翻譯成繁體中文，譯名對齊原版官方用語。</p><span class="go">翻譯範圍 →</span></a><a class="quick-card" data-mod="rare" href="#install"><h3>三步驟開始使用</h3><p>複製書籤程式碼、加入書籤、在遊戲頁點書籤；電腦、Android、iPhone 分別說明。</p><span class="go">安裝教學 →</span></a></div></div></section>
+  <!-- Editor Section -->
+  <section class="section" id="install" data-mod="rare">
     <div class="container">
-      <div class="tag-mono">
-        <span class="dot"></span>
-        <span>SYS.STATUS: OPERATIONAL // UNOFFICIAL TOOLKIT</span>
-      </div>
-      <h1 class="hero-title">D2倖存者工具包<br><span>D2 Survivors Toolkit</span></h1>
-      <p class="hero-subtitle">《D2 Survivors》(d2survivors.lol) 非官方工具包：存檔修改器 × 遊戲輔助器 × 繁體中文化</p>
-      <p class="hero-desc">
-        <strong>修改器</strong>用遊戲自己的物品產生器做裝備，數值範圍和遊戲完全一致；還能掃描存檔，先找出排行榜可能拒收的項目。<br>
-        <strong>輔助器</strong>只走遊戲原本的操作流程，幫你喝水、閃避、撿寶，並一路推任務與天梯。<br>
-        <strong>中文化</strong>即時翻譯介面與物品名稱，繁中／English 隨時切換。<br>
-        不用安裝：電腦或手機瀏覽器加一個書籤就能用，也有免安裝的 Windows 可攜版。
-      </p>
-
-      <div class="btn-group">
-        <a href="https://nojackno2-ctrl.github.io/d2-survivors-toolkit/" class="btn btn-primary" target="_blank" rel="noopener">
-          🚀 開啟網頁版安裝頁
-        </a>
-        <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit/releases" class="btn btn-secondary" target="_blank" rel="noopener">
-          💻 下載 Windows 版
-        </a>
-        <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit" class="btn btn-github" target="_blank" rel="noopener">
-          ⭐ GitHub 原始碼
-        </a>
+      <div class="section-title-wrap">
+        <div class="eyebrow">安裝教學</div>
+        <h2 class="section-title">安裝教學</h2>
+        <p class="section-desc">網頁版是書籤小程式（Bookmarklet），電腦與手機瀏覽器皆免安裝；Windows 另有可攜版</p>
       </div>
 
-      <!-- Simulated HUD Autobot Status Bar -->
-      <div class="hud-statusbar-wrap">
-        <div class="hud-statusbar">
-          <div class="hud-status-main">
-            <span class="hud-indicator"><span class="hud-indicator-dot"></span>自動戰鬥中</span>
-            <span class="hud-stat-divider">|</span>
-            <span class="hud-stat-item">模式: <strong>任務模式</strong></span>
-            <span class="hud-stat-divider">|</span>
-            <span class="hud-stat-item">關卡: <strong>地獄 第二幕</strong></span>
-            <span class="hud-stat-divider">|</span>
-            <span class="hud-stat-item">動作: <strong>回營地交任務</strong></span>
-          </div>
-          <div class="hud-status-right">
-            [示意畫面]
-          </div>
+      <p class="section-desc">注意：單機模式：載入工具包後排行榜上傳強制關閉、無法打開，詳見 <a href="#known-issues">已知問題</a>。</p>
+      <div class="steps-grid">
+        <div class="step-box">
+          <div class="step-num">01</div>
+          <h3 class="step-title">取得書籤程式碼</h3>
+          <p class="step-desc">
+            前往<a href="https://nojackno2-ctrl.github.io/d2-survivors-toolkit/" target="_blank" rel="noopener">網頁版安裝頁</a>，按「複製書籤程式碼」。內容如下（以安裝頁複製的為準）：
+          </p>
+          <div class="code-preview">javascript:import('https://nojackno2-ctrl.github.io/d2-survivors-toolkit/d2edit.js?v='+Date.now())</div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">02</div>
+          <h3 class="step-title">加入瀏覽器書籤</h3>
+          <p class="step-desc">依裝置操作方式不同，見下方三種平台說明。部分瀏覽器貼上時會自動刪掉開頭的 <code>javascript:</code>，請確認網址開頭仍是它。</p>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">03</div>
+          <h3 class="step-title">在遊戲頁點書籤</h3>
+          <p class="step-desc">
+            到 <a href="https://d2survivors.lol/play/" target="_blank" rel="noopener"><code>d2survivors.lol/play</code></a> 點書籤，畫面中央的進度條會同時載入字典、遊戲資料、語言模組、輔助器、自動淬鍊、物品引擎與修改器頁面，並做相容性自檢（約 5～10 秒）。接著按<strong>暫停</strong>，點左上角的「工具包」，選單依序是：輔助器、自動淬鍊、掛機、中文化、修改器、效能（自動淬鍊與掛機需先進入遊戲選好職業）。
+          </p>
         </div>
       </div>
 
-      <!-- Quick Overview -->
-      <div class="quick-grid">
-        <a class="quick-card" href="#editor">
-          <h3>🗡️ 存檔修改器</h3>
-          <p>9 個分頁：物品、製作裝備、裝備庫、帳號強化、存檔檢查、存檔管理、原始資料、設定、更新日誌。</p>
-          <span class="go">查看 9 個分頁 →</span>
-        </a>
-        <a class="quick-card" href="#autobot">
-          <h3>🤖 遊戲輔助器</h3>
-          <p>戰鬥輔助、自動戰鬥、遊戲修改三個分頁；任務、固定關卡、天梯三種自動模式；另有恰西自動淬鍊面板。</p>
-          <span class="go">查看所有設定 →</span>
-        </a>
-        <a class="quick-card" href="#lang">
-          <h3>🌐 遊戲繁體中文化</h3>
-          <p>遊戲介面、畫布文字、物品名稱即時翻譯，繁中與 English 不必重新整理即可切換。</p>
-          <span class="go">翻譯範圍 →</span>
-        </a>
-        <a class="quick-card amber" href="#install">
-          <h3>📲 三步驟開始使用</h3>
-          <p>複製書籤程式碼、加入書籤、在遊戲頁點書籤；電腦、Android、iPhone 分別說明。</p>
-          <span class="go">安裝教學 →</span>
-        </a>
+      <div class="platform-grid">
+        <div class="setting-group">
+          <h4>電腦（Chrome／Edge／Firefox）</h4>
+          <ol>
+            <li>按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> 顯示書籤列。</li>
+            <li>把安裝頁上的「D2 修改器」連結直接拖到書籤列。</li>
+            <li>或在書籤列按右鍵 →「新增網頁」，網址貼上程式碼。</li>
+          </ol>
+        </div>
+        <div class="setting-group">
+          <h4>Android（Chrome）</h4>
+          <ol>
+            <li>隨便把一個網頁加入書籤（「⋮」→ ☆）。</li>
+            <li>「⋮」→「書籤」→ 編輯剛剛的書籤。</li>
+            <li>名稱改為 <code>D2 修改器</code>，網址整個刪掉後貼上程式碼。</li>
+            <li><b>使用時</b>：在網址列輸入「D2 修改器」，點建議清單中的書籤（從書籤清單直接點不會執行）。</li>
+          </ol>
+        </div>
+        <div class="setting-group">
+          <h4>iPhone／iPad（Safari）</h4>
+          <ol>
+            <li>按分享 →「加入書籤」並儲存。</li>
+            <li>打開書籤清單 →「編輯」→ 點剛剛的書籤。</li>
+            <li>名稱改為 <code>D2 修改器</code>，網址刪掉後貼上程式碼。</li>
+            <li><b>使用時</b>：在遊戲頁直接點書籤。</li>
+          </ol>
+        </div>
+        <div class="setting-group">
+          <h4>Windows 桌面版</h4>
+          <ol>
+            <li>到 <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit/releases" target="_blank" rel="noopener">Releases</a> 下載 <code>D2.exe</code>（可攜版，免安裝），可對照 <code>SHA256SUMS.txt</code> 確認檔案完整。</li>
+            <li>關閉遊戲後執行，會讀取已安裝遊戲的存檔。</li>
+            <li>修改後按「寫入存檔」，每次寫入前自動備份。</li>
+          </ol>
+          <p class="card-foot">執行檔未經程式碼簽署，若出現 SmartScreen 警告請選「其他資訊 → 仍要執行」。</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Editor Section -->
-  <section class="section" id="editor">
+  <section class="section" id="editor" data-mod="unique">
     <div class="container">
       <div class="section-title-wrap">
-        <div class="section-tag">// MODULE: SAVE_EDITOR</div>
+        <div class="eyebrow">存檔修改器</div>
         <h2 class="section-title">存檔修改器：9 個分頁詳解</h2>
-        <p class="section-desc">在遊戲暫停畫面左上角點「修改器」開啟；修改後按「寫入存檔」再「關閉」，遊戲會重新載入並套用</p>
+        <p class="section-desc">暫停時點左上角的「工具包」，再選「修改器」開啟；修改後按「寫入存檔」再「關閉」，遊戲會重新載入並套用</p>
       </div>
 
       <div class="grid-cards">
-        <div class="hud-card">
-          <div class="card-header-line">
-            <span class="card-icon">🗡️</span>
-            <span class="card-badge-mono">PAGE 01 // ITEMS</span>
-          </div>
-          <h3 class="card-title">物品</h3>
+        <div class="spec-row"><div class="spec-heading"><span>01</span><h3>物品</h3></div><div>
           <p class="card-text">瀏覽並編輯存檔裡所有位置的物品，點選即可看到完整屬性與遊戲數值範圍。</p>
           <ul class="detail-list">
             <li><b>所有位置</b>：共用倉庫 1～3；各職業的身上裝備（含備用武器組）、個人倉庫、背包、咒符欄、傭兵裝備。</li>
             <li><b>其他</b>：鑰匙與器官（首領掉落）、獨特收藏、賣出紀錄（可買回）。</li>
             <li><b>獨特收藏</b>：「一鍵解鎖＋全部最高」補齊收藏庫，數量與遊戲一致；地獄火炬的職業技能依目前職業給予。</li>
+            <li><b>符文之語</b>：可勾選是否無形。</li>
             <li><b>可編輯</b>：底材、品質與每一條屬性數值；也可複製或移動物品。</li>
             <li><b>數值範圍</b>：每條屬性旁顯示遊戲正常範圍。</li>
           </ul>
-        </div>
+        </div></div>
 
-        <div class="hud-card">
-          <div class="card-header-line">
-            <span class="card-icon">⚒️</span>
-            <span class="card-badge-mono">PAGE 02 // CRAFT</span>
-          </div>
-          <h3 class="card-title">製作裝備</h3>
+        <div class="spec-row"><div class="spec-heading"><span>02</span><h3>製作裝備</h3></div><div>
           <p class="card-text">自選底材、品質與屬性訂製裝備，未解除限制時一律照原版規則。</p>
           <ul class="detail-list">
-            <li><b>魔法／稀有</b>：先選分類再選底材；「前綴」「後綴」「固有屬性」分區顯示已用／上限，新增屬性預設帶入最大合法值。</li>
+            <li><b>魔法／稀有</b>：逐步選單——依序選裝備類型、品質、（武器的）武器種類、底材，每一步選完才出現下一步，只列出有底材的選項；「前綴」「後綴」「固有屬性」分區顯示已用／上限，新增屬性預設帶入最大合法值。</li>
             <li><b>獨特／套裝／符文之語</b>：挑選物品後可在原版範圍內調整數值與原版本來就隨機的項目（如地獄火炬職業、是否無形）；符文之語只列原版允許的底材。</li>
+            <li><b>放到</b>：只能選共用倉庫 1～3、目前角色的個人倉庫與背包（一般製作與批次製作都適用）。</li>
+            <li><b>未解除修改限制</b>：也能製作獨特、套裝與符文之語，屬性種類與數量固定為原版定義。</li>
             <li><b>複合詞綴</b>：可唯一判定就自動補入配套屬性；有多種可能時提示確認，不猜測。</li>
             <li><b>孔數與珠寶</b>：可設定孔數並鑲嵌。</li>
             <li><b>輸出裝備設定</b>：一鍵複製表單內容供回報問題，不含存檔資料。</li>
           </ul>
           <p class="card-foot">詞綴上限：魔法 1 前綴＋1 後綴；稀有 2～6 個（前後綴各最多 3）；稀有珠寶最多 4。</p>
-        </div>
+        </div></div>
 
-        <div class="hud-card">
-          <div class="card-header-line">
-            <span class="card-icon">👑</span>
-            <span class="card-badge-mono">PAGE 03 // LIBRARY</span>
-          </div>
-          <h3 class="card-title">裝備庫</h3>
+        <div class="spec-row"><div class="spec-heading"><span>03</span><h3>裝備庫</h3></div><div>
           <p class="card-text">從遊戲全部獨特、套裝、符文之語，以及稀有／魔法底材中挑選並直接製作。</p>
           <ul class="detail-list">
             <li><b>用遊戲自己的產生器</b>：做出來的物品與遊戲掉落完全相同（含可驗證的種子）。</li>
@@ -1571,14 +146,9 @@
             <li><b>批次製作</b>：可一次製作多件（未解除限制時最多 40 件）。</li>
             <li><b>搜尋</b>：中英文名稱皆可搜尋，依品質與類型篩選。</li>
           </ul>
-        </div>
+        </div></div>
 
-        <div class="hud-card">
-          <div class="card-header-line">
-            <span class="card-icon">💰</span>
-            <span class="card-badge-mono">PAGE 04 // HERO</span>
-          </div>
-          <h3 class="card-title">帳號 / 強化</h3>
+        <div class="spec-row"><div class="spec-heading"><span>04</span><h3>帳號 / 強化</h3></div><div>
           <p class="card-text">調整帳號資源與各角色的成長設定。</p>
           <ul class="detail-list">
             <li><b>基本</b>：金幣、光之碎片、可聘傭兵欄（遊戲只接受 1、2、3、5）。</li>
@@ -1587,14 +157,9 @@
             <li><b>技能修改</b>：照遊戲規則每職業最多 10 點，每點替一個技能選一種修改。</li>
           </ul>
           <p class="card-foot">未解除限制時：金幣不超過 100 億、額外強化不超過 999。</p>
-        </div>
+        </div></div>
 
-        <div class="hud-card">
-          <div class="card-header-line">
-            <span class="card-icon">🛡️</span>
-            <span class="card-badge-mono">PAGE 05 // GUARD</span>
-          </div>
-          <h3 class="card-title">存檔檢查</h3>
+        <div class="spec-row"><div class="spec-heading"><span>05</span><h3>存檔檢查</h3></div><div>
           <p class="card-text">依遊戲本身的檢查規則掃描整份存檔，列出問題位置、原因與修正方式。</p>
           <ul class="detail-list">
             <li><b>問題明細</b>：逐項標出位置（職業、背包、倉庫分頁、裝備欄位、傭兵、商店等）與怎麼修正。</li>
@@ -1603,14 +168,9 @@
             <li><b>存檔識別碼</b>：可重新產生排行榜與角色識別碼（會重設爬塔與恐懼紀錄，寫入後生效）。</li>
           </ul>
           <p class="card-foot">合法性以遊戲自己的資料與檢查為準，正常打到的裝備不會被判為不合法。載入工具包後排行榜上傳一律關閉（單機模式），見<a href="#known-issues">已知問題</a>。</p>
-        </div>
+        </div></div>
 
-        <div class="hud-card">
-          <div class="card-header-line">
-            <span class="card-icon">💾</span>
-            <span class="card-badge-mono">PAGE 06 // SAVES</span>
-          </div>
-          <h3 class="card-title">存檔管理</h3>
+        <div class="spec-row"><div class="spec-heading"><span>06</span><h3>存檔管理</h3></div><div>
           <p class="card-text">修改前的安全網。</p>
           <ul class="detail-list">
             <li><b>快照</b>：自訂名稱建立快照，在「備份與快照」清單隨時載入或刪除。</li>
@@ -1618,56 +178,40 @@
             <li><b>匯出／匯入</b>：存檔可匯出成檔案或從檔案匯入；修改器直接寫入，不留下遊戲的匯入紀錄。</li>
             <li><b>建立全新存檔</b>：以遊戲空白存檔為基礎，只帶入勾選的內容，識別碼與紀錄由遊戲重新產生。</li>
           </ul>
-        </div>
+        </div></div>
 
-        <div class="hud-card">
-          <div class="card-header-line">
-            <span class="card-icon">🧾</span>
-            <span class="card-badge-mono">PAGE 07 // RAW</span>
-          </div>
-          <h3 class="card-title">原始存檔資料</h3>
+        <div class="spec-row"><div class="spec-heading"><span>07</span><h3>原始存檔資料</h3></div><div>
           <p class="card-text">直接以 JSON 檢視與編輯存檔內容，按「套用」後才生效；適合熟悉資料結構的玩家，修改前請先建立快照。</p>
-        </div>
+        </div></div>
 
-        <div class="hud-card">
-          <div class="card-header-line">
-            <span class="card-icon">⚙️</span>
-            <span class="card-badge-mono">PAGE 08 // SETTINGS</span>
-          </div>
-          <h3 class="card-title">設定</h3>
+        <div class="spec-row"><div class="spec-heading"><span>08</span><h3>設定</h3></div><div>
           <p class="card-text">修改器的全域選項。</p>
           <ul class="detail-list">
-            <li><b>介面語言</b>：自動（依系統）、繁體中文或 English。</li>
             <li><b>解除修改限制</b><span class="pill off">預設關閉</span>：關閉時照原版規則把關；開啟後可設數值倍率、製作數量不限，做出超出原版範圍的裝備（見<a href="#compliance">合規原則</a>）。</li>
             <li><b>診斷資訊</b>：產生並複製修改器狀態與最近操作紀錄，回報問題時附上；不含識別碼。</li>
           </ul>
-        </div>
+        </div></div>
 
-        <div class="hud-card">
-          <div class="card-header-line">
-            <span class="card-icon">📜</span>
-            <span class="card-badge-mono">PAGE 09 // CHANGELOG</span>
-          </div>
-          <h3 class="card-title">更新日誌</h3>
+        <div class="spec-row"><div class="spec-heading"><span>09</span><h3>更新日誌</h3></div><div>
           <p class="card-text">修改器內也能查看每天的更新內容，與本頁<a href="#changelog">更新日誌</a>相同。</p>
-        </div>
+        </div></div>
       </div>
     <div class="feature-shots">
       <figure class="feature-shot">
         <button type="button" class="gallery-img-wrap" data-src="img/editor-overview.jpg" data-caption="存檔修改器：共用倉庫與分頁總覽（實機畫面）">
-          <img src="img/editor-overview.jpg" alt="存檔修改器實機畫面" loading="lazy" onerror="this.closest('.feature-shot').style.display='none';">
+          <img src="img/editor-overview.jpg" alt="存檔修改器實機畫面" loading="lazy">
         </button>
         <figcaption>存檔修改器：共用倉庫與分頁總覽（實機畫面）</figcaption>
       </figure>
       <figure class="feature-shot">
         <button type="button" class="gallery-img-wrap" data-src="img/craft-form.jpg" data-caption="製作裝備：選底材與品質後，逐條填入前綴與後綴數值">
-          <img src="img/craft-form.jpg" alt="製作裝備實機畫面" loading="lazy" onerror="this.closest('.feature-shot').style.display='none';">
+          <img src="img/craft-form.jpg" alt="製作裝備實機畫面" loading="lazy">
         </button>
         <figcaption>製作裝備：選底材與品質後，逐條填入前綴與後綴數值</figcaption>
       </figure>
       <figure class="feature-shot">
         <button type="button" class="gallery-img-wrap" data-src="img/craft-result.jpg" data-caption="製作裝備：製作成功，物品詳情顯示每條詞綴的遊戲範圍">
-          <img src="img/craft-result.jpg" alt="製作成功的裝備詳情實機畫面" loading="lazy" onerror="this.closest('.feature-shot').style.display='none';">
+          <img src="img/craft-result.jpg" alt="製作成功的裝備詳情實機畫面" loading="lazy">
         </button>
         <figcaption>製作裝備：製作成功，物品詳情顯示每條詞綴的遊戲範圍</figcaption>
       </figure>
@@ -1675,33 +219,32 @@
     </div>
   </section>
 
-  <!-- Autobot Section -->
-  <section class="section" id="autobot">
+  <section class="section" id="autobot" data-mod="set">
     <div class="container">
       <div class="section-title-wrap">
-        <div class="section-tag">// MODULE: AUTONOMOUS_BOT</div>
+        <div class="eyebrow">遊戲輔助器</div>
         <h2 class="section-title">遊戲輔助器</h2>
-        <p class="section-desc">遊戲暫停時左上角點「輔助」開啟設定面板；戰鬥輔助與自動戰鬥只使用原版輸入與流程，「遊戲修改」另可變更遊戲數值</p>
+        <p class="section-desc">暫停時點左上角的「工具包」，再選「輔助器」開啟設定面板；戰鬥輔助與自動戰鬥只使用原版輸入與流程，「遊戲修改」另可變更遊戲數值</p>
       </div>
 
-      <div class="alert-card info" style="margin-top:0;margin-bottom:22px">
-        <h3 class="alert-card-title">🔌 兩個總開關的關係</h3>
+      <div class="alert-card info">
+        <h3 class="alert-card-title">兩個總開關的關係</h3>
         <p>兩個總開關<b>各自獨立</b>：<b>「戰鬥輔助」</b>負責喝水、走位、閃避、撿寶與死亡保護；<b>「自動戰鬥」</b>負責開局、選卡、配點、換裝與推進關卡，不會順便開啟戰鬥輔助。想全自動掛機請兩個都開。</p>
         <p>重新整理遊戲或重新開啟後再點書籤，兩個總開關與「遊戲修改總開關」一律預設關閉，避免一進遊戲就自動操作；同一頁面內重新點書籤則沿用原狀態。其他細部設定會儲存沿用。手動操作時輔助器會暫時讓出控制權；背景分頁、設定面板、修改器開啟或遊戲暫停時也會停止動作。</p>
       </div>
 
       <!-- Tabs -->
       <div class="tabs" role="tablist" aria-label="輔助器分頁">
-        <button type="button" class="tab-btn" role="tab" id="tab-assist" aria-controls="pane-assist" aria-selected="true">⚔️ 戰鬥輔助</button>
-        <button type="button" class="tab-btn" role="tab" id="tab-progress" aria-controls="pane-progress" aria-selected="false" tabindex="-1">🧭 自動戰鬥</button>
-        <button type="button" class="tab-btn" role="tab" id="tab-cheat" aria-controls="pane-cheat" aria-selected="false" tabindex="-1">🧪 遊戲修改</button>
+        <button type="button" class="tab-btn" role="tab" id="tab-assist" aria-controls="pane-assist" aria-selected="true">戰鬥輔助</button>
+        <button type="button" class="tab-btn" role="tab" id="tab-progress" aria-controls="pane-progress" aria-selected="false" tabindex="-1">自動戰鬥</button>
+        <button type="button" class="tab-btn" role="tab" id="tab-cheat" aria-controls="pane-cheat" aria-selected="false" tabindex="-1">遊戲修改</button>
       </div>
 
       <div class="tab-pane" role="tabpanel" id="pane-assist" aria-labelledby="tab-assist">
         <p class="pane-intro">你自己決定要打哪裡，輔助器負責保命與撿東西。</p>
         <div class="setting-groups">
           <div class="setting-group">
-            <h4>🧪 生命與藥水</h4>
+            <h4>生命與藥水</h4>
             <ul class="detail-list">
               <li><b>自動喝生命藥水</b>：低於設定的生命門檻（％）就喝。</li>
               <li><b>一擊必殺預判</b>：預估接下來幾秒（可設定）的傷害會致命時提早喝水。</li>
@@ -1710,7 +253,7 @@
             </ul>
           </div>
           <div class="setting-group">
-            <h4>🏃 走位與閃避</h4>
+            <h4>走位與閃避</h4>
             <ul class="detail-list">
               <li><b>合計威脅</b>：打不痛、能秒殺的小怪不閃，避免越閃越遠。</li>
               <li><b>預判包圍</b>：以 16 個方向取樣，提前往空隙移動。</li>
@@ -1719,7 +262,7 @@
             </ul>
           </div>
           <div class="setting-group">
-            <h4>💎 撿寶</h4>
+            <h4>撿寶</h4>
             <ul class="detail-list">
               <li><b>自動撿寶</b>：依遊戲內建的撿寶過濾器決定保留、隱藏或自動販售，請在遊戲設定調整過濾器。</li>
               <li><b>全圖撿寶</b><span class="pill on">預設開啟</span>：撿取距離改為全圖，要撿哪些依遊戲過濾器；撿回來沒用的由營地整備賣掉換金幣。</li>
@@ -1730,7 +273,7 @@
             </ul>
           </div>
           <div class="setting-group">
-            <h4>💀 死亡保護 <span class="pill on">預設開啟</span></h4>
+            <h4>死亡保護 <span class="pill on">預設開啟</span></h4>
             <ul class="detail-list">
               <li>預估接下來的傷害會致命且沒有可用的回血藥水，或生命低於緊急門檻（預設 15％）且藥水冷卻中時觸發。</li>
               <li>觸發後以原版「暫停 → 離開本局」離場回營地，避免陣亡從 1 級重來；回營地後自動戰鬥會接著繼續。</li>
@@ -1745,7 +288,7 @@
       <div class="tab-pane" role="tabpanel" id="pane-progress" aria-labelledby="tab-progress" hidden>
         <p class="pane-intro">開啟「自動戰鬥開關」並選擇自動模式，輔助器會自己開局、選卡、配點、換裝、回營地整備。目前模式用不到的設定會自動隱藏。</p>
 
-        <div class="modes-container" style="margin-top:0">
+        <div class="modes-container">
           <div class="mode-card">
             <span class="mode-badge">MODE 01 // QUEST</span>
             <h3 class="mode-title">任務模式</h3>
@@ -1785,7 +328,7 @@
         <h3 class="sub-title">各模式共用的自動行為</h3>
         <div class="setting-groups">
           <div class="setting-group">
-            <h4>🏆 依排行榜高手配法</h4>
+            <h4>依排行榜高手配法</h4>
             <ul class="detail-list">
               <li><b>選升級卡</b>：優先進化卡，其次依排行榜技能與被動權重；技能進化後可再次習得基礎技能。</li>
               <li><b>自動重抽</b>：候選卡評分偏低時使用重抽。</li>
@@ -1795,7 +338,7 @@
             <p class="card-foot">資料取自排行榜各職業前 50 位不同玩家，遊戲改版後重新抓取。</p>
           </div>
           <div class="setting-group">
-            <h4>🛡️ 自動換裝</h4>
+            <h4>自動換裝</h4>
             <ul class="detail-list">
               <li>以遊戲原版數值比較裝備，替換門檻約等於傷害提升％。</li>
               <li>每個欄位都會補上裝備；優先排行榜高手常用的獨特／套裝。</li>
@@ -1804,7 +347,7 @@
             </ul>
           </div>
           <div class="setting-group">
-            <h4>🏕️ 回營地整備</h4>
+            <h4>回營地整備</h4>
             <ul class="detail-list">
               <li><b>先交任務</b>：每次回營地先向凱恩／阿卡拉回報已完成的任務。</li>
               <li>獨特／套裝收進收藏庫，較好的裝備存倉庫。</li>
@@ -1813,7 +356,7 @@
             </ul>
           </div>
           <div class="setting-group">
-            <h4>📉 難度調整</h4>
+            <h4>難度調整</h4>
             <ul class="detail-list">
               <li>最高難度連續失敗 3 次，會回低一級刷一局。</li>
               <li>某難度完整打完卻整局沒升級，之後該等級以上不再回去刷。</li>
@@ -1827,46 +370,53 @@
         <p class="pane-intro">單機娛樂用的數值修改，<b>全部預設關閉</b>，並由「遊戲修改總開關」統一控制。這些修改會改變遊戲數值，不屬於原版行為。</p>
         <div class="setting-groups">
           <div class="setting-group">
-            <h4>⚔️ 戰鬥修改</h4>
+            <h4>遊戲修改總開關</h4>
             <ul class="detail-list">
-              <li><b>無敵</b>：免疫所有傷害並鎖定滿血。</li>
+              <li><b>遊戲修改總開關</b><span class="pill off">預設關閉</span>：主控所有修改項目；預設關閉。</li>
+            </ul>
+          </div>
+          <div class="setting-group">
+            <h4>戰鬥修改</h4>
+            <ul class="detail-list">
+              <li><b>無敵</b>：免疫所有傷害且鎖定滿血。</li>
               <li><b>致命攻擊</b>：致命一擊機率最高。</li>
               <li><b>一擊必殺</b>：所有屬性傷害提升一百倍。</li>
-              <li><b>所有技能 +20</b>：提高角色的「+所有技能」屬性，不直接改技能等級。</li>
+              <li><b>所有技能 +20</b>：提高裝備「+所有技能」屬性，不改技能等級。</li>
             </ul>
           </div>
           <div class="setting-group">
-            <h4>👹 怪物與環境</h4>
+            <h4>怪物與環境修改</h4>
             <ul class="detail-list">
-              <li><b>怪物數量最大化</b>：地圖怪物生成速度與數量拉滿。</li>
-              <li><b>全精英</b>：一般怪物全部升階為金／藍怪。</li>
+              <li><b>怪物數量最大化</b>：怪物數量最大化。</li>
+              <li><b>一般怪物全部變成精英以上等級</b>：一般怪物全部變成精英以上等級。</li>
             </ul>
           </div>
           <div class="setting-group">
-            <h4>🎲 流程與掉落</h4>
+            <h4>流程與掉落修改</h4>
             <ul class="detail-list">
-              <li><b>燃燒的恐懼精華 99</b>：鍛造用的精華數量固定 99（鍛造機率無法修改）。</li>
-              <li><b>無限重抽</b>：升級選卡可無限重抽、跳過與排除。</li>
-              <li><b>掉寶率最高</b>：大幅提升獨特／套裝／稀有尋寶率。</li>
-              <li><b>經驗值加成最大</b>：擊殺與任務經驗值乘以 1000 倍。</li>
-              <li><b>金幣掉落率最高</b>：玩家金幣超過 90 億時自動關閉。</li>
+              <li><b>燃燒的恐懼精華數量 99</b>：以虛擬精華提供，不放實體物品，淬鍊時自動補足。</li>
+              <li><b>淬鍊與地獄熔爐本地化</b>：不連伺服器，本機直接算出結果，不受限流；機率同原版。</li>
+              <li><b>本地淬鍊必定成功、地獄熔爐必定倍增</b>：需開啟本地化；自動淬鍊只會淬到你設定的目標屬性。</li>
+              <li><b>拉蘇克精華數量 99</b>：放入個人倉庫，可用來增加物品鑲孔。</li>
+              <li><b>關卡時間暫停</b>：本關計時不前進。</li>
+              <li><b>關卡內持續召喚頭目</b>：輪流召喚鑰匙頭目、各章首領與超級首領，超級首領掉器官。</li>
+              <li><b>選技能的重抽無限次數</b>：選技能的重抽無限次數。</li>
+              <li><b>掉寶率最高</b>：掉寶率最高。</li>
+              <li><b>經驗值加成最大</b>：經驗值加成最大。</li>
+              <li><b>金幣掉落率最高</b>：金幣掉落率最高（金幣超過 90 億自動關閉）。</li>
             </ul>
           </div>
           <div class="setting-group">
-            <h4>👑 首領召喚</h4>
+            <h4>首領召喚</h4>
             <ul class="detail-list">
-              <li><b>暗黑破壞神分身</b>：進入恐懼階時自動召喚，不必出售喬丹之石。</li>
+              <li><b>暗黑破壞神分身</b>：進入恐懼階時自動召喚暗黑破壞神分身（無須出售喬丹之石）。</li>
             </ul>
           </div>
         </div>
-        <p class="card-foot" style="margin-top:16px">⚠️ 關閉開關會還原無敵、致命攻擊、一擊必殺、掉寶率、金幣、經驗值與怪物數量；已變成精英的怪物維持原狀。載入工具包期間排行榜上傳強制關閉。</p>
+        <p class="card-foot">注意：關閉開關會還原無敵、致命攻擊、一擊必殺、掉寶率、金幣、經驗值與怪物數量；已變成精英的怪物維持原狀。載入工具包期間排行榜上傳強制關閉。</p>
       </div>
 
-      <div class="alert-card info" style="margin-top:22px">
-        <h3 class="alert-card-title">⚒️ 恰西自動淬鍊</h3>
-        <p>進入遊戲後畫面上會出現「自動淬鍊」面板（可收合成小圖示）。把獨特、套裝或符文之語放上恰西的鐵砧，替每條屬性設定目標：填數字代表要淬到幾次、0 代表不限、X 代表禁止淬鍊。輔助器會自動淬鍊，沒達標就清除重來；達標並補滿 10 次後執行地獄熔爐。</p>
-        <p>也可以從目前職業的背包加入多件裝備依序處理，並可選擇熔爐失敗時自動售出。全程使用遊戲原本的淬鍊流程，會正常消耗精華與金幣；同一件裝備的目標會記住，下次放上鐵砧自動帶入。</p>
-      </div>
+
 
       <h3 class="sub-title">停止與關閉：四種方式的差別</h3>
       <p class="sub-desc">依你想停多少選擇對應按鈕。</p>
@@ -1883,17 +433,17 @@
           </tbody>
         </table>
       </div>
-      <p class="sub-desc" style="margin-top:10px">畫面下方狀態列會顯示目前模式與輔助器正在做什麼；設定面板顯示任務進度。遊戲改版時面板最上方會提示「遊戲已更新」。</p>
+      <p class="sub-desc">畫面下方狀態列會顯示目前模式與輔助器正在做什麼；設定面板顯示任務進度。遊戲改版時面板最上方會提示「遊戲已更新」。</p>
     <div class="feature-shots">
       <figure class="feature-shot">
         <button type="button" class="gallery-img-wrap" data-src="img/assist-panel.jpg" data-caption="輔助器：戰鬥輔助與自動戰鬥開關（實機畫面）">
-          <img src="img/assist-panel.jpg" alt="輔助器設定面板實機畫面" loading="lazy" onerror="this.closest('.feature-shot').style.display='none';">
+          <img src="img/assist-panel.jpg" alt="輔助器設定面板實機畫面" loading="lazy">
         </button>
         <figcaption>輔助器：戰鬥輔助與自動戰鬥開關（實機畫面）</figcaption>
       </figure>
       <figure class="feature-shot">
         <button type="button" class="gallery-img-wrap" data-src="img/assist-auto.jpg" data-caption="輔助器：自動戰鬥分頁，可選任務、固定關卡或天梯模式（實機畫面）">
-          <img src="img/assist-auto.jpg" alt="輔助器自動戰鬥分頁實機畫面" loading="lazy" onerror="this.closest('.feature-shot').style.display='none';">
+          <img src="img/assist-auto.jpg" alt="輔助器自動戰鬥分頁實機畫面" loading="lazy">
         </button>
         <figcaption>輔助器：自動戰鬥分頁，可選任務、固定關卡或天梯模式（實機畫面）</figcaption>
       </figure>
@@ -1901,39 +451,91 @@
     </div>
   </section>
 
-  <!-- Language Section -->
-  <section class="section" id="lang">
+  <section class="section" id="forge" data-mod="rune">
     <div class="container">
       <div class="section-title-wrap">
-        <div class="section-tag">// MODULE: LOCALIZATION</div>
+        <div class="eyebrow">自動淬鍊</div>
+        <h2 class="section-title">自動淬鍊</h2>
+        <p class="section-desc">進入遊戲後隨時開啟自動淬鍊面板，支援逐件與多件並行淬鍊、屬性目標設定與本地化快速淬鍊</p>
+      </div>
+
+      <div class="setting-groups">
+        <div class="setting-group">
+          <h4>開啟方式</h4>
+          <p class="card-text">進入遊戲後，暫停點「工具包」→「自動淬鍊」，不必走到恰西的鐵砧；面板可收合成小圖示；視窗最小化後仍會持續淬鍊。</p>
+        </div>
+
+        <div class="setting-group">
+          <h4>可淬鍊的裝備</h4>
+          <p class="card-text">依原版規則——普通、稀有、套裝、獨特與符文之語可以淬鍊，魔法品質以及咒符等類型不行；用過地獄熔爐（不論成功或失敗）的裝備不再列出。來源可選角色背包或個人倉庫。</p>
+        </div>
+
+        <div class="setting-group">
+          <h4>屬性目標</h4>
+          <p class="card-text">替每條屬性設定目標；設為 X 的屬性表示不要淬到。同一款裝備的目標會記住，下次自動帶入。面板會顯示精確計算的機率與約需清除次數；被選為目標的屬性連續 200 次成功淬鍊都未升級時會跳出警告。</p>
+        </div>
+
+        <div class="setting-group">
+          <h4>序列</h4>
+          <p class="card-text">「加入同名」一鍵把同名同底材的裝備全部加入序列；「同時淬鍊 N 件」（1～10，預設 1）；「同款熔爐成功就略過其餘同款」（預設開啟）；「失敗就自動售出」可把熔爐失敗的裝備賣掉（倉庫裡的也可以）。</p>
+        </div>
+
+        <div class="setting-group">
+          <h4>伺服器限流</h4>
+          <p class="card-text">官方伺服器依網路 IP 對淬鍊限流（約每小時 1200 次）。被限流時會依伺服器告知的時間等滿後接著做同一件；伺服器沒說要等多久時，每次等 1 分鐘、最多重試 3 次後換下一件。收合成圖示時會顯示等待倒數，結束時顯示成功與失敗件數。</p>
+        </div>
+
+        <div class="setting-group">
+          <h4>本地化淬鍊</h4>
+          <p class="card-text">在輔助器「遊戲修改」分頁開啟，需同時開啟遊戲修改總開關。「淬鍊與地獄熔爐本地化」讓淬鍊、清除、地獄熔爐由本機直接算出結果，不連官方伺服器，所以不會被限流，機率與原版相同，照樣消耗精華；「本地淬鍊必定成功、地獄熔爐必定倍增」需搭配本地化，自動淬鍊只會淬到設定為目標的屬性。</p>
+        </div>
+
+        <div class="setting-group">
+          <h4>精華</h4>
+          <p class="card-text">每次淬鍊消耗燃燒的恐懼精華；可在「遊戲修改」開啟「燃燒的恐懼精華數量 99」。</p>
+        </div>
+      </div>
+
+      <div class="alert-card">
+        <h3 class="alert-card-title">注意</h3>
+        <p>本機淬鍊的結果官方伺服器並不知道。之後若停用工具包，或關掉本地化後再對同一件裝備淬鍊，該裝備的淬鍊可能被伺服器的舊紀錄蓋回去。</p>
+      </div>
+
+      <h3 class="sub-title">掛機與效能</h3>
+      <div class="setting-group">
+        <p class="card-text">工具包選單的「掛機」會用黑幕蓋住整個畫面，遊戲、輔助器與自動淬鍊照常執行，點畫面即喚醒；「效能」頁顯示更新率、記憶體等即時數據，並有「掛機時略過主畫面繪製」開關（預設開啟，實測掛機時處理器與顯示卡負擔約減少四成）。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="lang" data-mod="magic">
+    <div class="container">
+      <div class="section-title-wrap">
+        <div class="eyebrow">中文化</div>
         <h2 class="section-title">遊戲繁體中文化</h2>
-        <p class="section-desc">載入書籤後，遊戲暫停時左上角出現「🌐 語言」按鈕</p>
+        <p class="section-desc">載入書籤後自動翻譯；暫停時點左上角的「工具包」，再選「中文化」可調整排版與字型</p>
       </div>
       <div class="grid-cards">
         <div class="hud-card">
-          <div class="card-header-line"><span class="card-icon">🔁</span><span class="card-badge-mono">LIVE_SWITCH</span></div>
-          <h3 class="card-title">即時切換</h3>
-          <p class="card-text">繁體中文與 English 雙向切換，不必重新整理頁面，網頁版也不用再點書籤；選擇會記住。輔助器與修改器介面同步切換語言。</p>
+          <h3 class="card-title">繁中專屬與選單設定</h3>
+          <p class="card-text">只提供繁體中文，載入後自動翻譯。「中文化」選單可切換裝備比較框排版（上方並列／原版位置）與使用 D2R 原版字型。</p>
         </div>
         <div class="hud-card">
-          <div class="card-header-line"><span class="card-icon">📜</span><span class="card-badge-mono">COVERAGE</span></div>
           <h3 class="card-title">翻譯範圍</h3>
           <p class="card-text">遊戲按鈕、浮動文字、提示說明，以及畫在畫布上的文字都會翻譯；魔法與稀有物品名稱依字首、字尾分別翻譯。以遊戲全部介面字串比對，繁中均有譯文。</p>
         </div>
         <div class="hud-card">
-          <div class="card-header-line"><span class="card-icon">📖</span><span class="card-badge-mono">D2R_TERMS</span></div>
           <h3 class="card-title">對照官方用語</h3>
-          <p class="card-text">遊戲與網頁／桌面修改器共用同一份字典；裝備名稱與屬性說明依《暗黑破壞神 II：獄火重生》官方繁中文字修正可精確對應的部分。</p>
+          <p class="card-text">遊戲與網頁／桌面修改器共用同一份字典；譯名依 D2R 官方繁中字串核對（裝備、獨特、套裝、符文之語、詞綴、怪物、技能、地名）。</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Gallery Section: Actual Screenshots -->
-  <section class="section" id="gallery">
+  <section class="section" id="gallery" data-mod="rare">
     <div class="container">
       <div class="section-title-wrap">
-        <div class="section-tag">// MODULE: SCREENSHOTS_GALLERY</div>
+        <div class="eyebrow">實際畫面</div>
         <h2 class="section-title">實際畫面</h2>
         <p class="section-desc">實際執行畫面，點擊縮圖可放大檢視</p>
       </div>
@@ -1941,102 +543,98 @@
       <div class="gallery-grid">
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/live-sorceress.jpg" data-caption="自動戰鬥：第五章，法師在精英怪群中施放閃電與火焰">
-            <img src="img/live-sorceress.jpg" alt="自動戰鬥：第五章，法師在精英怪群中施放閃電與火焰" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/live-sorceress.jpg" alt="自動戰鬥：第五章，法師在精英怪群中施放閃電與火焰" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 01</span><span>自動戰鬥：第五章，法師在精英怪群中施放閃電與火焰</span></div>
+          <div class="gallery-caption"><span>自動戰鬥：第五章，法師在精英怪群中施放閃電與火焰</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/live-druid.jpg" data-caption="自動戰鬥：惡夢第一章，德魯伊以火焰清理狼群">
-            <img src="img/live-druid.jpg" alt="自動戰鬥：惡夢第一章，德魯伊以火焰清理狼群" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/live-druid.jpg" alt="自動戰鬥：惡夢第一章，德魯伊以火焰清理狼群" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 02</span><span>自動戰鬥：惡夢第一章，德魯伊以火焰清理狼群</span></div>
+          <div class="gallery-caption"><span>自動戰鬥：惡夢第一章，德魯伊以火焰清理狼群</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/live-necromancer.jpg" data-caption="自動戰鬥：第五章雪地，死靈召喚骷髏大軍作戰">
-            <img src="img/live-necromancer.jpg" alt="自動戰鬥：第五章雪地，死靈召喚骷髏大軍作戰" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/live-necromancer.jpg" alt="自動戰鬥：第五章雪地，死靈召喚骷髏大軍作戰" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 03</span><span>自動戰鬥：第五章雪地，死靈召喚骷髏大軍作戰</span></div>
+          <div class="gallery-caption"><span>自動戰鬥：第五章雪地，死靈召喚骷髏大軍作戰</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/live-assassin.jpg" data-caption="自動戰鬥：第五章，刺客與冰凍附魔精英交戰">
-            <img src="img/live-assassin.jpg" alt="自動戰鬥：第五章，刺客與冰凍附魔精英交戰" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/live-assassin.jpg" alt="自動戰鬥：第五章，刺客與冰凍附魔精英交戰" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 04</span><span>自動戰鬥：第五章，刺客與冰凍附魔精英交戰</span></div>
+          <div class="gallery-caption"><span>自動戰鬥：第五章，刺客與冰凍附魔精英交戰</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/live-paladin.jpg" data-caption="自動戰鬥：第五章雪原，聖騎士與精英怪交戰">
-            <img src="img/live-paladin.jpg" alt="自動戰鬥：第五章雪原，聖騎士與精英怪交戰" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/live-paladin.jpg" alt="自動戰鬥：第五章雪原，聖騎士與精英怪交戰" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 05</span><span>自動戰鬥：第五章雪原，聖騎士與精英怪交戰</span></div>
+          <div class="gallery-caption"><span>自動戰鬥：第五章雪原，聖騎士與精英怪交戰</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/live-barbarian.jpg" data-caption="自動戰鬥：第五章雪原，清理骷髏與精英並撿取掉落物">
-            <img src="img/live-barbarian.jpg" alt="自動戰鬥：第五章雪原，清理骷髏與精英並撿取掉落物" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/live-barbarian.jpg" alt="自動戰鬥：第五章雪原，清理骷髏與精英並撿取掉落物" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 06</span><span>自動戰鬥：第五章雪原，清理骷髏與精英並撿取掉落物</span></div>
+          <div class="gallery-caption"><span>自動戰鬥：第五章雪原，清理骷髏與精英並撿取掉落物</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/assist-panel.jpg" data-caption="輔助器：戰鬥輔助與自動戰鬥開關">
-            <img src="img/assist-panel.jpg" alt="輔助器：戰鬥輔助與自動戰鬥開關" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/assist-panel.jpg" alt="輔助器：戰鬥輔助與自動戰鬥開關" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 07</span><span>輔助器：戰鬥輔助與自動戰鬥開關</span></div>
+          <div class="gallery-caption"><span>輔助器：戰鬥輔助與自動戰鬥開關</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/assist-auto.jpg" data-caption="輔助器：自動戰鬥分頁，選擇任務、固定關卡或天梯模式">
-            <img src="img/assist-auto.jpg" alt="輔助器：自動戰鬥分頁，選擇任務、固定關卡或天梯模式" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/assist-auto.jpg" alt="輔助器：自動戰鬥分頁，選擇任務、固定關卡或天梯模式" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 08</span><span>輔助器：自動戰鬥分頁，選擇任務、固定關卡或天梯模式</span></div>
+          <div class="gallery-caption"><span>輔助器：自動戰鬥分頁，選擇任務、固定關卡或天梯模式</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/editor-overview.jpg" data-caption="存檔修改器：共用倉庫與分頁總覽">
-            <img src="img/editor-overview.jpg" alt="存檔修改器：共用倉庫與分頁總覽" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/editor-overview.jpg" alt="存檔修改器：共用倉庫與分頁總覽" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 09</span><span>存檔修改器：共用倉庫與分頁總覽</span></div>
+          <div class="gallery-caption"><span>存檔修改器：共用倉庫與分頁總覽</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/craft-form.jpg" data-caption="製作裝備：選底材與品質後，逐條填入前綴與後綴數值">
-            <img src="img/craft-form.jpg" alt="製作裝備：選底材與品質後，逐條填入前綴與後綴數值" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/craft-form.jpg" alt="製作裝備：選底材與品質後，逐條填入前綴與後綴數值" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 10</span><span>製作裝備：選底材與品質後，逐條填入前綴與後綴數值</span></div>
+          <div class="gallery-caption"><span>製作裝備：選底材與品質後，逐條填入前綴與後綴數值</span></div>
         </div>
         <div class="gallery-item">
           <button type="button" class="gallery-img-wrap" data-src="img/craft-result.jpg" data-caption="製作裝備：製作成功，物品詳情顯示每條詞綴的遊戲範圍">
-            <img src="img/craft-result.jpg" alt="製作裝備：製作成功，物品詳情顯示每條詞綴的遊戲範圍" loading="lazy" onerror="this.closest('.gallery-item').style.display='none';">
+            <img src="img/craft-result.jpg" alt="製作裝備：製作成功，物品詳情顯示每條詞綴的遊戲範圍" loading="lazy">
           </button>
-          <div class="gallery-caption"><span class="gallery-caption-tag">IMG 11</span><span>製作裝備：製作成功，物品詳情顯示每條詞綴的遊戲範圍</span></div>
+          <div class="gallery-caption"><span>製作裝備：製作成功，物品詳情顯示每條詞綴的遊戲範圍</span></div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Field Test Section -->
-  <section class="section" id="tests">
+  <section class="section" id="tests" data-mod="rare">
     <div class="container">
       <div class="section-title-wrap">
-        <div class="section-tag">// MODULE: VERIFIED_DATA</div>
+        <div class="eyebrow">測試資料</div>
         <h2 class="section-title">實測數據</h2>
         <p class="section-desc">輔助器的調整來自真實遊戲長時間掛機的結果</p>
       </div>
       <div class="grid-cards">
         <div class="hud-card">
-          <div class="card-header-line"><span class="card-icon">📈</span><span class="card-badge-mono">CAMPAIGN</span></div>
           <h3 class="card-title">全新存檔一路推進</h3>
           <p class="card-text">全新存檔的法師全自動打通普通（第五幕 82 級擊敗巴爾）與惡夢，推進到地獄第二幕；在地獄陣亡後會自動回惡夢練等。</p>
         </div>
         <div class="hud-card">
-          <div class="card-header-line"><span class="card-icon">🧪</span><span class="card-badge-mono">35_RUNS</span></div>
           <h3 class="card-title">35 個存檔長跑</h3>
           <p class="card-text">以 35 個存檔長時間實戰，修正精英判斷、閃避、換裝、配點、交任務等數十項行為；營地整備實測可自動賣裝、買穿皮甲並升級生命。</p>
         </div>
         <div class="hud-card">
-          <div class="card-header-line"><span class="card-icon">🏆</span><span class="card-badge-mono">TOP_50</span></div>
           <h3 class="card-title">依排行榜高手配法</h3>
           <p class="card-text">選卡、配點、技能變體與換裝參考排行榜各職業前 50 位玩家的實際配置，遊戲改版後重新抓取。</p>
         </div>
       </div>
 
       <div class="alert-card">
-        <h3 class="alert-card-title">⚠️ 自動戰鬥並不完美</h3>
+        <h3 class="alert-card-title">注意：自動戰鬥並不完美</h3>
         <ul class="alert-card-list">
           <li>不保證存活或通關：實測曾在惡夢撿物時被頭目一擊打掉 900 血、藥水用完時走進毒魔群陣亡；地獄難度仍常陣亡。</li>
           <li>最高難度連續失敗 3 次會自動回低一級刷，進度可能比手動慢。</li>
@@ -2048,85 +646,10 @@
     </div>
   </section>
 
-  <!-- Installation Steps Section -->
-  <section class="section" id="install">
+  <section class="section" id="known-issues" data-mod="danger">
     <div class="container">
       <div class="section-title-wrap">
-        <div class="section-tag">// MODULE: SETUP_GUIDE</div>
-        <h2 class="section-title">安裝教學</h2>
-        <p class="section-desc">網頁版是書籤小程式（Bookmarklet），電腦與手機瀏覽器皆免安裝；Windows 另有可攜版</p>
-      </div>
-
-      <p class="section-desc" style="margin-bottom:24px">⚠️ 單機模式：載入工具包後排行榜上傳強制關閉、無法打開，詳見 <a href="#known-issues">已知問題</a>。</p>
-      <div class="steps-grid">
-        <div class="step-box">
-          <div class="step-num">01</div>
-          <h3 class="step-title">取得書籤程式碼</h3>
-          <p class="step-desc">
-            前往<a href="https://nojackno2-ctrl.github.io/d2-survivors-toolkit/" target="_blank" rel="noopener" style="text-decoration:none;font-weight:600;">網頁版安裝頁</a>，按「📋 複製書籤程式碼」。內容如下（以安裝頁複製的為準）：
-          </p>
-          <div class="code-preview">javascript:import('https://nojackno2-ctrl.github.io/d2-survivors-toolkit/d2edit.js?v='+Date.now())</div>
-        </div>
-
-        <div class="step-box">
-          <div class="step-num">02</div>
-          <h3 class="step-title">加入瀏覽器書籤</h3>
-          <p class="step-desc">依裝置操作方式不同，見下方三種平台說明。部分瀏覽器貼上時會自動刪掉開頭的 <code>javascript:</code>，請確認網址開頭仍是它。</p>
-        </div>
-
-        <div class="step-box">
-          <div class="step-num">03</div>
-          <h3 class="step-title">在遊戲頁點書籤</h3>
-          <p class="step-desc">
-            到 <a href="https://d2survivors.lol/play/" target="_blank" rel="noopener"><code>d2survivors.lol/play</code></a> 點書籤，畫面中央的進度條會同時載入字典、遊戲資料、語言模組、輔助器、自動淬鍊、物品引擎與修改器頁面，並做相容性自檢（約 5～10 秒）。接著按<strong>暫停</strong>，左上角就會出現「修改器」「輔助」「🌐 語言」按鈕。
-          </p>
-        </div>
-      </div>
-
-      <div class="platform-grid">
-        <div class="setting-group">
-          <h4>🖥️ 電腦（Chrome／Edge／Firefox）</h4>
-          <ol>
-            <li>按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> 顯示書籤列。</li>
-            <li>把安裝頁上的「D2 修改器」連結直接拖到書籤列。</li>
-            <li>或在書籤列按右鍵 →「新增網頁」，網址貼上程式碼。</li>
-          </ol>
-        </div>
-        <div class="setting-group">
-          <h4>🤖 Android（Chrome）</h4>
-          <ol>
-            <li>隨便把一個網頁加入書籤（「⋮」→ ☆）。</li>
-            <li>「⋮」→「書籤」→ 編輯剛剛的書籤。</li>
-            <li>名稱改為 <code>D2 修改器</code>，網址整個刪掉後貼上程式碼。</li>
-            <li><b>使用時</b>：在網址列輸入「D2 修改器」，點建議清單中的書籤（從書籤清單直接點不會執行）。</li>
-          </ol>
-        </div>
-        <div class="setting-group">
-          <h4>🍎 iPhone／iPad（Safari）</h4>
-          <ol>
-            <li>按分享 →「加入書籤」並儲存。</li>
-            <li>打開書籤清單 →「編輯」→ 點剛剛的書籤。</li>
-            <li>名稱改為 <code>D2 修改器</code>，網址刪掉後貼上程式碼。</li>
-            <li><b>使用時</b>：在遊戲頁直接點書籤。</li>
-          </ol>
-        </div>
-        <div class="setting-group">
-          <h4>💻 Windows 桌面版</h4>
-          <ol>
-            <li>到 <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit/releases" target="_blank" rel="noopener">Releases</a> 下載 <code>D2.exe</code>（可攜版，免安裝），可對照 <code>SHA256SUMS.txt</code> 確認檔案完整。</li>
-            <li>關閉遊戲後執行，會讀取已安裝遊戲的存檔。</li>
-            <li>修改後按「寫入存檔」，每次寫入前自動備份。</li>
-          </ol>
-          <p class="card-foot">執行檔未經程式碼簽署，若出現 SmartScreen 警告請選「其他資訊 → 仍要執行」。</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section" id="known-issues">
-    <div class="container">
-      <div class="section-title-wrap">
-        <div class="section-tag">// PLAYER NOTICE</div>
+        <div class="eyebrow">已知問題</div>
         <h2 class="section-title">已知問題</h2>
       </div>
       <div class="alert-card">
@@ -2151,17 +674,17 @@
       </div>
     </div>
   </section>
-  <!-- FAQ Section -->
-  <section class="section" id="faq">
+
+  <section class="section" id="faq" data-mod="rare">
     <div class="container">
       <div class="section-title-wrap">
-        <div class="section-tag">// MODULE: FAQ</div>
+        <div class="eyebrow">常見問題</div>
         <h2 class="section-title">常見問題</h2>
       </div>
       <div class="faq">
         <details>
           <summary>點了書籤卻沒看到修改器？</summary>
-          <div class="answer"><p>這是正常的。修改器與輔助器的按鈕只在遊戲<b>暫停</b>時出現在左上角，請先在遊戲中按暫停。</p></div>
+          <div class="answer"><p>這是正常的。暫停時點左上角的「工具包」，再選「修改器」或「輔助器」，請先在遊戲中按暫停。</p></div>
         </details>
         <details>
           <summary>暫停後還是沒有按鈕？</summary>
@@ -2199,150 +722,10 @@
     </div>
   </section>
 
-  <!-- Changelog Section -->
-  <section class="section" id="changelog">
-    <div class="container">
-      <div class="section-title-wrap">
-        <div class="section-tag">// MODULE: CHANGELOG</div>
-        <h2 class="section-title">更新日誌</h2>
-        <p class="section-desc">完整紀錄見 <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit/commits/main" target="_blank" rel="noopener">GitHub</a></p>
-      </div>
-      <style>
-        .log{max-width:860px;margin:0 auto;border-left:2px solid var(--cyan-glow);padding-left:22px}
-        .log-entry{position:relative;margin-bottom:28px}
-        .log-entry::before{content:"";position:absolute;left:-29px;top:6px;width:12px;height:12px;border:2px solid var(--cyan);background:#090d12;transform:rotate(45deg)}
-        .log-date{font-family:ui-monospace,Consolas,monospace;color:var(--cyan);font-size:.9rem;letter-spacing:.05em}
-        .log-ver{display:inline-block;margin-left:8px;padding:1px 8px;border:1px solid var(--amber);color:var(--amber);font-family:ui-monospace,Consolas,monospace;font-size:.75rem}
-        .log-entry ul{margin:8px 0 0;padding-left:1.2em;line-height:1.75;color:#c9d4df}
-        .log-entry b{color:#e6edf3}
-      </style>
-      <div class="log">
-        <div class="log-entry">
-          <div class="log-date">2026-11-11</div>
-          <ul>
-            <li>遊戲修改：新增「淬鍊與地獄熔爐本地化」。開啟後（需同時開啟遊戲修改總開關），淬鍊、清除、地獄熔爐都由本機直接算出結果，不再連到官方伺服器，所以不會被限流（原本約每小時 1200 次）；機率與原版相同，照樣消耗燃燒的恐懼精華，重新整理後結果保留。</li>
-            <li>遊戲修改：新增「本地淬鍊必定成功、地獄熔爐必定倍增」（需開啟本地化）。搭配自動淬鍊時，只會淬到你在面板設定目標的屬性，設為 X 的屬性不會被淬到，可以直接做出想要的淬鍊組合。</li>
-            <li>本地淬鍊注意事項：本機淬鍊的結果官方伺服器並不知道。之後若停用工具包，或關掉本地化後再對同一件裝備淬鍊，該裝備的淬鍊可能被伺服器的舊紀錄蓋回去。</li>
-            <li>中文化：全部譯名改為對齊原版《暗黑破壞神 II》官方繁體中文。依本機安裝的 D2R 官方字串核對裝備、暗金、套裝、符文之語、魔法與稀有詞綴、怪物、技能、地名等名稱，共修正約 150 條（例如項鍊→護身符、兇殘鐮刀→陰森鐮刀、戰鬥體制→戰鬥命令、毀滅之符→滅絕、九頭蛇→多頭蛇），並重組 559 個稀有物品名稱（例如皮革→毛皮、上衣→水兵、聖甲蟲→惡魔甲蟲）。</li>
-            <li>中文化：屬性與說明句的用詞一併對齊官方。閃電傷害／抗性／免疫改為電擊、耐力改為精力、每級改為每等級、約旦之石改為喬丹之石、護符改為咒符、傳送點改為傳送平台、第○幕改為第○章、屍體爆炸改為屍爆、爆炸箭改為爆裂箭。技能「閃電」維持原樣。</li>
-            <li>工具包介面：輔助器、自動淬鍊、修改器、介紹網頁的文字同樣對齊官方用詞（暗金改為獨特、護符改為咒符、恐怖燃燒精華改為燃燒的恐懼精華）。修改器欄位原本把護身符與咒符弄混，一併修正（護身符＝Amulet、咒符＝Charm）。</li>
-            <li>中文化：只保留繁體中文，不再提供英文與語言切換。左上角的「語言」按鈕改為「中文化」，只剩「比較框排版」與「使用 D2R 原版字型」；修改器設定頁的「介面語言」選項也已移除。</li>
-            <li>製作裝備：「放到」只能選共用倉庫 1～3、目前角色（遊戲目前選的角色）的個人倉庫與背包，不再能放到其他角色的倉庫、背包或咒符欄、身上裝備等位置。一般製作與批次製作都適用。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-10</div>
-          <ul>
-            <li>自動淬鍊：序列新增「同時淬鍊 N 件」（1～10 件），可在短時間內同時淬鍊多件裝備，預設 1 件（與原本相同）。官方伺服器的限流仍依網路 IP 計算（約每小時 1200 次），同時件數多只是更快用完額度；被限流時所有裝備會一起等待，時間到自動續跑。</li>
-            <li>自動淬鍊：新增「同款熔爐成功就略過其餘同款」開關（預設開啟）。關閉後，序列中每一件同款裝備都會各自淬鍊到地獄熔爐。</li>
-            <li>自動淬鍊：面板的「開始」「停止」「收合」改放在同一排並加大，淬鍊狀態獨立顯示一排。</li>
-            <li>自動淬鍊：面板縮小成圖示時，被伺服器限流會在圖示旁顯示等待倒數；淬鍊結束會顯示成功與失敗件數，圖示不再直接消失（展開後再收合即清除提示）。</li>
-            <li>自動淬鍊：修正淬鍊進行中無法操作遊戲介面的問題（例如在收藏箱切換不了分頁）。原因是淬鍊每送一次請求，遊戲就會暫時忽略背包、倉庫與收藏箱的點擊；現在這些點擊會等到空檔再執行（約 0.2 秒內），淬鍊不必暫停。修正在下次打開商店或倉庫選單後生效，已開著的選單請關掉重開一次。</li>
-            <li>自動淬鍊：查出「伺服器無回應」的真正原因是官方伺服器對淬鍊限流（依網路 IP 計算，約每小時 1200 次，超過就要等 1 小時；換 IP 即可繼續）。遇到限流時，現在會依伺服器告知的時間等滿後接著做同一件，不再放棄；若伺服器沒說要等多久，才改為每次等 1 分鐘、最多重試 3 次後放棄這一件並換下一件。長時間淬鍊已實機連跑 4 小時驗證。</li>
-            <li>自動淬鍊：序列中有多件同款裝備（稀有度、名稱、底材相同）時，只要其中一件地獄熔爐成功，其餘同款就自動跳過。</li>
-            <li>語言：修正長時間遊玩時記憶體不斷增加的問題。先前載入工具包後，遊戲畫出的每一段文字（傷害數字、地上物品名稱等）都不會被釋放，打怪幾分鐘就多佔數 GB 記憶體，久了會變卡甚至當掉；修正後記憶體用量維持穩定。</li>
-            <li>載入：點書籤後的載入速度加快。物品引擎只讀取需要的兩個遊戲程式檔（原本要掃描四十多個），並避免重複下載相同的檔案。</li>
-            <li>效能頁：移除「減少特效」「記憶體整理」「降低解析度」三個開關。實際對照量測後三項都沒有可量到的改善，其中降低解析度還會和遊戲自己的自動解析度調整互相干擾。</li>
-            <li>效能頁：保留「掛機時略過主畫面繪製」。實測掛機時處理器與顯示卡負擔約減少四成，遊戲與自動淬鍊照常執行。</li>
-            <li>效能頁：修正「記憶體整理」開啟後持續出錯的問題（該開關已一併移除）。</li>
-            <li>工具包：修正每次載入時主控台出現一則錯誤訊息的問題；進入遊戲後，相容性自檢不再殘留「尚未掛上」的過期提示。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-09</div>
-          <ul>
-            <li>修改器：「製作裝備」改為逐步選單，依序選裝備類型、品質、（武器的）武器種類、底材；每一步選完才會出現下一步，且只列出有底材的選項。</li>
-            <li>修改器：未解除修改限制也能製作獨特、套裝與符文之語，屬性種類與數量固定為原版定義，不能新增或刪除。</li>
-            <li>工具包：暫停時左上角的按鈕合併為單一「工具包」，點開後選擇自動淬鍊、輔助器、語言、修改器，之後新增的功能也會收進同一個選單。</li>
-            <li>自動淬鍊：不必走到恰西的鐵砧，可從工具包直接開啟，在背包選取獨特、套裝或符文之語淬鍊。</li>
-            <li>自動淬鍊：機率估算改為精確計算，改變屬性目標時面板立即更新（先前會卡住數秒）；困難目標不再誤顯示 0%，改為顯示每回合走到熔爐的機率與約需清除次數。</li>
-            <li>自動淬鍊：「開始」併入序列，有序列就依序淬鍊；控制列（開始／停止／掛機）移到面板最上方。</li>
-            <li>自動淬鍊：「加入同名」一鍵把同名同底材的裝備全部加入序列；可選擇角色背包或個人倉庫作為淬鍊來源。</li>
-            <li>自動淬鍊：視窗最小化後仍會持續淬鍊；被選為目標的屬性連續 200 次成功淬鍊都未升級時，面板會跳出警告。</li>
-            <li>自動淬鍊：用過地獄熔爐（成功或失敗）的裝備不再列出或載入；熔爐失敗自動售出修正，倉庫裝備也能售出。</li>
-            <li>修改器：修正含法杖技能詞綴的魔法與稀有裝備，存檔檢查誤判「roll 不符」的問題；製作出的這類裝備現在能通過遊戲檢查。</li>
-            <li>修改器：修正新版遊戲下「原版規則檢查」無法檢查魔法與稀有詞綴的問題。</li>
-            <li>修改器：規則檢查不再把遊戲產生的法杖技能誤判為不合規。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-08</div>
-          <ul>
-            <li>載入：手機網路不穩時，字典、遊戲資料、修改器頁面與物品引擎讀取失敗會自動重試，不再出現「載入失敗」要重新整理。</li>
-            <li>排行榜：工具包改為單機爽玩定位，載入後強制關閉排行榜上傳，遊戲選項無法再打開，正在等待上傳的紀錄一併刪除；修改器寫入的存檔一律關閉上傳。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-07</div>
-          <ul>
-            <li>輔助器：「全圖撿寶」改為與其他設定一致的開關，直接切換開啟或關閉。</li>
-            <li>相容性：針對官方遊戲 20261105.3 的遊戲核心、介面樣式、選卡、物品與技能變動，已執行 10 項自動測試。</li>
-            <li>鍛造後的文字補上翻譯（冰寒專精只限魔法使、每件物品最多淬鍊 10 次、燃燒的恐懼精華數量與費用）</li>
-            <li>修正符文之語 Insight 在隨機產生時的故障（物品讀回後不再出現種子與法杖技能錯誤）</li>
-            <li>魔蝠、尺杖等 Fiend／Rule 系列名稱改依韓文官方譯名（惡魔、統御）</li>
-            <li>閃電相關詞彙統一為「閃電」，Jack 系列名稱改為「上衣」</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-06</div>
-          <ul>
-            <li>修改器：「重新產生排行榜與角色識別碼」會更換角色識別碼，並重設恐懼階層與爬塔紀錄（寫入存檔後生效）。</li>
-            <li>修改器：連續寫入存檔不再誤報「讀回內容不一致」。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-05</div>
-          <ul>
-            <li>相容遊戲 20261105.1，並新增 99 句繁中譯文；載入時會自動檢查工具包與遊戲是否相符。</li>
-            <li>輔助器：關閉遊戲修改開關會還原數值；技能加點改為 +所有技能 20；自動推層避開需要鑰匙與器官的特殊關卡；自動走位更快。</li>
-            <li>修改器：獨特、套裝與符文之語可依原版範圍自訂數值；符文之語可選原版允許的底材；修正多項收藏錯誤，並新增「清除錯誤項目」按鈕。</li>
-            <li>修改器：調成最高數值與修復物品時不再清掉已淬鍊的裝備；網頁版寫入存檔前會自動備份。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-04</div>
-          <ul>
-            <li>修改器：倉庫改為 10×12；「存檔檢查」會列出問題的位置與修正方式；修正正常打到的裝備被誤判為不合法。</li>
-            <li>輔助器：無限重抽鎖定在 99；推層時避開需要鑰匙或器官的超級首領選項。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-03</div>
-          <ul>
-            <li>製作裝備：依分類選底材，分別顯示前後綴範圍。</li>
-            <li>輔助器：新增「全部關閉」與獨立的全圖吸金幣開關；加快升級選卡與重抽的反應。</li>
-            <li>繁體中文：統一字典，依官方文字修正部分裝備名稱。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-02</div>
-          <ul>
-            <li>工具包更名為「D2倖存者工具包」，網頁版網址改為 /d2-survivors-toolkit/，請重新複製書籤。</li>
-            <li>輔助器：任務模式會自動偵測進度並回營地交任務；新增獨立的固定關卡模式。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-11-01</div>
-          <ul>
-            <li>新增遊戲輔助器：自動喝水、走位閃避、自動撿裝、死亡保護，以及任務與天梯自動模式。</li>
-            <li>新增合規檢查；開啟「解除修改限制」即可自由製作。</li>
-          </ul>
-        </div>
-        <div class="log-entry">
-          <div class="log-date">2026-10-31</div>
-          <ul>
-            <li>新增「製作裝備」與「裝備庫」。</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Compliance Section -->
-  <section class="section" id="compliance">
-    <div class="container">
+  <section class="section" id="compliance" data-mod="rare">
+    <div class="container"><div class="eyebrow">合規原則</div><h2>合規原則</h2>
       <div class="compliance-box">
-        <h3 class="compliance-title">⚖️ 合規模式 vs. 解除限制說明</h3>
+        <h3 class="compliance-title">合規模式 vs. 解除限制說明</h3>
         <div class="compliance-columns">
           <div class="comp-col">
             <h4>標準合規模式（預設）</h4>
@@ -2354,7 +737,7 @@
               <li>金幣不超過 100 億、額外強化不超過 999、技能修改每職業最多 10 點。</li>
               <li>寫入存檔前會再檢查一次修改過或匯入的物品。</li>
             </ul>
-            <p style="color:#f59e0b;margin-top:12px"><strong>⚠️ 單機模式：</strong>載入工具包後排行榜上傳強制關閉，合規模式只用來維持原版規則的遊玩體驗。</p>
+            <p><strong>注意：單機模式：</strong>載入工具包後排行榜上傳強制關閉，合規模式只用來維持原版規則的遊玩體驗。</p>
           </div>
           <div class="comp-col">
             <h4>解除限制模式（單機爽玩）</h4>
@@ -2367,20 +750,307 @@
 
       <!-- Disclaimer -->
       <div class="disclaimer-box">
-        <h3>⚠️ 免責聲明與備份提醒</h3>
+        <h3>注意：免責聲明與備份提醒</h3>
         <p>
           1. <strong>備份先行</strong>：進行任何存檔修改或自動掛機前，請務必先在修改器「存檔管理」頁中建立存檔快照或匯出備份。<br>
           2. <strong>非官方授權</strong>：本工具包為玩家自製專案（保留所有權利，未經同意不得修改、重新散布或商業使用），與《D2 Survivors》官方開發團隊及 Blizzard Entertainment 無任何關聯。<br>
-          3. <strong>自負風險</strong>：使用本工具所產生的遊戲進度變更、存檔毀損或因非合規修改導致的榜單懲處，開發者不承擔任何責任。
+          3. <strong>自負風險</strong>：使用本工具所產生的存檔毀損或進度變更，開發者不承擔任何責任。
         </p>
       </div>
     </div>
   </section>
 
+  <section class="section" id="changelog" data-mod="rare">
+    <div class="container">
+      <div class="section-title-wrap">
+        <div class="eyebrow">更新日誌</div>
+        <h2 class="section-title">更新日誌</h2>
+        <p class="section-desc">完整紀錄見 <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit/commits/main" target="_blank" rel="noopener">GitHub</a></p>
+      </div>
+      <div class="log-filter" role="group" aria-label="依類別篩選"></div>
+      <div class="log">
+        <article class="log-entry" data-date="2026-11-11">
+          <h3 class="log-date">2026-11-11</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>製作裝備：「放到」只能選共用倉庫 1～3、目前角色（遊戲目前選的角色）的個人倉庫與背包，不再能放到其他角色的倉庫、背包或咒符欄、身上裝備等位置。一般製作與批次製作都適用。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="遊戲修改">
+            <h4 class="log-cat">遊戲修改</h4>
+            <ul>
+              <li>新增「淬鍊與地獄熔爐本地化」。開啟後（需同時開啟遊戲修改總開關），淬鍊、清除、地獄熔爐都由本機直接算出結果，不再連到官方伺服器，所以不會被限流（原本約每小時 1200 次）；機率與原版相同，照樣消耗燃燒的恐懼精華，重新整理後結果保留。</li>
+              <li>新增「本地淬鍊必定成功、地獄熔爐必定倍增」（需開啟本地化）。搭配自動淬鍊時，只會淬到你在面板設定目標的屬性，設為 X 的屬性不會被淬到，可以直接做出想要的淬鍊組合。</li>
+              <li>本地淬鍊注意事項：本機淬鍊的結果官方伺服器並不知道。之後若停用工具包，或關掉本地化後再對同一件裝備淬鍊，該裝備的淬鍊可能被伺服器的舊紀錄蓋回去。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="中文化">
+            <h4 class="log-cat">中文化</h4>
+            <ul>
+              <li>全部譯名改為對齊原版《暗黑破壞神 II》官方繁體中文。依本機安裝的 D2R 官方字串核對裝備、暗金、套裝、符文之語、魔法與稀有詞綴、怪物、技能、地名等名稱，共修正約 150 條（例如項鍊→護身符、兇殘鐮刀→陰森鐮刀、戰鬥體制→戰鬥命令、毀滅之符→滅絕、九頭蛇→多頭蛇），並重組 559 個稀有物品名稱（例如皮革→毛皮、上衣→水兵、聖甲蟲→惡魔甲蟲）。</li>
+              <li>屬性與說明句的用詞一併對齊官方。閃電傷害／抗性／免疫改為電擊、耐力改為精力、每級改為每等級、約旦之石改為喬丹之石、護符改為咒符、傳送點改為傳送平台、第○幕改為第○章、屍體爆炸改為屍爆、爆炸箭改為爆裂箭。技能「閃電」維持原樣。</li>
+              <li>只保留繁體中文，不再提供英文與語言切換。左上角的「語言」按鈕改為「中文化」，只剩「比較框排版」與「使用 D2R 原版字型」；修改器設定頁的「介面語言」選項也已移除。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="工具包">
+            <h4 class="log-cat">工具包</h4>
+            <ul>
+              <li>工具包介面：輔助器、自動淬鍊、修改器、介紹網頁的文字同樣對齊官方用詞（暗金改為獨特、護符改為咒符、恐怖燃燒精華改為燃燒的恐懼精華）。修改器欄位原本把護身符與咒符弄混，一併修正（護身符＝Amulet、咒符＝Charm）。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-10">
+          <h3 class="log-date">2026-11-10</h3>
+          <section class="log-group" data-cat="自動淬鍊">
+            <h4 class="log-cat">自動淬鍊</h4>
+            <ul>
+              <li>序列新增「同時淬鍊 N 件」（1～10 件），可在短時間內同時淬鍊多件裝備，預設 1 件（與原本相同）。官方伺服器的限流仍依網路 IP 計算（約每小時 1200 次），同時件數多只是更快用完額度；被限流時所有裝備會一起等待，時間到自動續跑。</li>
+              <li>新增「同款熔爐成功就略過其餘同款」開關（預設開啟）。關閉後，序列中每一件同款裝備都會各自淬鍊到地獄熔爐。</li>
+              <li>面板的「開始」「停止」「收合」改放在同一排並加大，淬鍊狀態獨立顯示一排。</li>
+              <li>面板縮小成圖示時，被伺服器限流會在圖示旁顯示等待倒數；淬鍊結束會顯示成功與失敗件數，圖示不再直接消失（展開後再收合即清除提示）。</li>
+              <li>修正淬鍊進行中無法操作遊戲介面的問題（例如在收藏箱切換不了分頁）。原因是淬鍊每送一次請求，遊戲就會暫時忽略背包、倉庫與收藏箱的點擊；現在這些點擊會等到空檔再執行（約 0.2 秒內），淬鍊不必暫停。修正在下次打開商店或倉庫選單後生效，已開著的選單請關掉重開一次。</li>
+              <li>查出「伺服器無回應」的真正原因是官方伺服器對淬鍊限流（依網路 IP 計算，約每小時 1200 次，超過就要等 1 小時；換 IP 即可繼續）。遇到限流時，現在會依伺服器告知的時間等滿後接著做同一件，不再放棄；若伺服器沒說要等多久，才改為每次等 1 分鐘、最多重試 3 次後放棄這一件並換下一件。長時間淬鍊已實機連跑 4 小時驗證。</li>
+              <li>序列中有多件同款裝備（稀有度、名稱、底材相同）時，只要其中一件地獄熔爐成功，其餘同款就自動跳過。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="中文化">
+            <h4 class="log-cat">中文化</h4>
+            <ul>
+              <li>語言：修正長時間遊玩時記憶體不斷增加的問題。先前載入工具包後，遊戲畫出的每一段文字（傷害數字、地上物品名稱等）都不會被釋放，打怪幾分鐘就多佔數 GB 記憶體，久了會變卡甚至當掉；修正後記憶體用量維持穩定。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="效能">
+            <h4 class="log-cat">效能</h4>
+            <ul>
+              <li>效能頁：移除「減少特效」「記憶體整理」「降低解析度」三個開關。實際對照量測後三項都沒有可量到的改善，其中降低解析度還會和遊戲自己的自動解析度調整互相干擾。</li>
+              <li>效能頁：保留「掛機時略過主畫面繪製」。實測掛機時處理器與顯示卡負擔約減少四成，遊戲與自動淬鍊照常執行。</li>
+              <li>效能頁：修正「記憶體整理」開啟後持續出錯的問題（該開關已一併移除）。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="工具包">
+            <h4 class="log-cat">工具包</h4>
+            <ul>
+              <li>載入：點書籤後的載入速度加快。物品引擎只讀取需要的兩個遊戲程式檔（原本要掃描四十多個），並避免重複下載相同的檔案。</li>
+              <li>修正每次載入時主控台出現一則錯誤訊息的問題；進入遊戲後，相容性自檢不再殘留「尚未掛上」的過期提示。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-09">
+          <h3 class="log-date">2026-11-09</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>「製作裝備」改為逐步選單，依序選裝備類型、品質、（武器的）武器種類、底材；每一步選完才會出現下一步，且只列出有底材的選項。</li>
+              <li>未解除修改限制也能製作獨特、套裝與符文之語，屬性種類與數量固定為原版定義，不能新增或刪除。</li>
+              <li>修正含法杖技能詞綴的魔法與稀有裝備，存檔檢查誤判「roll 不符」的問題；製作出的這類裝備現在能通過遊戲檢查。</li>
+              <li>修正新版遊戲下「原版規則檢查」無法檢查魔法與稀有詞綴的問題。</li>
+              <li>規則檢查不再把遊戲產生的法杖技能誤判為不合規。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="自動淬鍊">
+            <h4 class="log-cat">自動淬鍊</h4>
+            <ul>
+              <li>不必走到恰西的鐵砧，可從工具包直接開啟，在背包選取獨特、套裝或符文之語淬鍊。</li>
+              <li>機率估算改為精確計算，改變屬性目標時面板立即更新（先前會卡住數秒）；困難目標不再誤顯示 0%，改為顯示每回合走到熔爐的機率與約需清除次數。</li>
+              <li>「開始」併入序列，有序列就依序淬鍊；控制列（開始／停止／掛機）移到面板最上方。</li>
+              <li>「加入同名」一鍵把同名同底材的裝備全部加入序列；可選擇角色背包或個人倉庫作為淬鍊來源。</li>
+              <li>視窗最小化後仍會持續淬鍊；被選為目標的屬性連續 200 次成功淬鍊都未升級時，面板會跳出警告。</li>
+              <li>用過地獄熔爐（成功或失敗）的裝備不再列出或載入；熔爐失敗自動售出修正，倉庫裝備也能售出。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="工具包">
+            <h4 class="log-cat">工具包</h4>
+            <ul>
+              <li>暫停時左上角的按鈕合併為單一「工具包」，點開後選擇自動淬鍊、輔助器、語言、修改器，之後新增的功能也會收進同一個選單。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-08">
+          <h3 class="log-date">2026-11-08</h3>
+          <section class="log-group" data-cat="工具包">
+            <h4 class="log-cat">工具包</h4>
+            <ul>
+              <li>載入：手機網路不穩時，字典、遊戲資料、修改器頁面與物品引擎讀取失敗會自動重試，不再出現「載入失敗」要重新整理。</li>
+              <li>排行榜：工具包改為單機爽玩定位，載入後強制關閉排行榜上傳，遊戲選項無法再打開，正在等待上傳的紀錄一併刪除；修改器寫入的存檔一律關閉上傳。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-07">
+          <h3 class="log-date">2026-11-07</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>修正符文之語 Insight 在隨機產生時的故障（物品讀回後不再出現種子與法杖技能錯誤）</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="輔助器">
+            <h4 class="log-cat">輔助器</h4>
+            <ul>
+              <li>「全圖撿寶」改為與其他設定一致的開關，直接切換開啟或關閉。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="中文化">
+            <h4 class="log-cat">中文化</h4>
+            <ul>
+              <li>鍛造後的文字補上翻譯（冰寒專精只限魔法使、每件物品最多淬鍊 10 次、燃燒的恐懼精華數量與費用）</li>
+              <li>魔蝠、尺杖等 Fiend／Rule 系列名稱改依韓文官方譯名（惡魔、統御）</li>
+              <li>閃電相關詞彙統一為「閃電」，Jack 系列名稱改為「上衣」</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="相容性">
+            <h4 class="log-cat">相容性</h4>
+            <ul>
+              <li>針對官方遊戲 20261105.3 的遊戲核心、介面樣式、選卡、物品與技能變動，已執行 10 項自動測試。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-06">
+          <h3 class="log-date">2026-11-06</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>「重新產生排行榜與角色識別碼」會更換角色識別碼，並重設恐懼階層與爬塔紀錄（寫入存檔後生效）。</li>
+              <li>連續寫入存檔不再誤報「讀回內容不一致」。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-05">
+          <h3 class="log-date">2026-11-05</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>獨特、套裝與符文之語可依原版範圍自訂數值；符文之語可選原版允許的底材；修正多項收藏錯誤，並新增「清除錯誤項目」按鈕。</li>
+              <li>調成最高數值與修復物品時不再清掉已淬鍊的裝備；網頁版寫入存檔前會自動備份。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="輔助器">
+            <h4 class="log-cat">輔助器</h4>
+            <ul>
+              <li>關閉遊戲修改開關會還原數值；技能加點改為 +所有技能 20；自動推層避開需要鑰匙與器官的特殊關卡；自動走位更快。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="中文化">
+            <h4 class="log-cat">中文化</h4>
+            <ul>
+              <li>新增 99 句繁中譯文。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="相容性">
+            <h4 class="log-cat">相容性</h4>
+            <ul>
+              <li>相容遊戲 20261105.1；載入時會自動檢查工具包與遊戲是否相符。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-04">
+          <h3 class="log-date">2026-11-04</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>倉庫改為 10×12；「存檔檢查」會列出問題的位置與修正方式；修正正常打到的裝備被誤判為不合法。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="輔助器">
+            <h4 class="log-cat">輔助器</h4>
+            <ul>
+              <li>無限重抽鎖定在 99；推層時避開需要鑰匙或器官的超級首領選項。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-03">
+          <h3 class="log-date">2026-11-03</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>製作裝備：依分類選底材，分別顯示前後綴範圍。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="輔助器">
+            <h4 class="log-cat">輔助器</h4>
+            <ul>
+              <li>新增「全部關閉」與獨立的全圖吸金幣開關；加快升級選卡與重抽的反應。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="中文化">
+            <h4 class="log-cat">中文化</h4>
+            <ul>
+              <li>繁體中文：統一字典，依官方文字修正部分裝備名稱。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-02">
+          <h3 class="log-date">2026-11-02</h3>
+          <section class="log-group" data-cat="輔助器">
+            <h4 class="log-cat">輔助器</h4>
+            <ul>
+              <li>任務模式會自動偵測進度並回營地交任務；新增獨立的固定關卡模式。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="工具包">
+            <h4 class="log-cat">工具包</h4>
+            <ul>
+              <li>工具包更名為「D2倖存者工具包」，網頁版網址改為 /d2-survivors-toolkit/，請重新複製書籤。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-11-01">
+          <h3 class="log-date">2026-11-01</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>新增合規檢查；開啟「解除修改限制」即可自由製作。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="輔助器">
+            <h4 class="log-cat">輔助器</h4>
+            <ul>
+              <li>新增遊戲輔助器：自動喝水、走位閃避、自動撿裝、死亡保護，以及任務與天梯自動模式。</li>
+            </ul>
+          </section>
+        </article>
+        <article class="log-entry" data-date="2026-10-31">
+          <h3 class="log-date">2026-10-31</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>新增「製作裝備」與「裝備庫」。</li>
+            </ul>
+          </section>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Autobot Section -->
+
+
+  <!-- Language Section -->
+
+
+  <!-- Gallery Section: Actual Screenshots -->
+
+
+  <!-- Field Test Section -->
+
+
+  <!-- Installation Steps Section -->
+
+
+
+  <!-- FAQ Section -->
+
+
+  <!-- Changelog Section -->
+
+
+  <!-- Compliance Section -->
+
+
   <!-- Lightbox Modal Container -->
-  <div class="lightbox-modal" id="lightboxModal" onclick="closeLightbox(event)">
-    <button class="lightbox-close" onclick="closeLightbox(event)" aria-label="Close">✕</button>
-    <div class="lightbox-content" onclick="event.stopPropagation()">
+  <div class="lightbox-modal" id="lightboxModal">
+    <button class="lightbox-close" aria-label="Close">✕</button>
+    <div class="lightbox-content">
       <img id="lightboxImg" class="lightbox-img" src="" alt="Enlarged view">
       <div id="lightboxCaption" class="lightbox-caption"></div>
     </div>
@@ -2390,13 +1060,13 @@
   <footer>
     <div class="container">
       <div class="footer-links">
-        <a href="https://nojackno2-ctrl.github.io/d2-survivors-toolkit/" target="_blank" rel="noopener">[ 網頁版安裝頁 ]</a>
-        <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit/releases" target="_blank" rel="noopener">[ Windows 版下載 ]</a>
-        <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit" target="_blank" rel="noopener">[ GitHub 儲存庫 ]</a>
-        <a href="https://d2survivors.lol/" target="_blank" rel="noopener">[ D2 Survivors 遊戲官網 ]</a>
+        <a href="https://nojackno2-ctrl.github.io/d2-survivors-toolkit/" target="_blank" rel="noopener">網頁版安裝頁</a>
+        <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit/releases" target="_blank" rel="noopener">Windows 版下載</a>
+        <a href="https://github.com/nojackno2-ctrl/d2-survivors-toolkit" target="_blank" rel="noopener">GitHub 儲存庫</a>
+        <a href="https://d2survivors.lol/play/" target="_blank" rel="noopener">官方遊戲 D2 Survivors</a>
       </div>
       <p class="footer-text">
-        © 2026 D2 Survivors Toolkit (D2倖存者工具包). 專為暗黑愛好者打造的非官方工具.
+        2026 D2 Survivors Toolkit (D2倖存者工具包). 專為暗黑愛好者打造的非官方工具.
       </p>
     </div>
   </footer>
@@ -2474,6 +1144,11 @@
       window.addEventListener('scroll', update, { passive: true });
       update();
     })();
+
+    document.getElementById('lightboxModal').addEventListener('click', closeLightbox);
+    document.querySelectorAll('.feature-shot img').forEach(function (img) { img.addEventListener('error', function () { img.closest('.feature-shot').hidden = true; }); });
+    (function () { var filter = document.querySelector('.log-filter'); var groups = Array.from(document.querySelectorAll('.log-group')); var order = ["修改器","輔助器","自動淬鍊","遊戲修改","中文化","效能","工具包","相容性"]; var available = order.filter(function (cat) { return groups.some(function (g) { return g.dataset.cat === cat; }); }); ['全部'].concat(available).forEach(function (cat) { var button = document.createElement('button'); button.type = 'button'; button.textContent = cat; button.setAttribute('aria-pressed', String(cat === '全部')); button.addEventListener('click', function () { filter.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); }); groups.forEach(function (g) { g.hidden = cat !== '全部' && g.dataset.cat !== cat; }); document.querySelectorAll('.log-entry').forEach(function (entry) { entry.hidden = !Array.from(entry.querySelectorAll('.log-group')).some(function (g) { return !g.hidden; }); }); }); filter.appendChild(button); }); })();
+    (function () { var wide = window.matchMedia('(min-width:1200px)').matches; var links = Array.from(document.querySelectorAll('.nav-links a[href^="#"]')).filter(function (a) { return !(wide && a.getAttribute('href') === '#changelog'); }); if (!('IntersectionObserver' in window)) return; var visible = new Map(); var observer = new IntersectionObserver(function (entries) { entries.forEach(function (entry) { if (entry.isIntersecting) visible.set(entry.target.id, entry.boundingClientRect.top); else visible.delete(entry.target.id); }); var current = Array.from(visible.entries()).sort(function (a,b) { return a[1]-b[1]; })[0]; if (current) links.forEach(function (a) { if (a.hash === '#' + current[0]) a.setAttribute('aria-current','true'); else a.removeAttribute('aria-current'); }); }, {rootMargin:'-10% 0px -65% 0px'}); links.forEach(function (a) { var section = document.querySelector(a.hash); if (section) observer.observe(section); }); })();
   </script>
 </body>
 </html>

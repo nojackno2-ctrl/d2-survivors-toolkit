@@ -4,33 +4,121 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>D2倖存者工具包</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#14110d; --panel:#1f1a14; --line:#3a3026; --text:#e8dcc4; --dim:#9c8f78; --gold:#d4a84a; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Microsoft JhengHei", system-ui, sans-serif; -webkit-text-size-adjust:100%; }
-  main { max-width:760px; margin:0 auto; padding:max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
-  h1 { color:var(--gold); font-size:22px; margin:0 0 4px; }
-  h2 { color:var(--gold); font-size:17px; margin:0 0 8px; }
-  section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-top:14px; }
-  .dim { color:var(--dim); }
-  ol { padding-left:22px; margin:6px 0; }
-  li { margin:4px 0; }
-  textarea { width:100%; height:84px; background:#0e0c09; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; font:13px Consolas, monospace; word-break:break-all; }
-  button, .drag { display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:var(--gold); color:#1a1408; border:0; border-radius:6px; padding:9px 16px; font:inherit; font-weight:bold; cursor:pointer; text-decoration:none; touch-action:manipulation; }
-  .ok { color:#7fbf6a; }
-  @media (max-width: 520px) { h1 { font-size:19px; } section { padding:12px 14px; } button { width:100%; } }
+  :root {
+    --bg: #0c0a09;
+    --surface: #151210;
+    --raised: #1c1815;
+    --inset: #090807;
+    --line: #2b2520;
+    --line-strong: #40372e;
+    --text: #e8e2d6;
+    --muted: #a59c8c;
+    --dim: #786f61;
+    --c-unique: #c7b377;
+    --c-set: #6fcf6f;
+    --c-rune: #e8963a;
+    --c-danger: #d9695a;
+    --c-magic: #8b9bff;
+    --c-rare: #e9dc7a;
+    --gold: var(--c-unique);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(ellipse at top, rgba(199, 179, 119, .04), transparent 55%), var(--bg);
+    color: var(--text);
+    font: 1rem/1.75 system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+  h1, h2 {
+    font-family: 'Noto Serif TC', 'Songti TC', 'PMingLiU', serif;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--c-unique);
+  }
+  h1 { font-size: 1.75rem; margin: 0 0 8px; }
+  h2 { font-size: 1.25rem; margin: 0 0 12px; }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 20px;
+    margin-top: 16px;
+  }
+  #known-issues {
+    border-color: var(--c-danger) !important;
+    border-left: 2px solid var(--c-danger) !important;
+  }
+  a { color: var(--c-magic); text-decoration: none; }
+  a:hover { color: var(--text); }
+  .dim { color: var(--muted); }
+  ol { padding-left: 20px; margin: 8px 0; }
+  li { margin: 6px 0; }
+  textarea {
+    width: 100%;
+    height: 84px;
+    background: var(--inset);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 10px;
+    font: 13px ui-monospace, Consolas, monospace;
+    overflow-wrap: anywhere;
+    resize: vertical;
+  }
+  textarea:focus { outline: 2px solid var(--c-unique); outline-offset: -1px; }
+  button, .drag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    background: var(--c-unique);
+    color: var(--bg);
+    border: 1px solid var(--c-unique);
+    border-radius: 2px;
+    padding: 9px 16px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    touch-action: manipulation;
+  }
+  button:hover, .drag:hover {
+    background: var(--raised);
+    border-color: var(--text);
+    color: var(--text);
+  }
+  button:focus-visible, .drag:focus-visible, a:focus-visible {
+    outline: 2px solid var(--c-unique);
+    outline-offset: 2px;
+  }
+  .ok { color: var(--c-set); font-size: 0.9rem; margin-left: 8px; }
+  @media (max-width: 520px) {
+    h1 { font-size: 1.4rem; }
+    section { padding: 16px; }
+    button { width: 100%; }
+  }
 </style>
 </head>
 <body>
 <main data-lang="zh">
   <h1>D2倖存者工具包（網頁版）</h1>
-  <p class="dim">給在瀏覽器（電腦或手機）玩 d2survivors.lol 的玩家。用書籤在遊戲頁面上開啟修改器，直接讀寫瀏覽器裡的存檔，不經過遊戲的匯入功能，不會留下匯入紀錄。 <a href="#" data-switch="en" style="color:var(--gold)">English</a></p>
+  <p class="dim">給在瀏覽器（電腦或手機）玩 <a href="https://d2survivors.lol/play/" target="_blank" rel="noopener" style="color:var(--gold)">d2survivors.lol</a>（官方遊戲）的玩家。用書籤在遊戲頁面上開啟修改器，直接讀寫瀏覽器裡的存檔，不經過遊戲的匯入功能，不會留下匯入紀錄。 <a href="#" data-switch="en" style="color:var(--gold)">English</a></p>
   <section id="known-issues" style="border-color:#a66b35"><h2>單機模式：排行榜上傳強制關閉</h2><p><b>工具包定位為單機爽玩：載入工具包後，排行榜上傳一律強制關閉，遊戲選項中也無法再打開，正在等待上傳的排行榜紀錄也會一併刪除；修改器寫入的存檔同樣關閉上傳。想上排行榜，請關閉已載入工具的分頁，另開乾淨的新分頁直接進入原版遊戲頁面，全程不要載入任何書籤工具。</b></p></section>
 
   <section>
     <h2>1. 複製書籤程式碼</h2>
     <textarea class="code" readonly>{{BOOKMARKLET}}</textarea>
-    <p><button class="copy">📋 複製書籤程式碼</button> <span class="copied ok"></span></p>
+    <p><button class="copy">複製書籤程式碼</button> <span class="copied ok"></span></p>
     <p class="dim">電腦：也可以直接把這個按鈕拖到書籤列 → <a class="drag" href="{{BOOKMARKLET_HTML}}">D2 修改器</a></p>
   </section>
 
@@ -73,7 +161,7 @@
   <section>
     <h2>1. Copy the bookmarklet</h2>
     <textarea class="code" readonly>{{BOOKMARKLET}}</textarea>
-    <p><button class="copy">📋 Copy bookmarklet</button> <span class="copied ok"></span></p>
+    <p><button class="copy">Copy bookmarklet</button> <span class="copied ok"></span></p>
     <p class="dim">Desktop: you can also drag this button to the bookmarks bar → <a class="drag" href="{{BOOKMARKLET_HTML}}">D2 Editor</a></p>
   </section>
 

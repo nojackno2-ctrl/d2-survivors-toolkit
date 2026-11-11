@@ -69,6 +69,7 @@ const plan = [
   has("no-push") ? "3. 提交根目錄倉庫（不推送）" : "3. 提交並推送根目錄倉庫到 GitHub（origin）",
   !has("desktop") || has("no-push") || has("no-release") ? "4. （略過）GitHub Release" : `4. 建立 GitHub Release v${next}（附桌面版執行檔與 SHA-256）`,
   "   更新日誌：同一天的內容併入當日條目（公告站與工具內各一處；可用 --log \"項目一|項目二\" 加入自訂內容）",
+  "   --log 項目可寫成「類別：內容」，類別為修改器、輔助器、自動淬鍊、遊戲修改、中文化、效能、工具包、相容性之一，否則歸入「工具包」。",
   "5. 推送後 Cloudflare 公告網站會自動建置（需到後台 Deployments 確認成功）",
 ];
 if (!has("confirm")) { console.log("【發布計畫，尚未執行】\n" + plan.join("\n") + "\n\n完成適配、測試與真實遊戲載入後以 --confirm 自動發布。"); process.exit(0); }
@@ -90,43 +91,23 @@ const bump = () => {
 // 更新日誌：同一天的更新合併成同一則（公告站與工具內各一處）。
 // 條目＝自動一行「相容官方遊戲 X」＋ --log "項目一|項目二" 的使用者可見變更；
 // 當天已有條目就把項目接在最後面，已存在的項目不重複加入，所以同一天重跑發布也安全。
-const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 const addChangelog = () => {
+  const { mergeChangelog } = require("./changelog.cjs");
   const date = new Date().toISOString().slice(0, 10);
   const groupNames = { game: "遊戲核心", items: "物品與技能", choices: "選卡", style: "介面樣式" };
   const areas = (verified.comparison?.groups || []).map((g) => groupNames[g]).filter(Boolean);
   const coverage = verified.tested?.length ? `已執行 ${verified.tested.length} 項自動測試` : "已執行自動測試";
   const auto = `相容性：針對官方遊戲 ${verified.build}${areas.length ? ` 的${areas.join("、")}變動` : ""}，${coverage}。`;
-  const items = [auto, ...opt("log", "").split("|").map((x) => x.trim()).filter(Boolean)];
-  // 把項目併入當天條目；沒有當天條目就在最前面新增一則（回傳是否有變更）
-  const mergeDay = (s, dayHeader, newEntry, anchor, liIndentOf) => {
-    const h = s.indexOf(dayHeader);
-    if (h < 0) {
-      if (anchor < 0) throw new Error("找不到更新日誌區塊");
-      return { s: s.slice(0, anchor) + newEntry(items) + s.slice(anchor), changed: true };
-    }
-    const end = s.indexOf("</ul>", h);
-    const dayText = s.slice(h, end);
-    const fresh = items.filter((it, i) => (i === 0 ? !dayText.includes(`官方遊戲 ${verified.build}`) : !dayText.includes(esc(it))));
-    if (!fresh.length) return { s, changed: false };
-    const lineStart = s.lastIndexOf("\n", end) + 1;
-    const lis = fresh.map((i) => `${liIndentOf(s.slice(lineStart, end))}<li>${esc(i)}</li>`).join("\n");
-    return { s: s.slice(0, lineStart).replace(/\s*$/, "\n") + lis + "\n" + s.slice(lineStart), changed: true };
-  };
+  const items = opt("log", "").split("|").map((x) => x.trim()).filter(Boolean);
   const done = [];
   {
     const p = path.join(P.root, "modifier", "editor.html"), s = fs.readFileSync(p, "utf8");
-    const head = s.indexOf("<h2>更新日誌</h2>");
-    const r = mergeDay(s, `<h3>${date}</h3>`,
-      (its) => `    <h3>${date}</h3>\n    <ul>\n${its.map((i) => `      <li>${esc(i)}</li>`).join("\n")}\n    </ul>\n`,
-      s.indexOf("<h3>", head), (ind) => ind + "  ");
+    const r = mergeChangelog(s, { date, build: verified.build, auto, items, format: "editor" });
     if (r.changed) { fs.writeFileSync(p, r.s); done.push("modifier/editor.html"); }
   }
   {
     const sp = path.join(P.web, "site", "index.html"), s = fs.readFileSync(sp, "utf8");
-    const r = mergeDay(s, `<div class="log-date">${date}</div>`,
-      (its) => `        <div class="log-entry">\n          <div class="log-date">${date}</div>\n          <ul>\n${its.map((i) => `            <li>${esc(i)}</li>`).join("\n")}\n          </ul>\n        </div>\n        `,
-      s.indexOf('<div class="log-entry">', s.indexOf('<div class="log">')), (ind) => ind + "  ");
+    const r = mergeChangelog(s, { date, build: verified.build, auto, items, format: "site" });
     if (r.changed) { fs.writeFileSync(sp, r.s); done.push("site/index.html"); }
   }
   return done;
