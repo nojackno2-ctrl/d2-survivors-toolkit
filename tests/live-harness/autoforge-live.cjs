@@ -60,7 +60,11 @@ app.whenReady().then(async () => {
       const essences = () => (g.save?.inventoryByClass?.[cls] || []).filter(i => i?.type === "essence" && i.base === essenceName).reduce((s, i) => s + (i.count ?? 1), 0);
       const root = document.querySelector("#d2autobot-panel")?.shadowRoot;
       const toggle = (name, enabled) => { const b = root?.querySelector('[data-setting="' + name + '"]'); if (!b) throw new Error("找不到設定：" + name); if ((b.getAttribute("aria-checked") === "true") !== enabled) b.click(); };
-      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true); await sleep(2000); toggle("cheat.enabled", false); await sleep(1000);
+      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true); await sleep(2000);
+      // H_LOCAL=1：本地化＋必定成功（總開關保持開啟），其餘屬性設為 X，驗證只淬到指定屬性
+      const local = ${JSON.stringify(process.env.H_LOCAL || "")} === "1";
+      if (local) { toggle("cheat.forgeMax", false); toggle("cheat.forgeLocal", true); toggle("cheat.forgeLocalSure", true); } else toggle("cheat.enabled", false);
+      await sleep(1000);
       const items = [JSON.parse(${JSON.stringify(process.env.H_ITEM_JSON || "null")}), JSON.parse(${JSON.stringify(process.env.H_ITEM2_JSON || "null")})].filter(Boolean);
       if (!items.length) throw new Error("缺少 H_ITEM");
       g.save.inventoryByClass = g.save.inventoryByClass || {};
@@ -68,9 +72,9 @@ app.whenReady().then(async () => {
       for (const it of items) g.save.inventoryByClass[cls].push(it);
       const slots = items.map((it, k) => {
         const lines = window.__d2autoforgeUI.lines(it.id);
-        const targets = {}; for (const l of lines) targets[l.key] = 0;
-        if (lines[0]) targets[lines[0].key] = 2;
-        if (lines[1]) targets[lines[1].key] = 1;
+        const targets = {}; for (const l of lines) targets[l.key] = local ? "X" : 0;
+        if (lines[0]) targets[lines[0].key] = local ? 5 : 2;
+        if (lines[1]) targets[lines[1].key] = local ? 5 : 1;
         return { id: it.id, name: it.name + "#" + (k + 1), targets, lines: lines.map(l => l.text) };
       });
       const trace = { cls, essencesBefore: essences(), slots: slots.map(s => ({ name: s.name, targets: s.targets, lines: s.lines })) };
@@ -82,6 +86,7 @@ app.whenReady().then(async () => {
       trace.log = st.log.slice(-60);
       trace.running = st.running;
       trace.essencesAfter = essences();
+      trace.forgeLocalStats = window.__d2forgeLocal?.stats ?? null;
       trace.forge = items.map(it => { const x = (g.inventoryOf?.(cls) || []).find(v => v?.id === it.id); return { name: it.name, forge: x?.forge ?? null }; });
       return trace;
     })()`);

@@ -67,6 +67,15 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+0000000000000e. **【已發布 2026-11-11，git 直接推送 main，公告站與修改器日誌已補】遊戲修改「淬鍊與地獄熔爐本地化」**（新檔 `helper/forge-local.js`；`d2edit.js`、`helper/autobot.js`、`helper/autoforge-ui.js`；實作由 Codex、實機腳本由 AGY 子代理撰寫，主代理核實與修補）。
+   - **原理**：鍛造全部走 `POST /api/leaderboard/forge`（`act`：temper／clean／hellforge／upgrade／look／claim）。用戶端只檢查回應格式（`pack` 的 `H`），`h` 不做簽章驗證，所以可在頁面攔截 fetch、回本機算出的 Response，遊戲原本的 `forgeTry` 照常扣精華、套用、存檔。舊結論「直接寫 forge 會被伺服器覆蓋」的原因是 `look` 同步，本機一併回覆 `look` 即可保留。
+   - **開關**（遊戲修改 →「流程與掉落修改」）：`cheat.forgeLocal`（本地化，機率同原版：淬鍊 `1/(1+n/4)`、熔爐 40% 倍增）；`cheat.forgeLocalSure`（淬鍊必成功、熔爐必倍增；自動淬鍊執行時經 `__d2forgeLocal.setWant` 只淬面板上未達標且非 X 的屬性）。生效條件＝總開關＋`forgeLocal`。
+   - **本機帳本** localStorage `d2forgeLocal.ledger`（物品 ID → 本機 forge，上限 2000）：帳本內物品的 `look`／`claim` 不論開關一律本機回覆；載入後 0／6／25 秒各 `restore()` 一次，把被伺服器同步蓋掉的 forge 套回。開關關閉時操作類請求放行，伺服器回應帶 forge 就把該物品移出帳本。
+   - **實機（官方 `/play/`，隔離設定檔、全新存檔，The Stone of Jordan）**：`tests/live-harness/forge-local-live.cjs`（`H_PASS=1`）四階段全過——A：10 次淬鍊全中、精華 99→89、第 11 次「Temper stops at 10」、熔爐「All tempers doubled」總數 20、再熔爐「used」，真實 `/forge` 請求 0；B（不開必成功）：20 次中 10 次、clean 清空，請求 0；C：重新整理後記憶體與 localStorage 的 forge 仍為 20／hf，帳本物品的 look 由本機回覆，請求 0；D：關閉本地化後新裝備淬鍊送出真實請求 1 次（伺服器回 `h`）。`tests/live-harness/autoforge-live.cjs`（新增 `H_LOCAL=1`）：目標 s0=5、s1=5、其餘 X → 11 步 0.75 秒，結果 `s0:10、s1:10、hf:1`。`node helper/tests/forge-local.cjs`、`autoforge.cjs`、`build-web.cjs` 通過；`verify --quick` 16／17。
+   - **既有失敗（非本次造成）**：`modifier/tests/weapon-sets.cjs` 丟 `sharedCont is not defined`（本次未動 `modifier/`，推測來自 a0b1eaa 放置位置改動，待修）。
+   - **未驗證**：面板兩個開關的畫面目視與手機版；`upgrade`（底材升級）本機回覆；穿戴中／傭兵裝備的本機淬鍊與遊戲自己觸發的 `syncForge`（只以直接送 look 驗證）；帳本物品在「未載入工具包」時被伺服器同步覆蓋後的 `restore()` 實際還原；專家模式；同時淬鍊多件的 want；桌面 App 的 bridge 通道（`yC()` 不經 fetch，攔不到）；發布後線上版（GitHub Pages）的實際載入。
+   - **已知限制**：本機淬鍊的結果伺服器不知道。停用工具包（或關掉本地化後對同一件裝備送真實請求）時，伺服器可能回 stale 並以它的紀錄覆蓋（已寫入玩家公告）。
+   - **子代理環境**：Codex 的別名工作區 `C:\Users\nojac\codex-ws\6902755a1eb8` 原本是殘留的普通資料夾（非連結），導致 Codex 無法寫入本倉庫（先前 slice-10 未動也是此因）；已改名為 `…\6902755a1eb8.stale-20261111` 保留，包裝器重建連結後恢復正常。
 000000000000d. **【已實作、官方 /play/ 實機抽驗，未發布】中文化改為「只有繁體中文」，譯名對齊原版暗黑 2（D2R 官方繁中）**（`lang/`、`d2edit.js`、`helper/`、`modifier/`）。
    - **官方資料來源**：本機 `C:\Program Files (x86)\Diablo II Resurrected`（D2R 3.3.93847，zhTW）。新工具 `lang/tools/d2r-strings.mjs` 讀 CASC（只讀）匯出官方字串與 excel 表到 `backups/d2r-strings/`（Git 忽略，不把官方資料放進倉庫）；`lang/tools/d2r-align.mjs` 依 excel 表（物品、暗金、套裝、符文之語、魔法／稀有／暗金詞綴、怪物、技能、地名）核對 `zh-TW.json`，加 `--write` 寫回；再跑應為 0 差異。字典已更新約 150 條名稱（例：項鍊→護身符、兇殘鐮刀→陰森鐮刀、戰鬥體制→戰鬥命令、毀滅之符→滅絕、稀有名稱 Hide／Jack／Nock／Quarrel／Scarab 等 559 條重組），並另補 `item:`／`affix:`／`monster:`／`unique:` 同字不同譯鍵。
    - **句子用詞**：閃電傷害／抗性／免疫→電擊、耐力→精力（Energy 改「能量」）、每級→每等級、約旦之石→喬丹之石、護符→咒符（Charm）、傳送點→傳送平台、第○幕→第○章、屍體爆炸→屍爆、爆炸箭→爆裂箭 等。保留：技能「閃電」（官方閃電箭，但遊戲把 Lightning 也當元素標籤，字典鍵維持「閃電」）、遊戲自創用語。分 10 份交由子代理（AGY／Codex）逐份校對後，由主代理驗證占位符與鍵集合再合併（slice-10 因子代理工作區限制未動，改由規則腳本處理）。

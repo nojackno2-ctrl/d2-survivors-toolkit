@@ -69,6 +69,15 @@ const mode = (m) => MODES[m === "hardcore" ? "hardcore" : "softcore"];
   tick(); setInterval(tick, 300);
   window.__d2lockLeaderboard = lock;
 })();
+// 獨立旗標讓舊版排行榜攔截器存在時，熱重載仍可接上本地淬鍊。
+if (!window.__d2forgeFetchHook) {
+  window.__d2forgeFetchHook = true;
+  const previousFetch = window.fetch;
+  window.fetch = function (input, init) {
+    const intercepted = window.__d2forgeLocal?.fetchHook?.(input, init, previousFetch.bind(this));
+    return intercepted || previousFetch.apply(this, arguments);
+  };
+}
 
 /* ---------- 簽章（與遊戲相同：HMAC-SHA256） ---------- */
 async function hmac(key, text) {
@@ -655,7 +664,7 @@ window.__d2changelogPromise ??= fetch("/changelog.json", { cache: "no-cache" }).
     ["遊戲資料", loadGameData],
     ["中文化模組", loadLang],
     ["輔助器", loadBot],
-    ["自動淬鍊", async () => { await import(at("helper/autoforge.js")); await import(at("helper/autoforge-ui.js")); }],
+    ["自動淬鍊", async () => { await import(at("helper/forge-local.js")); await import(at("helper/autoforge.js")); await import(at("helper/autoforge-ui.js")); }],
     ["物品引擎（遊戲裝備產生器）", () => engine()],
     ["修改器頁面", () => Promise.all([hostFetch(editorUrl(), "text"), backend.assets()])],
     // 自檢與其他步驟並行：載入進度條跑的同時檢查工具包與當前遊戲是否相符；問題只輸出，不阻擋遊玩。

@@ -3,7 +3,7 @@ const fs = require("node:fs"), path = require("node:path"), os = require("node:o
 const assert = require("node:assert/strict"), { spawnSync } = require("node:child_process");
 
 const repo = path.resolve(__dirname, "..", "..");
-const SOURCES = ["tools/build-web.js", "d2edit.js", "modifier/editor.html", "site/install.template.html", "editor/package.json", "helper/autobot.js", "helper/autoforge.js", "helper/autoforge-ui.js", "helper/selfcheck.js", "lang/zh-TW.json", "modifier/signatures.json"];
+const SOURCES = ["tools/build-web.js", "d2edit.js", "modifier/editor.html", "site/install.template.html", "editor/package.json", "helper/autobot.js", "helper/forge-local.js", "helper/autoforge.js", "helper/autoforge-ui.js", "helper/selfcheck.js", "lang/zh-TW.json", "modifier/signatures.json"];
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "d2toolkit-build-"));
 for (const f of SOURCES) {

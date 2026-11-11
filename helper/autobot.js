@@ -39,6 +39,8 @@
       monsterDensity10x: false,
       allElites: false,
       forgeMax: false,
+      forgeLocal: false,
+      forgeLocalSure: false,
       larzukMax: false,
       pauseStageTime: false,
       summonAllBosses: false,
@@ -2221,7 +2223,9 @@
   field("cheat.maxMonsterDensity", "怪物數量最大化（地圖怪物生成速度與數量拉滿）");
   field("cheat.allElites", "一般怪物全部變成精英以上等級（全圖小怪升階為金/藍怪）");
   group("流程與掉落修改");
-  field("cheat.forgeMax", "燃燒的恐懼精華數量 99（鍛造機率無法修改）");
+  field("cheat.forgeMax", "燃燒的恐懼精華數量 99");
+  field("cheat.forgeLocal", "淬鍊與地獄熔爐本地化（不連伺服器，本機直接算出結果，不受限流；機率同原版）");
+  field("cheat.forgeLocalSure", "本地淬鍊必定成功、地獄熔爐必定倍增（需開啟本地化；自動淬鍊只會淬到你設定的目標屬性）");
   field("cheat.larzukMax", "拉蘇克精華數量 99（加入背包，可用來增加物品鑲孔）");
   field("cheat.pauseStageTime", "關卡時間暫停（本關計時不前進，可一直戰鬥刷怪）");
   field("cheat.summonAllBosses", "關卡內持續召喚頭目（輪流召喚鑰匙頭目、各幕首領與 Uber 首領 Lilith、Duriel、Izual；Uber 首領掉器官，恐懼階中鑰匙可掉落）");
@@ -2296,6 +2300,7 @@
     destroy() { if (!alive) return; alive = false; restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); setPickupRadius(pickupOwner, false); release(); abort.abort(); clearInterval(timer); for (const restore of restores.reverse()) restore(); launcher.remove(); stopButton.remove(); statusLine.remove(); host.remove(); if (window.__d2autobot === api) delete window.__d2autobot; }, stop,
     diagnostics: () => ({ hellClears, hookUrl, hookNote, connected: !!game, state: game?.state ?? null, lastAction, storageNote, quests: (() => { try { const q = questSnapshot(game); return { line: questLine(game), done: q.done, total: q.total, pending: q.pending, cain: q.cain }; } catch { return null; } })(), gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() }),
     get game() { return game; },
+    get settings() { return settings; },
   };
   window.__d2autobot = api;
   connect().catch((err) => { if (alive) hookNote = "無法掛接遊戲程式：" + String(err.message || err); fire(checkGameVersion(""), "版本檢查"); });

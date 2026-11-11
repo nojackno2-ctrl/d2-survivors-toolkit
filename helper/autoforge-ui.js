@@ -25,6 +25,8 @@ const KNOWN_RESULT = /Raised|temper failed|removed|doubled|lost/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const AF = () => window.__d2autoforge;
 const game = () => window.__d2autobot?.game ?? null;
+const wantedByItem = new Map();
+function clearWant() { wantedByItem.clear(); window.__d2forgeLocal?.setWant(null); }
 
 function essenceCount(g, cls) {
   const inv = g.save?.inventoryByClass?.[cls] || [];
@@ -191,6 +193,12 @@ async function stepOnce(g, cls, ctx = state) {
   if (essenceCount(g, cls) < 1) return { done: true, result: "燃燒的恐懼精華不足，已停止" };
   const d = AF().decideNext(AF().normalizeTargets(ctx.targets), { counts: item.forge?.t ?? {}, hellforgeUsed: !!item.forge?.hf });
   if (d.action === "done") return { done: true, result: d.reason };
+  if (d.action === "temper" && window.__d2forgeLocal?.enabled() && window.__d2autobot?.settings?.cheat?.forgeLocalSure) {
+    const targets = AF().normalizeTargets(ctx.targets);
+    const pending = Object.entries(targets).filter(([k, t]) => t.kind === "min" && (item.forge?.t?.[k] || 0) < t.min).map(([k]) => k);
+    wantedByItem.set(item.id, pending.length ? pending : Object.entries(targets).filter(([, t]) => t.kind !== "x").map(([k]) => k));
+    window.__d2forgeLocal.setWant((id) => wantedByItem.get(id) || null);
+  }
   g.anvil = item.id;
   const beforeT = { ...(item.forge?.t ?? {}) };
   const r = await g.forgeTry(cls, state.level, d.action, () => {});
@@ -318,6 +326,7 @@ async function loop() {
     await sleep(stepGap);
   }
   if (!state.queueRunning && out.result !== "已停止") state.notice = { kind: out.hfOk ? "ok" : /失敗|放棄|錯誤|拒絕|不足/.test(out.result) ? "fail" : "done", text: out.result };
+  if (!state.queueRunning) clearWant();
   render();
   return out;
 }
@@ -335,6 +344,7 @@ const hasTarget = (key) => Object.values(loadMemory()[key] || {}).some((v) => v 
 
 // 序列結束：統計成功／失敗件數，寫入訊息與縮小圖示的提示（手動停止不提示）。
 function finishQueue(stopped) {
+  clearWant();
   state.queueRunning = false; state.running = false; state.pauseUntil = 0;
   const ok = state.queue.filter((q) => /倍增/.test(q.status || "")).length;
   const bad = state.queue.filter((q) => /清空|熔爐失敗|放棄|錯誤|拒絕/.test(q.status || "")).length;
@@ -606,7 +616,7 @@ function render() {
     state.running = true; push("開始");
     loop();
   };
-  b.querySelector("#af-stop").onclick = () => { state.running = false; state.queueRunning = false; push("已停止"); };
+  b.querySelector("#af-stop").onclick = () => { state.running = false; state.queueRunning = false; clearWant(); push("已停止"); };
   // 選取：把背包裡的裝備放上「鐵砧」（遊戲內部狀態），tick 會自動載入它的屬性與記住的目標。
   b.querySelectorAll("[data-select]").forEach((x) => x.onclick = () => { if (!state.running) { g.anvil = x.dataset.select; lastItemId = undefined; render(); } });
   b.querySelectorAll("[data-add]").forEach((x) => x.onclick = () => {
@@ -730,7 +740,7 @@ window.__d2autoforgeUI = {
     lastItemId = item.id;
     state.running = true; state.log = []; push("開始（測試）"); loop();
   },
-  stop() { state.running = false; state.queueRunning = false; },
+  stop() { state.running = false; state.queueRunning = false; clearWant(); },
   // 序列測試：ids 依序加入，targetsById 寫入記憶後執行。
   async queueRun(ids, targetsById, cls) {
     const g = game();
