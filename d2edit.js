@@ -479,8 +479,10 @@ registerToolkitFeature({ id: "afk", label: "掛機", order: 16, open: () => ente
 const afkLauncher = document.createElement("button");
 afkLauncher.type = "button";
 afkLauncher.id = "d2afk-launcher";
-afkLauncher.textContent = "掛機";
-afkLauncher.style.cssText = "position:fixed;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:2147483645;display:none;min-height:44px;padding:8px 14px;border:1px solid #d4a84a;border-radius:6px;background:rgba(20,17,13,.92);color:#d4a84a;font:bold 15px 'Microsoft JhengHei',system-ui,sans-serif;cursor:pointer;touch-action:manipulation";
+afkLauncher.textContent = "☾";
+afkLauncher.title = "掛機";
+afkLauncher.setAttribute("aria-label", "掛機");
+afkLauncher.style.cssText = "position:fixed;right:8px;z-index:2147483000;display:none;width:42px;height:42px;padding:0;border:1px solid #d4a84a;border-radius:50%;background:rgba(20,17,13,.94);color:#d4a84a;font:24px/40px sans-serif;text-align:center;cursor:pointer;touch-action:manipulation";
 afkLauncher.onclick = (e) => { e.preventDefault(); e.stopPropagation(); enterAfk(); };
 for (const ev of ["pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend", "keydown", "keyup"]) afkLauncher.addEventListener(ev, (e) => e.stopPropagation());
 let perfPage = null;
@@ -636,7 +638,7 @@ const pausedNow = () => {
 // 依使用者要求：整個工具讀取完畢前不讓玩家使用，「修改器」按鈕等載入完成才出現。
 let toolsReady = false;
 // 每 500 毫秒及畫面變動時執行：值相同時不寫入 style，避免無謂的樣式重算
-const sync = () => { const v = toolsReady && pausedNow() && !frame ? "block" : "none"; if (launcher.style.display !== v) launcher.style.display = v; if (v === "none" && toolkitMenu.style.display !== "none") toolkitMenu.style.display = "none"; const afkVisible = toolsReady && !!window.__d2autobot?.game?.kit && !frame && !perfPage && !window.__d2afk; afkLauncher.style.display = afkVisible ? "block" : "none"; };
+const sync = () => { const v = toolsReady && pausedNow() && !frame ? "block" : "none"; if (launcher.style.display !== v) launcher.style.display = v; if (v === "none" && toolkitMenu.style.display !== "none") toolkitMenu.style.display = "none"; const forgeExpanded = document.getElementById("d2autoforge-panel") && window.__d2autoforgeUI?.state?.folded === false; const afkVisible = toolsReady && !!window.__d2autobot?.game?.kit && !frame && !perfPage && !window.__d2afk && !forgeExpanded; afkLauncher.style.top = window.innerWidth < 600 ? "calc(44vh + 50px)" : "62px"; afkLauncher.style.display = afkVisible ? "block" : "none"; };
 let watched = null;
 const observer = new MutationObserver(() => {
   const p = document.getElementById("paused");

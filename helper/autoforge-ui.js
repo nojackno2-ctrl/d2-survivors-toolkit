@@ -707,6 +707,8 @@ function tick() {
   }
 }
 setInterval(tick, 300);
+// 橫直向切換時同步更新收合圖示位置，避免與掛機入口重疊。
+window.addEventListener("resize", () => { if (state.folded && box?.isConnected) render(); });
 // 暫停倒數：每秒只更新倒數文字，不重畫整個面板（避免打斷下拉選單操作）。
 setInterval(() => { const el = document.getElementById("af-cd"); if (el) el.textContent = pauseCountdownText();
   // 縮小圖示的提示：倒數每秒更新；等待開始或結束時（提示出現／消失）重畫圖示。
