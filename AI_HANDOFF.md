@@ -243,6 +243,7 @@
 4. **【已刪除 2026-11-10】`modifier/overrides/game-overrides.js`**：使用者同意刪除，連同 `d2edit.js` 的載入段移除（詳見本節最上方 2026-11-10 項目）。
 5. **手機版比較框排版**：`lang/lang.js` 已新增 `planTipLayout`（避免裝備框蓋住操作按鈕），純函式單元測試已過，尚待真實觸控手機或官方實機驗證。
 6. **鍛造精華作弊與實機接受度**：`cheat.forgeMax` 已改為遊戲真實格式（`type: "essence"`、`base: "Burning Essence of Terror"`、`count` 99）；官方 /play/ 實機（`tests/live-harness/forge-essence-live.cjs`）確認存檔內出現精華堆疊且 count=99。尚未驗證：鍛造面板顯示數量、實際鍛造是否被遊戲接受、重新整理後是否保留。
+   - **2026-11-11 虛擬精華**：`cheat.forgeMax` 預設改為「虛擬精華」（`helper/autobot.js` 的 `installVirtualForgeEssence`）——不在存檔放實體物品；包住 `g.forgeTry`，執行期間暫時在背包最前面放 id 以 `vess` 開頭的 99 疊（先消耗，真實精華不動），結束即移除；包住 `g.forgeActions` 讓面板顯示 99。實體寫入（個人倉庫）保留為備援，`PHYSICAL_FORGE_ESSENCE = true` 啟用。拉蘇克精華仍為實體（找不到消耗點）。**尚未實機驗證**（需確認：鍛造能成功、面板顯示 99、存檔不殘留 vess 堆疊、關閉修改後不影響真實精華）。
 7. **桌面版封裝**：網頁端修改已同步至啟動器程式碼，但尚未執行正式桌面 exe 重新打包（`publish.cjs --desktop`）。
 8. **淬鍊機率實測（單次，2026-11-08）**：暗金 The Stone of Jordan（5 條屬性，由修改器引擎產生），官方 /play/ 隔離存檔，`H_PLAN=hellforge` 連續淬鍊 25 次（成功 11、失敗 14，精華 98→74）。
    - 成功淬鍊的分布：s1（最大魔力 %）4 次、s3（+技能）2 次、s2（閃電傷害）1 次、s0（+魔力）3 次；s4 從未被選中。

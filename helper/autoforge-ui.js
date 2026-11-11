@@ -28,8 +28,11 @@ const game = () => window.__d2autobot?.game ?? null;
 const wantedByItem = new Map();
 function clearWant() { wantedByItem.clear(); window.__d2forgeLocal?.setWant(null); }
 
+// 與遊戲鍛造一致：背包與倉庫的精華合併計算（含個人與共用倉庫；不足時仍以遊戲回應「You need」為準）。
 function essenceCount(g, cls) {
-  const inv = g.save?.inventoryByClass?.[cls] || [];
+  if (window.__d2autobot?.virtualEssence?.()) return 99; // 遊戲修改的虛擬精華：不放實體物品，鍛造時才暫時補一疊
+  const tabs = g.save?.stashTabs || {};
+  const inv = [g.save?.inventoryByClass?.[cls], tabs[cls], tabs.shared1, tabs.shared2, tabs.shared3].filter(Array.isArray).flat();
   return inv.filter((i) => i?.type === "essence" && i.base === ESSENCE_NAME).reduce((s, i) => s + (i.count ?? 1), 0);
 }
 

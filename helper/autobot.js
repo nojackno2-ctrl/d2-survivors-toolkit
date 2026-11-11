@@ -1780,22 +1780,67 @@
       lastAction = "持續召喚頭目：" + name;
     } catch (err) { lastAction = "召喚頭目失敗：" + (err?.message || err); }
   }
+  // ---- 虛擬燃燒的恐懼精華：存檔裡不放實體物品 ----
+  // 遊戲的精華數量是背包＋倉庫堆疊的加總，鍛造時直接從堆疊扣除（模組內函式，無法攔截）。
+  // 做法：包住 g.forgeTry，執行期間暫時在背包最前面放一疊 99（先被消耗，真實精華不動），結束就移除；
+  // 同時包住 g.forgeActions 讓鍛造面板的精華數量顯示 99。暫時堆疊的 id 以 "vess" 開頭，萬一中途離開殘留，下一輪會清掉。
+  const PHYSICAL_FORGE_ESSENCE = false; // 備援：true＝改回寫入實體精華到個人倉庫
+  const FORGE_ESSENCE = "Burning Essence of Terror";
+  const virtualEssenceOn = () => !!(settings.cheat?.enabled && settings.cheat.forgeMax && !PHYSICAL_FORGE_ESSENCE);
+  const virtualEss = { patched: new WeakSet(), active: 0, stack: null };
+  function removeVirtualStacks(g) {
+    const lists = [...Object.values(g.save?.inventoryByClass || {}), ...Object.values(g.save?.stashTabs || {})];
+    for (const list of lists) if (Array.isArray(list)) for (let i = list.length - 1; i >= 0; i--) if (typeof list[i]?.id === "string" && list[i].id.startsWith("vess")) list.splice(i, 1);
+  }
+  function cleanupVirtualEssence(g) { if (g && virtualEss.active === 0) { removeVirtualStacks(g); virtualEss.stack = null; } }
+  function installVirtualForgeEssence(g) {
+    if (!g || virtualEss.patched.has(g) || typeof g.forgeTry !== "function") return;
+    virtualEss.patched.add(g);
+    const origTry = g.forgeTry, origActions = g.forgeActions;
+    g.forgeTry = async function (...args) {
+      const inv = virtualEssenceOn() && g.save?.inventoryByClass?.[args[0]];
+      if (!Array.isArray(inv)) return origTry.apply(this, args);
+      if (virtualEss.active++ > 0 && virtualEss.stack) { virtualEss.stack.count = 99; if (!inv.includes(virtualEss.stack)) inv.unshift(virtualEss.stack); } // 同時多件：每次進入都補滿
+      else { virtualEss.stack = { id: "vess" + Math.random().toString(36).slice(2, 10), base: FORGE_ESSENCE, type: "essence", rarity: "normal", name: FORGE_ESSENCE, level: 1, mods: [], count: 99 }; inv.unshift(virtualEss.stack); }
+      try { return await origTry.apply(this, args); }
+      finally { if (--virtualEss.active === 0) { removeVirtualStacks(g); virtualEss.stack = null; } }
+    };
+    if (typeof origActions === "function") g.forgeActions = function (...args) {
+      const r = origActions.apply(this, args);
+      if (r && typeof r === "object" && virtualEssenceOn()) r.essences = () => 99;
+      return r;
+    };
+    virtualEss.restore = () => { if (g.forgeTry !== origTry) g.forgeTry = origTry; if (origActions && g.forgeActions !== origActions) g.forgeActions = origActions; };
+  }
   function applyCheats(g) {
-    if (!g || !settings.cheat?.enabled) { restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); return; }
-    // 補充背包中的精華（燃燒的恐懼精華、拉蘇克精華）；關閉後保留已寫入的物品。
+    if (!g || !settings.cheat?.enabled) { cleanupVirtualEssence(g); restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); return; }
+    // 燃燒的恐懼精華：預設走「虛擬精華」（不產生實體物品，見 installVirtualForgeEssence）；實體寫入保留為備援，把 PHYSICAL_FORGE_ESSENCE 改 true 即啟用。
+    // 拉蘇克精華仍為實體物品（遊戲內沒有找到可攔截的消耗點）。
+    cleanupVirtualEssence(g);
+    if (settings.cheat.forgeMax && !PHYSICAL_FORGE_ESSENCE) installVirtualForgeEssence(g);
+    // 補充精華到目前角色的個人倉庫；關閉後保留已寫入的物品。遊戲鍛造會合併計算背包與倉庫的精華。
     // 遊戲的精華格式：type 為 "essence"、base 為名稱，數量存在 count（單疊上限 99）。
     const essenceCheats = [["forgeMax", "Burning Essence of Terror"], ["larzukMax", "Larzuk's Essence"]];
     for (const [key, name] of essenceCheats) {
       if (!settings.cheat[key]) continue;
+      if (key === "forgeMax" && !PHYSICAL_FORGE_ESSENCE) continue;
       const cls = g.kit?.id, inv = cls && g.save?.inventoryByClass?.[cls];
       if (!Array.isArray(inv)) continue;
-      const stacks = inv.filter((item) => item?.type === "essence" && item.base === name);
+      const stash = g.save.stashTabs ? (Array.isArray(g.save.stashTabs[cls]) ? g.save.stashTabs[cls] : (g.save.stashTabs[cls] = [])) : null;
+      const stacks = [stash, inv].filter(Array.isArray).flatMap((list) => list.filter((item) => item?.type === "essence" && item.base === name).map((item) => ({ item, list })));
       if (stacks.length) {
-        stacks[0].count = 99;
-        for (const extra of stacks.slice(1)) inv.splice(inv.indexOf(extra), 1);
-      } else {
-        inv.push({ id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), base: name, type: "essence", rarity: "normal", name, level: 1, mods: [], count: 99 });
+        stacks[0].item.count = 99;
+        for (const { item, list } of stacks.slice(1)) list.splice(list.indexOf(item), 1);
+        continue;
       }
+      const stack = { id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), base: name, type: "essence", rarity: "normal", name, level: 1, mods: [], count: 99 };
+      // 倉庫格子 10×12，物品尺寸最大 2×4：只選「不落在任何現有物品可能範圍內」的格子避免重疊；找不到空位才退回背包。
+      let spot = null;
+      if (stash) {
+        const hit = (x, y) => stash.some((o) => o?.at && Number.isInteger(o.at.x) && Number.isInteger(o.at.y) && x >= o.at.x && x < o.at.x + 2 && y >= o.at.y && y < o.at.y + 4);
+        for (let y = 0; y < 12 && !spot; y++) for (let x = 0; x < 10 && !spot; x++) if (!hit(x, y)) spot = { x, y };
+      }
+      if (spot) { stack.at = spot; stash.push(stack); } else inv.push(stack);
     }
     // 關卡時間暫停：遊戲以 time - actStart 計算本關經過時間；每幀把 actStart 對齊 time，經過時間永遠是 0，玩家可一直刷怪。
     // 關閉後不需還原，時間從當下重新計算。
@@ -2223,10 +2268,10 @@
   field("cheat.maxMonsterDensity", "怪物數量最大化（地圖怪物生成速度與數量拉滿）");
   field("cheat.allElites", "一般怪物全部變成精英以上等級（全圖小怪升階為金/藍怪）");
   group("流程與掉落修改");
-  field("cheat.forgeMax", "燃燒的恐懼精華數量 99");
+  field("cheat.forgeMax", "燃燒的恐懼精華數量 99（放入個人倉庫）");
   field("cheat.forgeLocal", "淬鍊與地獄熔爐本地化（不連伺服器，本機直接算出結果，不受限流；機率同原版）");
   field("cheat.forgeLocalSure", "本地淬鍊必定成功、地獄熔爐必定倍增（需開啟本地化；自動淬鍊只會淬到你設定的目標屬性）");
-  field("cheat.larzukMax", "拉蘇克精華數量 99（加入背包，可用來增加物品鑲孔）");
+  field("cheat.larzukMax", "拉蘇克精華數量 99（放入個人倉庫，可用來增加物品鑲孔）");
   field("cheat.pauseStageTime", "關卡時間暫停（本關計時不前進，可一直戰鬥刷怪）");
   field("cheat.summonAllBosses", "關卡內持續召喚頭目（輪流召喚鑰匙頭目、各幕首領與 Uber 首領 Lilith、Duriel、Izual；Uber 首領掉器官，恐懼階中鑰匙可掉落）");
   field("cheat.infiniteRerolls", "選技能的重抽無限次數（升級選卡無限重抽、跳過與排除）");
@@ -2297,9 +2342,10 @@
     setText(status, (["戰鬥輔助：" + (settings.enabled ? "啟用" : "關閉") + "／自動戰鬥：" + (settings.progressEnabled ? "啟用（" + modeLabel() + "）" : "關閉"), game ? questLine(game) : "", game ? "掛鉤：原版 Game／" + game.state : hookNote, s.hp ? `生命：${Math.ceil(s.hp.now)}／${Math.ceil(s.hp.max)}` : "生命：無法讀取", s.mp ? `魔力：${Math.ceil(s.mp.now)}／${Math.ceil(s.mp.max)}` : "魔力：未啟用或無法讀取", game?.kit?.id ? "職業：" + ({ amazon: "亞馬遜", assassin: "刺客", barbarian: "野蠻人", druid: "德魯伊", necromancer: "死靈法師", paladin: "聖騎士", sorceress: "法師" }[game.kit.id] || game.kit.id) + "（" + (isMelee() ? "近戰" : "遠程") + "）" : "", game?.world?.terror ? "恐怖層數：" + game.world.terror.tier : "", "最近動作：" + lastAction, storageNote].filter(Boolean).join("\n")));
   }, 200);
   const api = {
-    destroy() { if (!alive) return; alive = false; restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); setPickupRadius(pickupOwner, false); release(); abort.abort(); clearInterval(timer); for (const restore of restores.reverse()) restore(); launcher.remove(); stopButton.remove(); statusLine.remove(); host.remove(); if (window.__d2autobot === api) delete window.__d2autobot; }, stop,
+    destroy() { if (!alive) return; alive = false; virtualEss.restore?.(); cleanupVirtualEssence(game); restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); setPickupRadius(pickupOwner, false); release(); abort.abort(); clearInterval(timer); for (const restore of restores.reverse()) restore(); launcher.remove(); stopButton.remove(); statusLine.remove(); host.remove(); if (window.__d2autobot === api) delete window.__d2autobot; }, stop,
     diagnostics: () => ({ hellClears, hookUrl, hookNote, connected: !!game, state: game?.state ?? null, lastAction, storageNote, quests: (() => { try { const q = questSnapshot(game); return { line: questLine(game), done: q.done, total: q.total, pending: q.pending, cain: q.cain }; } catch { return null; } })(), gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() }),
     get game() { return game; },
+    virtualEssence: virtualEssenceOn,
     get settings() { return settings; },
   };
   window.__d2autobot = api;

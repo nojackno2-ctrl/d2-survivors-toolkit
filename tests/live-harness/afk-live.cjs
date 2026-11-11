@@ -60,7 +60,7 @@ app.whenReady().then(async () => {
       for (let i = 0; i < 120 && !g.world?.player && g.state !== "camp"; i++) await sleep(500);
       const cls = g.kit?.id;
       const ok = it => it && ["unique", "set", "runeword"].includes(it.rarity) && Array.isArray(it.mods) && it.mods.length;
-      const ess = () => (g.save?.inventoryByClass?.[cls] || []).filter(i => i?.type === "essence" && i.base === "Burning Essence of Terror").reduce((s, i) => s + (i.count ?? 1), 0);
+      const ess = () => [...(g.save?.inventoryByClass?.[cls] || []), ...(g.save?.stashTabs?.[cls] || [])].filter(i => i?.type === "essence" && i.base === "Burning Essence of Terror").reduce((s, i) => s + (i.count ?? 1), 0);
       // 測試存檔沒有恐懼精華時，用修改器的 cheat 補上（隔離存檔副本，不影響使用者原檔）。
       if (ess() < 5) {
         const root = document.querySelector("#d2autobot-panel")?.shadowRoot;
