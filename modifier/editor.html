@@ -167,6 +167,7 @@
     <h4>修改器</h4>
     <ul>
       <li>製作裝備：「放到」只能選共用倉庫 1～3、目前角色（遊戲目前選的角色）的個人倉庫與背包，不再能放到其他角色的倉庫、背包或咒符欄、身上裝備等位置。一般製作與批次製作都適用。</li>
+      <li>帳號與強化頁新增「技能配置」：可以自己挑角色帶的主動技能與被動技能（各最多 10 個，依難度 6／8／10）並設定等級；同職業進行中的冒險與保留的角色會一併修改。原本的「技能修改」改名為「技能變體」。</li>
     </ul>
     <h4>自動淬鍊</h4>
     <ul>
@@ -595,8 +596,13 @@
     <table><thead><tr><th>職業</th><th>解鎖難度</th><th>金色光芒</th><th>技能改造點數</th><th>已付費重置次數</th><th>恐怖等級（開放）</th></tr></thead><tbody id="classes"></tbody></table>
   </section>
   <section>
-    <h2>技能修改</h2>
-    <p class="note">照遊戲規則：每個職業最多 10 點，每點可以讓一個技能選一種修改；選項只列出該職業有的技能。</p>
+    <h2>技能配置</h2>
+    <p class="note">自己挑角色帶的主動技能與被動技能（各最多 10 個，依難度：普通 6、惡夢 8、地獄 10）。只有已經有角色進度的職業可以改；新選的技能預設為最高等級。</p>
+    <div id="buildBox"></div>
+  </section>
+  <section>
+    <h2>技能變體</h2>
+    <p class="note">照遊戲規則：每個職業最多 10 點，每點可以讓一個技能選一種變體；選項只列出該職業有的技能。（遊戲內也能免費改）</p>
     <div id="skillModsBox"></div>
   </section>
 </div>
@@ -2253,9 +2259,92 @@ function syncSkillMods(cls) {
     $("#smc-" + c).textContent = `已用 ${used} / ${pts.value} 點`;
   }
 }
+/* 技能配置：直接改角色進度（heroes.<職業>.kept／run 的 build）帶的主動與被動 */
+const BUILD_KINDS = [["kept", "保留的角色"], ["run", "進行中的冒險"]];
+const SLOT_OF = { normal: 6, nightmare: 8, hell: 10 };
+// 遊戲規則：保留的角色要能接續下一個難度，欄位數不能超過下一難度的上限；進行中的冒險用當前難度。
+function buildCap(kind, rec) {
+  const d = SLOT_OF[rec.difficulty] ?? 10;
+  return Math.max(rec.build.slots ?? 6, kind === "kept" ? Math.min(10, d + 2) : d);
+}
+const buildOk = (b) => Array.isArray(b?.skills) && !!b.passives && typeof b.passives === "object";
+// 該職業有可改配置的紀錄，進行中的冒險排前面
+const buildRecs = (c) => ["run", "kept"].filter(k => buildOk(save.heroes?.[c]?.[k]?.build));
+const lvOpts = (max, v) => Array.from({ length: max }, (_, i) => `<option value="${i + 1}"${i + 1 === v ? " selected" : ""}>${i + 1}</option>`).join("");
+function buildRow(key, type, defs, id, level) {
+  const def = defs.find(d => d.id === id);
+  return `<tr><td><select data-build="${key}" data-kind="${type}" style="max-width:260px"><option value="">（空）</option>${defs.map(d =>
+    `<option value="${esc(d.id)}"${d.id === id ? " selected" : ""}>${esc(d.common ? T(d.name) : skillZh(d.id))}${d.evolved ? "（進化）" : d.common ? "（共通）" : ""}</option>`).join("")}</select></td>
+    <td><select data-build-lv>${def ? lvOpts(def.maxLevel, Math.min(def.maxLevel, level)) : ""}</select></td></tr>`;
+}
+function buildTable() {
+  const blocks = [];
+  // 每個職業一個區塊：遊戲實際接續的是「進行中的冒險」，沒有才用「保留的角色」；兩個都有時一併改成相同配置
+  if (BUILD_DEFS) for (const c of CLASSES) {
+    const kinds = buildRecs(c), defs = BUILD_DEFS[c];
+    if (!defs || !kinds.length) continue;
+    const kind = kinds[0], b = save.heroes[c][kind].build, label = kinds.map(k => BUILD_KINDS.find(x => x[0] === k)[1]).join("＋");
+    const cap = Math.min(...kinds.map(k => buildCap(k, save.heroes[c][k]))), key = `${c}.${kind}`, pas = Object.entries(b.passives).filter(([, v]) => v > 0);
+    const rows = (type, list, cur) => Array.from({ length: Math.max(cap, cur.length) }, (_, i) => buildRow(key, type, list, cur[i]?.[0] ?? "", cur[i]?.[1] ?? 0)).join("");
+    blocks.push(`<details><summary>${CLASS_ZH[c]}・${label}（等級 ${b.level ?? "?"}）　<span class="dim" id="bc-${c}-${kind}"></span></summary>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;margin:6px 0">
+        <table><thead><tr><th>主動技能</th><th>等級</th></tr></thead><tbody>${rows("skill", defs.skills, b.skills.map(s => [s.id, s.level]))}</tbody></table>
+        <table><thead><tr><th>被動技能</th><th>等級</th></tr></thead><tbody>${rows("passive", defs.passives, pas)}</tbody></table>
+      </div></details>`);
+  }
+  $("#buildBox").innerHTML = blocks.join("") || `<p class="dim">${BUILD_DEFS ? "這個存檔沒有可以修改的角色進度（要先在遊戲裡玩過該職業並保留角色）。" : "讀不到遊戲的技能資料。"}</p>`;
+  syncBuild();
+}
+const buildSels = (key, type) => [...document.querySelectorAll(`select[data-build="${key}"][data-kind="${type}"]`)];
+// 同一個技能不能重複選；顯示已選數量
+function syncBuild(key) {
+  for (const k of key ? [key] : [...new Set([...document.querySelectorAll("select[data-build]")].map(s => s.dataset.build))]) {
+    const n = {};
+    for (const type of ["skill", "passive"]) {
+      const sels = buildSels(k, type), used = new Set(sels.map(s => s.value).filter(Boolean));
+      for (const s of sels) for (const o of s.options) o.disabled = !!o.value && o.value !== s.value && used.has(o.value);
+      n[type] = used.size;
+    }
+    const el = $("#bc-" + k.replace(".", "-"));
+    if (el) el.textContent = `主動 ${n.skill}、被動 ${n.passive}`;
+  }
+}
+function onBuildChange(sel) {
+  const [c] = sel.dataset.build.split("."), list = BUILD_DEFS[c][sel.dataset.kind === "skill" ? "skills" : "passives"], def = list.find(d => d.id === sel.value);
+  sel.closest("tr").querySelector("[data-build-lv]").innerHTML = def ? lvOpts(def.maxLevel, def.maxLevel) : "";
+  syncBuild(sel.dataset.build);
+}
+function collectBuild() {
+  if (!BUILD_DEFS) return;
+  for (const key of new Set([...document.querySelectorAll("select[data-build]")].map(s => s.dataset.build))) {
+    const [c, kind] = key.split("."), b = save.heroes?.[c]?.[kind]?.build;
+    if (!b) continue;
+    const read = (type) => { const m = new Map(); for (const s of buildSels(key, type)) if (s.value && !m.has(s.value)) m.set(s.value, Number(s.closest("tr").querySelector("[data-build-lv]").value) || 1); return m; };
+    const sk = read("skill"), pa = read("passive");
+    const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+    const pasOf = (x) => Object.entries(x.passives).filter(([, v]) => v > 0).sort();
+    const skillsFor = (x) => [...sk].map(([id, level]) => { const old = x.skills.find(s => s.id === id); return old ? { ...old, level, ...(old.banked > level ? { banked: level } : {}) } : { id, level, cooldown: 0 }; });
+    const newPas = [...pa].sort();
+    if (same(skillsFor(b), b.skills) && same(newPas, pasOf(b))) continue; // 畫面上的配置沒動過，什麼都不寫
+    // 同職業的另一筆紀錄（保留的角色）一併改成相同配置，否則遊戲接續時仍是舊技能
+    for (const k of new Set([kind, ...buildRecs(c)])) {
+      const x = save.heroes[c][k].build;
+      x.skills = skillsFor(x);
+      if (!same(newPas, pasOf(x))) {
+        x.passives = Object.fromEntries(pa);
+        // 遊戲讀檔時要求升級紀錄裡每個被動的次數等於它的等級，否則整個角色讀不到
+        x.history = [...(x.history ?? []).filter(h => !h.startsWith("passive:")), ...[...pa].flatMap(([id, lv]) => Array(lv).fill("passive:" + id))];
+      }
+      const n = Math.max(x.skills.length, pa.size), need = n > 8 ? 10 : n > 6 ? 8 : 6;
+      if (need > (x.slots ?? 6)) x.slots = need;
+    }
+  }
+}
+let BUILD_DEFS;
 async function renderHero() {
   await heroDefs();
-  rankGrid("ranks"); rankGrid("extraRanks"); skillModTable();
+  if (BUILD_DEFS === undefined) { try { BUILD_DEFS = await window.api.engine("buildDefs", CLASSES); } catch { BUILD_DEFS = null; } if (BUILD_DEFS?.error) BUILD_DEFS = null; }
+  rankGrid("ranks"); rankGrid("extraRanks"); skillModTable(); buildTable();
   const freeMods = !SKILL_MODS || unlocked();
   $("#classes").innerHTML = CLASSES.map(c => `<tr><td>${CLASS_ZH[c]}</td>
     <td><select data-path="unlocked.${c}">${DIFFS.map(d => `<option value="${d}">${DIFF_ZH[d]}</option>`).join("")}</select></td>
@@ -2269,6 +2358,7 @@ async function renderHero() {
   checkGold();
 }
 function collectHero() {
+  collectBuild();
   for (const el of document.querySelectorAll("[data-glow]")) {
     const hero = save.heroes?.[el.dataset.glow];
     if (el.checked) { if (!save.heroes) save.heroes = {}; if (!hero) save.heroes[el.dataset.glow] = {}; save.heroes[el.dataset.glow].glow = true; }
@@ -2720,6 +2810,7 @@ document.addEventListener("change", (e) => {
   const p = e.target.dataset?.path ?? "";
   if (p.startsWith("ranks.")) syncExtra();
   if (e.target.dataset.cls) syncSkillMods(e.target.dataset.cls);
+  if (e.target.dataset.build) onBuildChange(e.target);
 });
 for (const b of document.querySelectorAll("[data-fill]")) b.onclick = () => {
   const id = b.dataset.fill, v = $("#fill-" + id).value;

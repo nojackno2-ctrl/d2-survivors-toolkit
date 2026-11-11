@@ -67,6 +67,14 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+0000000000000k. **【2026-11-11 已提交；存檔格式與修改器介面皆已實機驗證】修改器「技能配置」**：使用者要的是自己選角色帶的 10 主動＋10 被動，不是變體（`skillMods`，遊戲內可免費改）。
+   - **存檔位置**：`heroes.<職業>.run.build`（進行中的冒險，遊戲接續時實際用這個）與 `heroes.<職業>.kept.build`（保留的角色）；`skills:[{id,level,cooldown}]`、`passives:{id:等級}`、`slots`（不寫＝6，只能 8 或 10）。
+   - **遊戲讀檔規則（`saveTransfer` 的 `nS`／`Qx`）**：技能須為該職業 kit 內、不重複、等級 1～`maxLevel`（進化技為 1）；被動為職業被動＋共通 5 個（vitality／fcr／frw／replenish／telekinesis）；`history` 內 `passive:<id>` 次數必須等於等級，否則整筆 `kept`／`run` 被丟棄（`saveFaults` 不會報）。
+   - **實作**：`modifier/engine-page.js` `buildDefs`（共通被動清單寫死，遊戲更新要重驗）；`modifier/editor.html` `buildTable`／`syncBuild`／`onBuildChange`／`collectBuild`，每職業一個區塊，以 run 為準、run 與 kept 一併改寫並各自重寫 `history`。原「技能修改」區塊改名「技能變體」。
+   - **已驗證**：`node modifier/tests/build-defs.cjs`、`skill-mods.cjs` 通過。官方 `/play/` 實機（`node tests/live-harness/build-edit-live.cjs`，隔離設定檔、使用者 D2S1 存檔副本、法師）：照相同規則改寫 run＋kept 後，遊戲保留該配置、`saveFaults` 為空，選法師進入後 `game.build` 即為改寫的 10 主動＋10 被動；反例（不改 `history`）遊戲丟棄 `kept`、以空配置開始。
+   - **介面實機（官方 `/play/`，`node tests/live-harness/build-ui-live.cjs`，Codex 撰寫、主代理重跑核對）**：第一次失敗——`d2edit.js` 的引擎操作白名單缺 `buildDefs`，介面顯示「讀不到遊戲的技能資料」；補上後不加診斷修補重跑通過：法師區塊「進行中的冒險＋保留的角色」、聖騎士「保留的角色」、亞馬遜無區塊；選項為繁中並標（進化）（共通）、已選項目在其他列停用；以 DOM 操作改法師（第 1 列 fireBolt、第 4 列 nova 自動 8 級、enchant→frw、清空一列）與聖騎士（blessedHammer、vitality）後按「寫入存檔」，localStorage 的法師 run／kept、聖騎士 kept 皆為所選配置，`history` 被動次數相符、其餘紀錄數不變（713／713／698）；重新載入後遊戲存檔保留三筆，選法師後 `game.build` 為所選 9 主動＋10 被動。
+   - **未驗證**：選角後遊戲狀態停在 `loading`（未觀察到實際開打）；聖騎士進入遊戲；欄位數 6／8 的角色；桌面版（`editor/`）。重新載入階段 console 有 `TypeError: Cannot read properties of undefined (reading 'id')`（官方 `Game-DPAk-Rvc.js:289`），對照組（完全不改存檔，`H_CONTROL=1 node tests/live-harness/build-edit-live.cjs`）同樣出現，與本功能無關，是遊戲原本就有的。沒有任何進度的職業（只有 `glow`）無法配置。
+   - **注意**：工作樹另有其他代理未提交的 `d2edit.js`、`helper/autobot.js`、`helper/autoforge-ui.js` 變更與 `quest-mode-10x-live.cjs`，本項只在 `d2edit.js` 白名單加了 `"buildDefs"`。
 0000000000000j. **【2026-11-11 Codex：掛機懸浮按鈕調整，準備發布】**：`d2edit.js` 掛機入口改成與自動淬鍊一致的金框圓形月亮圖示，位於其下方；淬鍊面板展開時隱藏入口。`helper/autoforge-ui.js` 在視窗尺寸變動時更新收合位置。`node --check` 兩檔及 `node tools/tests/build-web.cjs` 通過。官方 `/play/`、隔離 Electron 與存檔副本、載入本機工具包：直向與橫向兩圖示皆間隔 10px，展開淬鍊時入口隱藏，點掛機及喚醒成功；紀錄 `backups/afk-layout-result.json`。未驗證實體手機 Safari；發布後須確認線上部署，保留其他代理的未提交變更。
 0000000000000i. **【2026-11-11 Codex：狀態列避開遊戲介面，未實機驗證】**：`helper/autobot.js` 狀態列沿用停止按鈕的 `gameWindowOpen` 判斷；角色、營地、暫停、技能樹與任務日誌開啟時隱藏，關閉後恢復。`helper/tests/autobot.cjs` 新增對應顯示條件測試。`node --check helper/autobot.js`、`node --check helper/tests/autobot.cjs`、`node helper/tests/toolkit-1105.cjs` 通過；`node editor/node_modules/electron/cli.js helper/tests/autobot.cjs` 模擬測試 216 項通過。官方網址實機尚未驗證，未發布。
 0000000000000h. **【2026-11-11 已提交並部署（f710755 與後續提交）】公告站重新設計＋更新日誌依類別分組**：

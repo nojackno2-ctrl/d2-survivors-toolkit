@@ -778,6 +778,23 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
       }
       return out;
     },
+    // 技能配置：{ 職業: { skills: [{ id, name, maxLevel, evolved }], passives: [{ id, name, maxLevel, common }] } }
+    // 共通被動（每個職業都能選）在遊戲的存檔模組裡（saveTransfer 的 Go），物品引擎讀不到，這裡照遊戲列出；遊戲更新時要重驗。
+    buildDefs(classes) {
+      if (!G.__classKits) return null;
+      const COMMON = [["vitality", "Vitality"], ["fcr", "Faster Cast Rate"], ["frw", "Faster Run/Walk"], ["replenish", "Replenish Life"], ["telekinesis", "Telekinesis"]];
+      const out = {};
+      for (const c of classes) {
+        const kit = G.__classKits[c];
+        if (!kit) continue;
+        const own = Object.entries(kit.passives ?? {}).map(([id, d]) => ({ id, name: d?.name ?? id, maxLevel: d?.maxLevel ?? 5, common: false }));
+        out[c] = {
+          skills: Object.entries(kit.skills ?? {}).map(([id, d]) => ({ id, name: d?.name ?? id, maxLevel: d?.maxLevel ?? 8, evolved: !!d?.evolved })),
+          passives: [...COMMON.filter(([id]) => !own.some((p) => p.id === id)).map(([id, name]) => ({ id, name, maxLevel: 5, common: true })), ...own],
+        };
+      }
+      return out;
+    },
     bases() { return G.__bases.map((b) => ({ name: b.name, type: b.type, itype: b.itype, level: b.level ?? 0, size: b.size, sockets: stats.bases[b.name]?.sockets ?? null })); },
     // 可以做成這個符文之語的底材
     fixedInfo(rarity, name, baseName, eth) { try { return fixedInfo(rarity, name, baseName, eth); } catch (e) { return { error: String(e.message ?? e) }; } },
