@@ -110,10 +110,10 @@
 </style>
 </head>
 <body>
-<main data-lang="zh">
+<main>
   <h1>D2倖存者工具包（網頁版）</h1>
-  <p class="dim">給在瀏覽器（電腦或手機）玩 <a href="https://d2survivors.lol/play/" target="_blank" rel="noopener" style="color:var(--gold)">d2survivors.lol</a>（官方遊戲）的玩家。用書籤在遊戲頁面上開啟修改器，直接讀寫瀏覽器裡的存檔，不經過遊戲的匯入功能，不會留下匯入紀錄。 <a href="#" data-switch="en" style="color:var(--gold)">English</a></p>
-  <section id="known-issues" style="border-color:#a66b35"><h2>單機模式：排行榜上傳強制關閉</h2><p><b>工具包定位為單機爽玩：載入工具包後，排行榜上傳一律強制關閉，遊戲選項中也無法再打開，正在等待上傳的排行榜紀錄也會一併刪除；修改器寫入的存檔同樣關閉上傳。想上排行榜，請關閉已載入工具的分頁，另開乾淨的新分頁直接進入原版遊戲頁面，全程不要載入任何書籤工具。</b></p></section>
+  <p class="dim">給在瀏覽器（電腦或手機）玩 <a href="https://d2survivors.lol/play/" target="_blank" rel="noopener" style="color:var(--gold)">d2survivors.lol</a>（官方遊戲）的玩家。用書籤在遊戲頁面上載入工具包（修改器、輔助器、自動淬鍊、中文化），修改器直接讀寫瀏覽器裡的存檔，不經過遊戲的匯入功能，不會留下匯入紀錄。</p>
+  <section id="known-issues" style="border-color:#a66b35"><h2>單機模式：排行榜上傳強制關閉</h2><p><b>工具包定位為單機爽玩：載入工具包後，排行榜上傳一律強制關閉，遊戲選項中也無法再打開，正在等待上傳的排行榜紀錄也會一併刪除；修改器寫入的存檔同樣關閉上傳。</b></p></section>
 
   <section>
     <h2>1. 複製書籤程式碼</h2>
@@ -147,65 +147,19 @@
     <ol>
       <li>打開 <a href="https://d2survivors.lol/play/" style="color:var(--gold)">d2survivors.lol/play</a>。</li>
       <li>載入書籤：<b>Android</b> 在網址列輸入「D2 修改器」，點下面出現的書籤（從書籤清單點不會執行）；<b>iPhone／電腦</b> 直接點書籤。畫面不會變化，遊戲照常進行。</li>
-      <li>在遊戲中按<b>暫停</b>，畫面右上角會出現「<b>修改器</b>」按鈕，點它開啟修改器。</li>
+      <li>在遊戲中按<b>暫停</b>，畫面左上角會出現「<b>工具包</b>」按鈕，點開選單有：輔助器、自動淬鍊、掛機、中文化、修改器、效能。</li>
+      <li>選「修改器」開啟存檔修改器。</li>
       <li>改完按「寫入存檔」，再按「關閉」，遊戲會重新載入並套用。重新整理頁面後需再點一次書籤。</li>
     </ol>
     <p class="dim">修改前建議先到「存檔管理」按「建立快照」，會下載一份備份檔。物品引擎直接使用遊戲本身的程式產生物品，第一次開啟需要連網。修改器預設依原版規則限制數值與裝備屬性，可在「設定」解除（後果自負）。</p>
   </section>
 </main>
-<main data-lang="en" hidden>
-  <h1>D2 Survivors Toolkit (web)</h1>
-  <p class="dim">For players of d2survivors.lol in a browser (desktop or mobile). A bookmark opens the editor on top of the game page and reads/writes the save stored in your browser directly — no in-game import, so no import record is left. <a href="#" data-switch="zh" style="color:var(--gold)">繁體中文</a></p>
-  <section style="border-color:#a66b35"><h2>Known issue: leaderboard scores may not upload</h2><p>Some players report that scores may not upload after loading a toolkit bookmark, even without editing a save. The cause is unconfirmed.</p><p><b>Temporary workaround:</b> Close the game tab where a toolkit was loaded, open a clean new tab directly to the <a href="https://d2survivors.lol/play/" target="_blank" rel="noopener" style="color:var(--gold)">original game page</a>, and do not load D2 Toolkit or other bookmark tools during that session. This cannot guarantee that the game will accept a score.</p></section>
 
-  <section>
-    <h2>1. Copy the bookmarklet</h2>
-    <textarea class="code" readonly>{{BOOKMARKLET}}</textarea>
-    <p><button class="copy">Copy bookmarklet</button> <span class="copied ok"></span></p>
-    <p class="dim">Desktop: you can also drag this button to the bookmarks bar → <a class="drag" href="{{BOOKMARKLET_HTML}}">D2 Editor</a></p>
-  </section>
-
-  <section>
-    <h2>2. Add the bookmark</h2>
-    <p><b>Desktop (Chrome / Edge / Firefox)</b></p>
-    <ol>
-      <li>Press Ctrl+Shift+B to show the bookmarks bar and drag the "D2 Editor" button onto it.</li>
-      <li>Or right-click the bookmarks bar → "Add page", name it <b>D2 Editor</b>, paste the code as the URL and save.</li>
-    </ol>
-    <p><b>Android (Chrome)</b></p>
-    <ol>
-      <li>Bookmark any page (for example this one).</li>
-      <li>Open "Bookmarks", find it → Edit. Rename it to <b>D2 Editor</b>, delete the whole URL, paste the code and save.</li>
-    </ol>
-    <p><b>iPhone (Safari)</b></p>
-    <ol>
-      <li>Tap Share → Add Bookmark, save.</li>
-      <li>Open Bookmarks → Edit → tap that bookmark. Rename it to <b>D2 Editor</b>, replace the URL with the code, done.</li>
-    </ol>
-    <p class="dim">Some browsers strip the leading javascript: when pasting — make sure the URL still starts with javascript:.</p>
-  </section>
-
-  <section>
-    <h2>3. Use it</h2>
-    <ol>
-      <li>Open <a href="https://d2survivors.lol/play/" style="color:var(--gold)">d2survivors.lol/play</a>.</li>
-      <li>Load the bookmark: on <b>Android</b> type "D2 Editor" in the address bar and tap the bookmark suggestion (tapping it in the bookmark list won't run it); on <b>iPhone / desktop</b> just tap it. Nothing changes on screen and the game keeps running.</li>
-      <li><b>Pause</b> the game — an "<b>Editor</b>" button appears in the top-right corner. Tap it to open the editor.</li>
-      <li>When done press "Write save", then "Close"; the game reloads with your changes. After a page reload, tap the bookmark again.</li>
-    </ol>
-    <p class="dim">Tip: create a snapshot on the Saves page first — it downloads a backup file. The item engine uses the game's own code, so the first launch needs an internet connection. By default the editor keeps values and gear within the original game rules; you can remove this in Settings at your own risk.</p>
-  </section>
-</main>
 <script>
-  const show = (l) => { document.documentElement.lang = l === "zh" ? "zh-Hant" : "en"; document.title = l === "zh" ? "D2倖存者工具包" : "D2 Survivors Toolkit";
-    for (const m of document.querySelectorAll("main")) m.hidden = m.dataset.lang !== l; };
-  const sys = String((navigator.languages && navigator.languages[0]) || navigator.language || "en").toLowerCase();
-  show(sys.startsWith("zh") ? "zh" : "en");
-  for (const a of document.querySelectorAll("[data-switch]")) a.onclick = (e) => { e.preventDefault(); show(a.dataset.switch); };
   for (const b of document.querySelectorAll(".copy")) b.onclick = async () => {
     const box = b.closest("section"), t = box.querySelector(".code");
     try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand("copy"); }
-    box.querySelector(".copied").textContent = b.closest("main").dataset.lang === "zh" ? "已複製" : "Copied";
+    box.querySelector(".copied").textContent = "已複製";
   };
 </script>
 </body>

@@ -568,7 +568,7 @@ function render() {
   const autoSellBox = `<label style="display:flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input id="af-autosell" type="checkbox"${state.autoSell ? " checked" : ""}> 地獄熔爐失敗就自動售出</label>`;
   const itemLine = state.itemId
     ? `<div><b>${esc(state.itemObj ? zhItemName(state.itemObj) : "")}</b> <span id="af-steps" style="opacity:.85">${state.steps} 步</span></div>${hfNotice}<div style="opacity:.85"><span id="af-result">${esc(state.result || "")}</span> <b id="af-cd" style="color:#d4a84a">${pauseCountdownText()}</b></div>`
-    : `<div style="opacity:.8">${g.forgeUp ? "請把獨特、套裝或符文之語放到恰西的鐵砧上。" : "請在下方「背包可淬鍊」點「選取」，挑一件獨特、套裝或符文之語。"}</div>`;
+    : `<div style="opacity:.8">${g.forgeUp ? "請把可淬鍊的裝備（普通、稀有、套裝、獨特或符文之語）放到恰西的鐵砧上。" : "請在下方「背包可淬鍊」點「選取」，挑一件可淬鍊的裝備（普通、稀有、套裝、獨特或符文之語）。"}</div>`;
   // 控制列放在面板最上方：標題與「開始／停止／收合」同一排（按鈕加大），淬鍊狀態獨立一排。
   // 「開始」有序列就依序淬鍊，沒有序列就淬鍊鐵砧上這件。
   const bigBtn = "font-size:17px;padding:6px 16px;min-height:38px;";
@@ -672,7 +672,7 @@ function queueHtml(g) {
     <div style="border-top:1px solid #4a3d25;margin-top:8px;padding-top:6px">
       <b style="color:#d4a84a">${state.source === "stash" ? "個人倉庫" : "背包"}可淬鍊（${bag.length}）</b>
       ${sourceRow}
-      ${bagRows || `<div style="opacity:.7">${state.source === "stash" ? "個人倉庫" : "背包"}沒有獨特、套裝或符文之語</div>`}
+      ${bagRows || `<div style="opacity:.7">${state.source === "stash" ? "個人倉庫" : "背包"}沒有可淬鍊的裝備</div>`}
     </div>`;
 }
 

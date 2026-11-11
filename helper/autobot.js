@@ -2268,7 +2268,7 @@
   field("cheat.maxMonsterDensity", "怪物數量最大化（地圖怪物生成速度與數量拉滿）");
   field("cheat.allElites", "一般怪物全部變成精英以上等級（全圖小怪升階為金/藍怪）");
   group("流程與掉落修改");
-  field("cheat.forgeMax", "燃燒的恐懼精華數量 99（放入個人倉庫）");
+  field("cheat.forgeMax", "燃燒的恐懼精華數量 99（虛擬精華，不放實體物品，淬鍊時自動補足）");
   field("cheat.forgeLocal", "淬鍊與地獄熔爐本地化（不連伺服器，本機直接算出結果，不受限流；機率同原版）");
   field("cheat.forgeLocalSure", "本地淬鍊必定成功、地獄熔爐必定倍增（需開啟本地化；自動淬鍊只會淬到你設定的目標屬性）");
   field("cheat.larzukMax", "拉蘇克精華數量 99（放入個人倉庫，可用來增加物品鑲孔）");
