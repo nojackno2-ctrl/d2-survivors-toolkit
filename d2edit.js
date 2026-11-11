@@ -375,6 +375,7 @@ const prevClose = window.__d2editClose;
 if (prevClose) prevClose(true);
 window.__d2editLauncher?.remove();
 window.__d2toolkitMenu?.remove();
+document.getElementById("d2afk-launcher")?.remove();
 window.__d2perfClose?.(); // 重新點書籤時關掉舊的效能頁與其動畫迴圈
 document.getElementById("d2autoforge-afk")?.remove(); window.__d2afk = false; // 掛機遮罩（重新點書籤時清掉舊的）
 window.__d2editStopWatch?.();
@@ -456,6 +457,7 @@ function hookRenderer(g) {
 }
 function setAfk(on) {
   window.__d2afk = !!on;
+  sync();
   if (!on) { afkEl?.remove(); afkEl = null; window.__d2autoforgeUI?.redraw?.(); return; }
   hookRenderer(window.__d2autobot?.game);
   if (afkEl?.isConnected) return;
@@ -474,6 +476,13 @@ function enterAfk() {
   setAfk(true);
 }
 registerToolkitFeature({ id: "afk", label: "掛機", order: 16, open: () => enterAfk() });
+const afkLauncher = document.createElement("button");
+afkLauncher.type = "button";
+afkLauncher.id = "d2afk-launcher";
+afkLauncher.textContent = "掛機";
+afkLauncher.style.cssText = "position:fixed;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:2147483645;display:none;min-height:44px;padding:8px 14px;border:1px solid #d4a84a;border-radius:6px;background:rgba(20,17,13,.92);color:#d4a84a;font:bold 15px 'Microsoft JhengHei',system-ui,sans-serif;cursor:pointer;touch-action:manipulation";
+afkLauncher.onclick = (e) => { e.preventDefault(); e.stopPropagation(); enterAfk(); };
+for (const ev of ["pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend", "keydown", "keyup"]) afkLauncher.addEventListener(ev, (e) => e.stopPropagation());
 let perfPage = null;
 function openPerfPage() {
   if (perfPage) return;
@@ -615,7 +624,7 @@ for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) {
   launcher.addEventListener(ev, (e) => e.stopPropagation());
   toolkitMenu.addEventListener(ev, (e) => e.stopPropagation());
 }
-document.body.append(launcher, toolkitMenu);
+document.body.append(launcher, toolkitMenu, afkLauncher);
 window.__d2editLauncher = launcher;
 window.__d2toolkitMenu = toolkitMenu;
 // 遊戲的暫停選單畫在 canvas 上：暫停時 body 會加上 frontend-over-run（實測 d2survivors.lol 營地與冒險中皆同）；舊版或其他畫面用 #paused
@@ -627,7 +636,7 @@ const pausedNow = () => {
 // 依使用者要求：整個工具讀取完畢前不讓玩家使用，「修改器」按鈕等載入完成才出現。
 let toolsReady = false;
 // 每 500 毫秒及畫面變動時執行：值相同時不寫入 style，避免無謂的樣式重算
-const sync = () => { const v = toolsReady && pausedNow() && !frame ? "block" : "none"; if (launcher.style.display !== v) launcher.style.display = v; if (v === "none" && toolkitMenu.style.display !== "none") toolkitMenu.style.display = "none"; };
+const sync = () => { const v = toolsReady && pausedNow() && !frame ? "block" : "none"; if (launcher.style.display !== v) launcher.style.display = v; if (v === "none" && toolkitMenu.style.display !== "none") toolkitMenu.style.display = "none"; const afkVisible = toolsReady && !!window.__d2autobot?.game?.kit && !frame && !perfPage && !window.__d2afk; afkLauncher.style.display = afkVisible ? "block" : "none"; };
 let watched = null;
 const observer = new MutationObserver(() => {
   const p = document.getElementById("paused");

@@ -67,6 +67,7 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+0000000000000j. **【2026-11-11 Codex：掛機懸浮按鈕，準備發布】**：`d2edit.js` 新增右上角「掛機」懸浮入口，選好職業且工具包載入完成後顯示；沿用既有遮罩與點擊喚醒，原選單入口保留，重新載入工具包會移除舊按鈕。公告站與修改器已補更新日誌。`node --check d2edit.js`、`node tools/tests/build-web.cjs`、`node tools/tests/changelog-merge.cjs` 通過；`node verify/live-smoke.cjs` 官方遊戲煙霧測試通過（20261105.3，amazon）。尚未驗證此按鈕的點擊、遮罩及桌面／手機版排版；發布後須確認線上部署。
 0000000000000i. **【2026-11-11 Codex：狀態列避開遊戲介面，未實機驗證】**：`helper/autobot.js` 狀態列沿用停止按鈕的 `gameWindowOpen` 判斷；角色、營地、暫停、技能樹與任務日誌開啟時隱藏，關閉後恢復。`helper/tests/autobot.cjs` 新增對應顯示條件測試。`node --check helper/autobot.js`、`node --check helper/tests/autobot.cjs`、`node helper/tests/toolkit-1105.cjs` 通過；`node editor/node_modules/electron/cli.js helper/tests/autobot.cjs` 模擬測試 216 項通過。官方網址實機尚未驗證，未發布。
 0000000000000h. **【2026-11-11 已提交並部署（f710755 與後續提交）】公告站重新設計＋更新日誌依類別分組**：
    - `site/index.html` 全面改版（Codex 實作設計、Agy 依程式稽核並校對內容、主代理核實與修整）：暗黑 2 物品提示框風格，稀有度色＝模組色（修改器金 `--c-unique`、輔助器綠 `--c-set`、自動淬鍊橘 `--c-rune`、遊戲修改紅 `--c-danger`、中文化藍 `--c-magic`、工具包／效能／相容性黃 `--c-rare`）；≥1200px 三欄（左導覽＋scroll-spy、右更新日誌），以下為頂部橫向導覽單欄。新增 `#forge` 自動淬鍊區段、官方遊戲連結（`https://d2survivors.lol/play/`）。`site/install.template.html` 同步換視覺，`site/install.html` 已用同一書籤字串重新產生（未跑 build-web，`version.json` 未動）。
