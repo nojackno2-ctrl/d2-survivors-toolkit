@@ -33,8 +33,8 @@ function essenceCount(g, cls) {
   return inv.filter((i) => i?.type === "essence" && i.base === ESSENCE_NAME).reduce((s, i) => s + (i.count ?? 1), 0);
 }
 
-// 可淬鍊：獨特、套裝、符文之語，且有屬性。
-const eligible = (it) => !!it && ["unique", "set", "runeword"].includes(it.rarity) && Array.isArray(it.mods) && it.mods.length > 0;
+// 可淬鍊：原版規則（非魔法、非咒符／珠寶／精華／任務物品，且至少一條可淬鍊屬性），見 autoforge.js 的 canTemper。
+const eligible = (it) => !!it && AF().canTemper(it);
 
 // 該角色的個人倉庫（與遊戲 stashTabs[角色] 相同）。
 const stashOf = (g, cls) => g.save?.stashTabs?.[cls] || [];

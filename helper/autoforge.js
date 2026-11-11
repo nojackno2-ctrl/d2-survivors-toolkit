@@ -197,6 +197,62 @@ function exactOdds(targets, lineKeys, opts = {}) {
   };
 }
 
-const AUTOFORGE = { TEMPER_CAP, normalizeTargets, totalTempers, decideNext, afterHellforge, hellforgeFailed, hellforgeSucceeded, simulateOdds, exactOdds, TEMPER_SAMPLE, HELLFORGE_SAMPLE };
+
+// ───── 原版「可淬鍊」規則（反編譯 game-bundles/20261105.3：pack-_pWog-fz.js 的 z／B／ge／k，itemArt 的 dke／l6，saveTransfer 的 ma） ─────
+// 1. 類型不是咒符（charm）、珠寶（jewel）、精華（essence）、任務物品（quest）。
+// 2. 稀有度不是魔法（magic）。普通、稀有、套裝、獨特、符文之語都可以（稀有並非不能淬鍊）。
+// 3. 至少有一條「可淬鍊屬性」（見 temperLines）：略過隱含屬性、值 ≤ 0 的屬性，以及 TEMPER_NO_KEY 清單中的特殊效果；
+//    有 item.stats（新格式）時，item.stats 只收白名單，item.mods 只收 auto／staff 標記的條目。
+const TEMPER_STATS = new Set(["strength", "dexterity", "energy", "vitality", "maxhp", "item_hp_perlevel", "hpregen", "maxstamina", "item_stamina_perlevel", "staminarecoverybonus", "item_regenstamina_perlevel", "item_fastercastrate", "item_fasterattackrate", "item_fastermovevelocity", "item_magicbonus", "item_goldbonus", "item_armor_percent", "armorclass", "damageresist", "normal_damage_reduction", "fireresist", "coldresist", "lightresist", "poisonresist", "maxfireresist", "maxcoldresist", "maxlightresist", "maxpoisonresist", "item_attackertakesdamage", "item_attackertakeslightdamage", "lifedrainmindam", "item_crushingblow", "item_deadlystrike", "item_deadlystrike_perlevel", "item_openwounds", "item_pierce", "item_healafterkill", "item_healafterdemonkill", "item_poisonlengthresist", "item_undeaddamage_percent", "item_demondamage_percent", "tohit", "item_tohit_percent", "passive_fire_mastery", "passive_cold_mastery", "passive_ltng_mastery", "passive_pois_mastery", "passive_fire_pierce", "passive_cold_pierce", "passive_ltng_pierce", "passive_pois_pierce", "item_maxdamage_percent", "item_mindamage_percent", "item_normaldamage", "poisonmindam", "poisonmaxdam", "toblock", "item_fasterblockrate", "item_fastergethitrate", "item_reducedprices", "item_absorbfire_percent", "item_absorbcold_percent", "item_absorblight_percent", "item_absorbfire", "item_absorbcold", "item_absorbmagic", "item_absorblight", "item_absorb_fire_perlevel", "item_absorb_cold_perlevel", "item_absorb_ltng_perlevel", "item_vitality_perlevel", "item_maxdamage_perlevel", "item_fire_damagemax_perlevel", "item_cold_damagemax_perlevel", "item_ltng_damagemax_perlevel", "item_armor_perlevel", "item_find_magic_perlevel", "item_damage_demon_perlevel", "item_resist_ltng_perlevel", "item_thorns_perlevel", "item_tohit_perlevel", "item_tohitpercent_perlevel", "item_strength_perlevel", "item_dexterity_perlevel", "item_maxdamage_percent_perlevel", "item_damage_undead_perlevel", "item_find_gold_perlevel", "item_tohit_undead_perlevel", "item_tohit_demon_perlevel", "item_maxhp_percent", "item_addexperience", "magic_damage_reduction", "armorclass_vs_missile", "armorclass_vs_hth", "item_stupidity", "item_freeze", "item_slow", "item_howl", "item_fractionaltargetac", "item_damagetargetac", "item_undead_tohit", "item_demon_tohit", "maxmana", "item_maxmana_percent", "item_mana_perlevel", "manarecoverybonus", "item_damagetomana", "manadrainmindam", "item_manaafterkill", "mindamage", "maxdamage", "firemindam", "firemaxdam", "lightmindam", "lightmaxdam", "coldmindam", "coldmaxdam", "magicmindam", "magicmaxdam"]);
+const TEMPER_SKILL_STATS = new Set(["item_allskills","item_elemskill","item_addclassskills","item_addskill_tab","item_singleskill","item_nonclassskill","item_aura","item_magicarrow","item_explosivearrow"]);
+const TEMPER_PROC_STATS = new Set(["item_skillonhit","item_skillonattack","item_skillongethit","item_skillonkill","item_skillondeath","item_skillonlevelup","item_charged_skill"]);
+const TEMPER_SKILL_KEY = /^(allSkills|fireSkills|coldSkills|lightningSkills|skilltab\d+|classskills\d+|skill:.+|oskill:.+|aura:.+|magicArrows|explosiveArrows)$/;
+const TEMPER_NO_KEY = /^(cannotBeFrozen|halfFreeze|knockback|ignoreDefense|preventHeal|restInPeace|lightRadius|proc:.+|charge:.+)$/;
+const TEMPER_NEG_OK = new Set(["item_fractionaltargetac", "item_damagetargetac"]); // 這兩個以負值為有效
+const TEMPER_PAIRS = new Map([["item_mindamage_percent", "item_maxdamage_percent"], ["mindamage", "maxdamage"], ["firemindam", "firemaxdam"], ["lightmindam", "lightmaxdam"], ["coldmindam", "coldmaxdam"], ["magicmindam", "magicmaxdam"], ["poisonmindam", "poisonmaxdam"], ["minDamage", "maxDamage"], ["fireMinDamage", "fireMaxDamage"], ["lightningMinDamage", "lightningMaxDamage"], ["coldMinDamage", "coldMaxDamage"], ["magicMinDamage", "magicMaxDamage"], ["poisonMinDamage", "poisonMaxDamage"]].flatMap(([a, b]) => [[a, b], [b, a]]));
+
+// 單一條屬性是否可淬鍊：回傳 "level"／"amount"／null。fromStats＝這條來自 item.stats。
+function temperKind(m, fromStats) {
+  if (!m || m.implicit) return null;
+  if (fromStats) {
+    if (TEMPER_PROC_STATS.has(m.stat)) return (m.level ?? 0) > 0 && m.value > 0 ? "level" : null;
+    if (TEMPER_SKILL_STATS.has(m.stat)) return m.value > 0 ? "level" : null;
+    if (!TEMPER_STATS.has(m.stat)) return null;
+  } else {
+    if (TEMPER_NO_KEY.test(m.stat)) return null;
+    if (TEMPER_SKILL_KEY.test(m.stat)) return m.value > 0 ? "level" : null;
+  }
+  return (TEMPER_NEG_OK.has(m.stat) ? m.value < 0 : m.value > 0) ? "amount" : null;
+}
+
+// 把一組屬性分成可淬鍊的「行」（最小／最大傷害成對算一行）。回傳 [{ key: "s0"|"m0", kind, at:[索引] }]。
+function temperGroups(list, fromStats) {
+  const prefix = fromStats ? "s" : "m", used = new Set(), out = [];
+  (list || []).forEach((m, i) => {
+    if (used.has(i)) return;
+    const kind = temperKind(m, fromStats);
+    if (!kind) return;
+    const pair = TEMPER_PAIRS.get(m.stat);
+    const j = pair === undefined ? -1 : list.findIndex((x, k) => k > i && !used.has(k) && x.stat === pair);
+    const at = j < 0 ? [i] : [i, j];
+    at.forEach((k) => used.add(k));
+    out.push({ key: prefix + i, kind, at });
+  });
+  return out;
+}
+
+// 物品所有可淬鍊的行（鍵名與遊戲的 forge.t 一致：s＝item.stats、m＝item.mods）。
+function temperLines(item) {
+  if (!item || ["charm", "jewel", "essence", "quest"].includes(item.type)) return [];
+  const mods = item.stats ? (item.mods || []).filter((m) => m.auto || m.staff) : (item.mods || []);
+  return [...(item.stats ? temperGroups(item.stats, true) : []), ...temperGroups(mods, false)];
+}
+
+// 原版可淬鍊判斷（不含「已滿 10 次」「熔爐已用」這類目前狀態）。
+function canTemper(item) {
+  return !!item && item.rarity !== "magic" && temperLines(item).length > 0;
+}
+
+const AUTOFORGE = { TEMPER_CAP, temperKind, temperLines, canTemper, normalizeTargets, totalTempers, decideNext, afterHellforge, hellforgeFailed, hellforgeSucceeded, simulateOdds, exactOdds, TEMPER_SAMPLE, HELLFORGE_SAMPLE };
 if (typeof module !== "undefined" && module.exports) module.exports = AUTOFORGE;
 else if (typeof window !== "undefined") window.__d2autoforge = AUTOFORGE;

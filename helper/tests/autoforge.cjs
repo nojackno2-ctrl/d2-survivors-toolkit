@@ -21,6 +21,17 @@ ok(d({ s0: 5, s1: 3, s2: 1 }) === "temper", "總數 9 未達成 → temper");
 ok(d({ s0: 5, s1: 3, s4: 2 }) === "clean", "總數 10 且 s2 不足 → clean");
 ok(A.decideNext({ s0: { kind: "any", min: 0 } }, { counts: {} }).action === "done", "沒有任何需達成的目標 → done");
 
+// 原版可淬鍊規則（反編譯移植）
+const ct = (type, rarity, mods, extra) => A.canTemper({ type, rarity, mods, ...extra });
+ok(ct("weapon", "rare", [{ stat: "fireResist", value: 5 }]) === true, "稀有可淬鍊");
+ok(ct("weapon", "magic", [{ stat: "fireResist", value: 5 }]) === false, "魔法不可淬鍊");
+ok(ct("charm", "unique", [{ stat: "fireResist", value: 5 }]) === false, "咒符不可淬鍊");
+ok(ct("armor", "unique", [{ stat: "fireResist", value: 0 }]) === false, "值為 0 沒有可淬鍊行");
+ok(ct("armor", "unique", [{ stat: "fireResist", value: 5, implicit: true }]) === false, "只有隱含屬性不可淬鍊");
+ok(ct("armor", "unique", [{ stat: "cannotBeFrozen", value: 1 }]) === false, "特殊效果不可淬鍊");
+ok(ct("armor", "unique", [{ stat: "allSkills", value: 1 }]) === true, "+全技能可淬鍊");
+ok(A.temperLines({ type: "weapon", rarity: "unique", mods: [{ stat: "mindamage", value: 5 }, { stat: "maxdamage", value: 9 }] }).length === 1, "最小／最大傷害成對算一行");
+
 ok(A.afterHellforge("All tempers doubled").status === "done", "倍增 → done");
 ok(A.afterHellforge("All tempers lost").status === "failed", "清空 → failed");
 ok(A.afterHellforge("???").status === "unknown", "未知文字 → unknown");

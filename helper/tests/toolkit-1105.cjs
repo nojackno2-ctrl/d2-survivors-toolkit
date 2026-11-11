@@ -21,16 +21,18 @@ for (const [decision, expected] of [["hidesell", true], ["sell", true], ["pick",
   checkLoot(acceptsSource, decision, expected);
   console.log("通過：撿寶 " + decision + " → " + expected);
 }
-const eligible = new Function(eligibleSource + "; return eligible;")();
-for (const rarity of ["magic", "rare", "unique", "set", "runeword"]) {
-  const expected = ["unique", "set", "runeword"].includes(rarity);
-  assert.equal(eligible({ rarity, mods: [{}] }), expected, "可淬鍊判斷：" + rarity);
+const AFmod = require("../autoforge.js");
+const eligible = new Function("AF", eligibleSource + "; return eligible;")(() => AFmod);
+for (const rarity of ["normal", "magic", "rare", "unique", "set", "runeword"]) {
+  const expected = rarity !== "magic"; // 原版：只有魔法不可淬鍊
+  assert.equal(eligible({ type: "armor", rarity, mods: [{ stat: "fireResist", value: 10 }] }), expected, "可淬鍊判斷：" + rarity);
   console.log("通過：可淬鍊 " + rarity + " → " + expected);
 }
-for (const rarity of ["unique", "set", "runeword"]) {
-  assert.equal(eligible({ rarity, mods: [] }), false, "空屬性不可淬鍊：" + rarity);
+for (const rarity of ["unique", "set", "runeword", "rare"]) {
+  assert.equal(eligible({ type: "armor", rarity, mods: [] }), false, "空屬性不可淬鍊：" + rarity);
 }
-console.log("通過：空屬性不可淬鍊");
+for (const type of ["charm", "jewel", "essence", "quest"]) assert.equal(eligible({ type, rarity: "unique", mods: [{ stat: "fireResist", value: 10 }] }), false, "類型不可淬鍊：" + type);
+console.log("通過：空屬性、咒符／珠寶／精華／任務物品不可淬鍊");
 // 結構檢查：確認兩處售出條件先檢查 eligible，再檢查 hellforgeFailed。
 for (const name of ["it", "item"]) {
   const condition = new RegExp("if\\s*\\(\\s*eligible\\(\\s*" + name + "\\s*\\)\\s*&&\\s*AF\\(\\)\\.hellforgeFailed\\(\\s*" + name + "\\.forge\\s*\\)[^\\n]*\\)\\s*\\{[^\\n]*sellItem\\(");

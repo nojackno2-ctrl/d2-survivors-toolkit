@@ -67,6 +67,10 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+0000000000000f. **【已實作 2026-11-11，未提交、未實機驗證】自動淬鍊「可淬鍊」判斷改為原版規則**（反編譯 `game-bundles/20261105.3`：`pack-_pWog-fz.js` 的 `z／B／ge／k`、`itemArt` 的 `dke／l6`、`saveTransfer` 的 `ma`；移植為 `helper/autoforge.js` 的 `temperLines／canTemper`，`helper/autoforge-ui.js` 的 `eligible` 改用它）。
+   - **原版規則**：① 類型不是咒符／珠寶／精華／任務物品；② 稀有度**只排除魔法**（普通、**稀有**、套裝、獨特、符文之語都可以；舊版只收獨特／套裝／符文之語，稀有被誤排除）；③ 至少一條可淬鍊屬性：略過隱含、值 ≤ 0、`cannotBeFrozen／halfFreeze／knockback／ignoreDefense／preventHeal／restInPeace／lightRadius／proc:／charge:`；有 `item.stats` 時 stats 只收白名單、mods 只收 auto／staff；最小／最大傷害成對算一行。遊戲鐵砧放上時只檢查①（`Ot`），②③ 決定面板有沒有可淬鍊行。
+   - **對照**：The Stone of Jordan 移植結果為 s0～s3 四行，與先前實測「s4 從未出現」一致。單元測試 `helper/tests/autoforge.cjs`（50 項）、`toolkit-1105.cjs` 通過；`autobot.cjs` 在改動前就缺模組無法執行（與本次無關）。
+   - **未驗證**：稀有裝備在官方 `/play/` 實際放上鐵砧並淬鍊；普通裝備；`magic` 的 `Hellforge open` 路徑。
 0000000000000e. **【已發布 2026-11-11，git 直接推送 main，公告站與修改器日誌已補】遊戲修改「淬鍊與地獄熔爐本地化」**（新檔 `helper/forge-local.js`；`d2edit.js`、`helper/autobot.js`、`helper/autoforge-ui.js`；實作由 Codex、實機腳本由 AGY 子代理撰寫，主代理核實與修補）。
    - **原理**：鍛造全部走 `POST /api/leaderboard/forge`（`act`：temper／clean／hellforge／upgrade／look／claim）。用戶端只檢查回應格式（`pack` 的 `H`），`h` 不做簽章驗證，所以可在頁面攔截 fetch、回本機算出的 Response，遊戲原本的 `forgeTry` 照常扣精華、套用、存檔。舊結論「直接寫 forge 會被伺服器覆蓋」的原因是 `look` 同步，本機一併回覆 `look` 即可保留。
    - **開關**（遊戲修改 →「流程與掉落修改」）：`cheat.forgeLocal`（本地化，機率同原版：淬鍊 `1/(1+n/4)`、熔爐 40% 倍增）；`cheat.forgeLocalSure`（淬鍊必成功、熔爐必倍增；自動淬鍊執行時經 `__d2forgeLocal.setWant` 只淬面板上未達標且非 X 的屬性）。生效條件＝總開關＋`forgeLocal`。
