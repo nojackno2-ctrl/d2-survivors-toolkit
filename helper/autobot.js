@@ -972,8 +972,12 @@
     // 實測（35 存檔裝備異動紀錄）：雙手武器與盾牌互擠，被擠掉的欄位不扣分，之後撿不到單手武器就一直空著（聖騎士、死靈常空武器欄）。
     // 盾牌以外每空一欄扣 15 分（約少 15％ 傷害），只有提升夠大才犧牲欄位，空欄也會優先補上。
     const emptyPenalty = ["weapon", "head", "body", "gloves", "belt", "boots", "amulet", "ring1", "ring2"].filter((k) => !worn[k]).length * 15;
-    return -emptyPenalty + Math.log1p(Math.max(0, n.Damage || 0)) * 100 + Math.log1p(Math.max(0, n.Life || 0)) * 130 - Math.log(1 - reduced) * 150 + res + Math.log1p(Math.max(0, n.Defense || 0) / 1000) * 20 + Math.min(1, n["Faster Cast Rate"] || 0) * 20 + (n["Replenish Life"] || 0) * 0.5 + (n["Magic Find"] || 0) * 0.02;
+    // 語料審查：原版 heroNumbers 沒有這幾項，直接加總身上裝備詞綴；權重取保守值（1 分約傷害 +1％），並設上限避免被單一屬性帶走。
+    const sum = (id) => Object.values(worn).reduce((a, it) => a + (it?.mods || []).reduce((b, m) => b + (m.stat === id ? Number(m.value) || 0 : 0), 0), 0);
+    const extra = Math.min(30, sum("lifeLeech")) * 1.2 + Math.min(40, sum("frw")) * 0.3 + Math.min(50, sum("crushingBlow")) * 0.2 + Math.min(100, sum("openWounds")) * 0.08 + Math.min(100, sum("deadlyStrike")) * 0.12;
+    return -emptyPenalty + extra + Math.log1p(Math.max(0, n.Damage || 0)) * 100 + Math.log1p(Math.max(0, n.Life || 0)) * 130 - Math.log(1 - reduced) * 150 + res + Math.log1p(Math.max(0, n.Defense || 0) / 1000) * 20 + Math.min(1, n["Faster Cast Rate"] || 0) * 20 + (n["Replenish Life"] || 0) * 0.5 + (n["Magic Find"] || 0) * 0.02;
   }
+  const equipFailed = new WeakSet();
   // 回傳候選中提升最多且達門檻者；候選可來自背包、倉庫、收藏庫或商店，只比較不寫入。
   function bestGear(g, items) {
     const p = g.world.player, worn = g.equippedOf(p.cls), baseNumbers = gearNumbers(g, worn), base = gearScore(g, worn, baseNumbers), doll = g.ownGear(p.cls).doll;
@@ -981,8 +985,20 @@
     const survival = (n) => Math.log1p(Math.max(0, n.Life || 0)) * 130 - Math.log(1 - Math.min(0.5, Math.max(0, n["Damage Reduced"] || 0))) * 150 + resKeys.reduce((a, k) => { const r = n[k] || 0; return a - Math.log(1 - Math.min(75, r) / 100) * 100 + Math.min(0, r) * 1.5; }, 0);
     const baseSurvival = survival(baseNumbers), baseDamage = Math.max(0, baseNumbers.Damage || 0);
     let best = null;
+    // 候選過多（倉庫／收藏庫上千件）時每件都要跑一次原版數值計算，太慢：先用便宜的粗分（品質、詞綴數值總和、防禦）每個欄位只留前 12 件再精算。
+    if (items.length > 60) {
+      const rarityRank = { normal: 0, magic: 1, rare: 2, set: 3, runeword: 3, unique: 3 }, cheap = (it) => (rarityRank[it.rarity] ?? 0) * 20 + (it.mods || []).reduce((a, m) => a + Math.abs(Number(m.value) || 0), 0) + (Number(it.defense) || 0) * 0.1;
+      const groups = new Map();
+      for (const it of items) {
+        if (!it?.base || equipFailed.has(it)) continue;
+        let key = it.type; try { key = it.type === "ring" ? "ring" : doll.slotFor?.(it, worn) || it.type; } catch { /* 用類型分組 */ }
+        (groups.get(key) || groups.set(key, []).get(key)).push(it);
+      }
+      items = [...groups.values()].flatMap((list) => list.sort((a, b) => cheap(b) - cheap(a)).slice(0, 12));
+    }
     for (const item of items) {
-      if (!item?.base || item.type === "quest" || item.type === "rune" || item.type === "gem" || Object.values(worn).includes(item)) continue;
+      // 珠寶是用來鑲嵌的（原版 equip 對珠寶沒有作用，doll.canWear 卻回傳 true）；語料實測背包有珠寶時會以「空欄」加分永遠被挑中而卡死其他換裝。穿不上的裝備也記住不再挑。
+      if (!item?.base || item.type === "quest" || item.type === "rune" || item.type === "gem" || item.type === "jewel" || equipFailed.has(item) || Object.values(worn).includes(item)) continue;
       if (!doll.canWear?.(item)) continue;
       // 原版兩格戒指都已穿時預設覆蓋 ring1；分別評估兩格並明確傳入選中的欄位。
       const slots = item.type === "ring" ? ["ring1", "ring2"].filter((slot) => typeof doll.fits !== "function" || doll.fits(item, slot)) : [doll.slotFor?.(item, worn)];
@@ -1013,6 +1029,24 @@
     }
     return best;
   }
+  // 單件裝備換上後相對目前身上的分數差（各可用欄位取最大）；穿不上回傳 -Infinity。只比較不寫入。
+  const stashRefused = new WeakSet(), collectRefused = new WeakSet(), duplicateJunk = new WeakSet();
+  function gearGain(g, item) {
+    try {
+      const p = g.world.player, worn = g.equippedOf(p.cls), doll = g.ownGear(p.cls).doll, base = gearScore(g, worn);
+      if (!doll.canWear?.(item)) return -Infinity;
+      const slots = item.type === "ring" ? ["ring1", "ring2"] : [doll.slotFor?.(item, worn)];
+      let gain = -Infinity;
+      for (const to of slots) {
+        if (!to) continue;
+        const trial = { ...worn };
+        for (const s of doll.displaced?.(item, worn, to) || []) delete trial[s];
+        trial[to] = item;
+        gain = Math.max(gain, gearScore(g, trial) - base);
+      }
+      return gain;
+    } catch { return -Infinity; }
+  }
   let charmTried = new WeakSet();
   // 咒符評分（依屬性）：本職業技能／全技能高分，別職業技能 0 分；生命、抗性、跑速、魔法尋寶等；四項屬性依排行榜配點比例加權。
   // 技能詞綴對應職業（遊戲 itemArt 的 T6 順序）：classskillsN → T6[N]、skilltabN → T6[floor(N/3)]。
@@ -1033,7 +1067,8 @@
       else if (stat === "fhr" || stat === "fcr") v += n * 0.5;
       else if (stat === "magicFind") v += n * 0.3;
       else if (stat === "goldFind") v += n * 0.02;
-      else if (/MinDamage$|MaxDamage$/.test(stat)) v += n * (/poison/.test(stat) ? 0.03 : 0.3);
+      // 語料審查（70 萬件）：物理 minDamage／maxDamage 為小寫開頭，原正則 /MinDamage$|MaxDamage$/ 抓不到，約 420 件咒符被算 0 分。
+      else if (/(min|max)damage$/i.test(stat)) v += n * (/poison/i.test(stat) ? 0.03 : 0.3);
       else if (stat === "attackRatingPoints") v += n * (caster ? 0 : 0.03);
       else if (stat === "defense") v += n * 0.02;
       else if (stat === "replenishLife") v += n * 1;
@@ -1070,13 +1105,23 @@
       }
       // 沒用的裝備（普通／魔法／稀有且不比身上好）撿到就賣，不等背包滿；獨特、套裝、符文之語、咒符留給收藏與倉庫。
       if (settings.town.sellJunk) {
-        const junk = g.inventoryOf(p.cls).find((x) => x?.base && (!keepType(x) && !isCharm(x) && ["normal", "magic", "rare"].includes(x.rarity) || isCharm(x) && x.rarity !== "unique" && charmValue(x, p.cls) <= 0));
-        if (junk) { g.gearActions(p.cls, () => {}, false).sell(junk); if (!g.inventoryOf(p.cls).includes(junk)) lastAction = "賣掉用不到的裝備 " + (junk.name || junk.base); }
+        // 背包快滿（約 40 格）時一次多賣幾件並先賣最低品質，避免被裝備塞滿；平時一次一件。
+        const rank = { normal: 0, magic: 1, rare: 2 }, inv = g.inventoryOf(p.cls);
+        const junks = inv.filter((x) => x?.base && (!keepType(x) && !isCharm(x) && x.rarity in rank || isCharm(x) && x.rarity !== "unique" && charmValue(x, p.cls) <= 0)).sort((a, b) => (isCharm(a) ? -1 : rank[a.rarity]) - (isCharm(b) ? -1 : rank[b.rarity]));
+        const acts = g.gearActions(p.cls, () => {}, false);
+        for (const junk of junks.slice(0, inv.length >= 28 ? 4 : 1)) { acts.sell(junk); if (!g.inventoryOf(p.cls).includes(junk)) lastAction = "賣掉用不到的裝備 " + (junk.name || junk.base); }
       }
       return;
     }
     g.gearActions(p.cls, () => {}, false).equip(best.item, best.slot);
     if (Object.values(g.equippedOf(p.cls)).includes(best.item)) lastAction = "已自動穿上較佳裝備：" + itemZh(best.item);
+    else {
+      // 背包塞滿時換裝沒有空格放被換下的裝備：先賣一件用不到的低品質裝備騰空間，下一輪再試；沒有可賣的才放棄這件。
+      const rank = { normal: 0, magic: 1, rare: 2 }, junk = g.inventoryOf(p.cls).filter((x) => x?.base && x !== best.item && !keepType(x) && !isCharm(x) && x.rarity in rank).sort((a, b) => rank[a.rarity] - rank[b.rarity])[0];
+      const full = finite(g.lastInventoryFull) && performance.now() - g.lastInventoryFull < 5000;
+      if (junk && full) { g.gearActions(p.cls, () => {}, false).sell(junk); g.lastInventoryFull = -Infinity; if (!g.inventoryOf(p.cls).includes(junk)) { lastAction = "背包已滿，賣掉 " + (junk.name || junk.base) + " 再換裝"; return; } }
+      equipFailed.add(best.item);
+    }
   }
   // 營地整備：沿用原版 openCampTrade 與商店介面回呼（hud.showTown 的參數），一次只做一個動作。
   // 實測（2026-11-01）：store＝恰西升級與裝備、akara＝藥水（1000 金，下一局放入藥帶）、stash＝倉庫／收藏庫（toStash、collectAll、可直接 equip）。
@@ -1138,9 +1183,23 @@
         if (best) { shop.tried.add(best.item); a.equip(best.item, best.slot); lastAction = "整備：換上較佳裝備 " + itemZh(best.item); return false; }
       }
       if (settings.town.collect && (view ? view.collect > 0 : shop.smith) && !shop.collected && typeof a.collectAll === "function") { shop.collected = true; a.collectAll(); lastAction = "整備：把獨特／套裝收進收藏庫"; return false; }
+      // 依使用者要求：獨特／套裝／符文之語放收藏庫（原版每個名稱只收一件）；同名的由原版比較，品質較好的換進收藏庫，較差的那件賣掉。
+      // 原版 toStash 在收藏庫分頁（uniques）：沒有同名→收入；同名且較好→swapIn（舊的回到背包）；同名且不較好→拒絕。
+      if (settings.town.collect && typeof a.toStash === "function" && typeof a.openStashTab === "function" && view?.open) {
+        const kept = (it) => (view.uniques instanceof Map ? [...view.uniques.values()] : Object.values(view.uniques || {})).flat().map((x) => x?.item ?? x).find((x) => x && x !== it && x.name === it.name && x.rarity === it.rarity);
+        if (shop.collecting) { const it = shop.collecting; shop.collecting = null; const old = shop.collectingTwin; shop.collectingTwin = null; if (g.inventoryOf(cls).includes(it)) { if (kept(it)) duplicateJunk.add(it); else shop.tried.delete(it); collectRefused.add(it); } else if (old && g.inventoryOf(cls).includes(old)) duplicateJunk.add(old); }
+        const item = g.inventoryOf(cls).find((x) => x?.base && x.name && !shop.tried.has(x) && !collectRefused.has(x) && !duplicateJunk.has(x) && !keepType(x) && !(x.base === WIRT_LEG && cowWanted(g)) && ["unique", "set", "runeword"].includes(x.rarity));
+        if (item && view.open !== "uniques") { a.openStashTab("uniques"); lastAction = "整備：切換到收藏庫"; return false; }
+        if (item) { shop.tried.add(item); shop.collecting = item; shop.collectingTwin = kept(item) || null; a.toStash(item); lastAction = "整備：放入收藏庫（同名留較好的） " + itemZh(item); return false; }
+      }
       if (settings.town.stash && typeof a.toStash === "function") {
-        const item = g.inventoryOf(cls).find((x) => x?.base && !shop.tried.has(x) && !keepType(x) && !(x.base === WIRT_LEG && cowWanted(g)) && ["unique", "set", "runeword", "rare"].includes(x.rarity));
-        if (item) { shop.tried.add(item); a.toStash(item); lastAction = "整備：存入倉庫 " + itemZh(item); return false; }
+        // 上一件存不進去（個人倉庫已滿，仍留在背包）：記住不再存，稀有的交給賣裝步驟，避免背包被存不進去的裝備塞滿。
+        if (shop.stashing) { if (g.inventoryOf(cls).includes(shop.stashing)) { stashRefused.add(shop.stashing); shop.tried.delete(shop.stashing); } shop.stashing = null; }
+        // 稀有裝備只有接近身上裝備（分數差 5 分以內，可當備用）才存；其餘留給賣裝，倉庫才不會被用不到的稀有裝備塞滿。獨特／套裝／符文之語一律存。
+        const item = g.inventoryOf(cls).find((x) => x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !keepType(x) && !(x.base === WIRT_LEG && cowWanted(g)) && (["unique", "set", "runeword"].includes(x.rarity) || x.rarity === "rare" && gearGain(g, x) >= -5));
+        // 原版 toStash 存進「目前開著的分頁」；使用者要求只能存個人倉庫，目前不是個人分頁（共用或收藏庫）時先切回個人分頁，下一輪再存。
+        if (item && view?.open && view.open !== "personal" && typeof a.openStashTab === "function") { a.openStashTab("personal"); lastAction = "整備：切換到個人倉庫"; return false; }
+        if (item) { shop.tried.add(item); shop.stashing = item; a.toStash(item); lastAction = "整備：存入倉庫 " + itemZh(item); return false; }
       }
       // 秘密乳牛關卡（N3）：原版 LM() 只認「背包裡」的維特之腿才開傳送門；腿放在倉庫（例如 shared 分頁，實測 stashTabs.shared3）時
       // 格里斯華爾德死亡只會判成 "nothing"（Game-DPAk 約 230681）。本難度 N3 未完成就用原版倉庫動作 fromStash（約 398125）把腿拿回背包。
@@ -1153,9 +1212,9 @@
     },
     sell(g, cls) {
       if (!settings.town.sellJunk || !openTrade(g, "store")) return true;
-      const a = trade.gear?.actions, item = g.inventoryOf(cls).find((x) => x?.base && !shop.tried.has(x) && !keepType(x) && ["normal", "magic", "rare"].includes(x.rarity));
+      const a = trade.gear?.actions, item = g.inventoryOf(cls).find((x) => x?.base && !keepType(x) && (duplicateJunk.has(x) && !shop.soldTry?.has(x) || !shop.tried.has(x) && ["normal", "magic", "rare"].includes(x.rarity)));
       if (!a?.sell || !item) return true;
-      shop.tried.add(item); a.sell(item); lastAction = "整備：賣出 " + itemZh(item);
+      shop.tried.add(item); (shop.soldTry ??= new Set()).add(item); a.sell(item); lastAction = "整備：賣出 " + itemZh(item);
       return false;
     },
     potions(g) {
@@ -2558,6 +2617,8 @@
     get game() { return game; },
     virtualEssence: virtualEssenceOn,
     get settings() { return settings; },
+    // 測試用（唯讀）：離線／實機評估自動配裝時直接呼叫評分與挑選函式。
+    gearTools: { bestGear, gearScore, gearNumbers, charmValue },
   };
   window.__d2autobot = api;
   connect().catch((err) => { if (alive) hookNote = "無法掛接遊戲程式：" + String(err.message || err); fire(checkGameVersion(""), "版本檢查"); });

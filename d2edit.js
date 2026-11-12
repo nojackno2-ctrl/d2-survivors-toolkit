@@ -306,7 +306,7 @@ const backend = {
     return { dict, game, missing: !Object.keys(dict).length };
   },
   async engine(fn, ...args) {
-    if (!["capabilities", "catalog", "generateMany", "faults", "saveFaults", "bases", "runewordBases", "affixOk", "rankDefs", "skillModDefs", "buildDefs", "itemModMax", "affixInfo", "statRanges", "resolveName", "validateItems", "allowedStatsMany", "affixSlots", "fixedInfo", "fixedBuild", "sanitizeItem", "kindMap"].includes(fn)) throw new Error("不支援的操作");
+    if (!["capabilities", "catalog", "generateMany", "faults", "saveFaults", "bases", "runewordBases", "affixOk", "rankDefs", "skillModDefs", "buildDefs", "itemModMax", "affixInfo", "statRanges", "resolveName", "validateItems", "allowedStatsMany", "affixSlots", "fixedInfo", "fixedBuild", "sanitizeItem", "kindMap", "dropItems"].includes(fn)) throw new Error("不支援的操作");
     const e = await engine();
     const capability = e.capabilities(activeGameScript());
     if (fn === "capabilities") return JSON.parse(JSON.stringify(capability));

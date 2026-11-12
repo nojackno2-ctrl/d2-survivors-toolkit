@@ -5,7 +5,7 @@
   else root.D2Patch = factory();
 })(typeof self !== "undefined" ? self : this, function () {
   // 遊戲的合法性檢查與讀檔整理函式；舊版遊戲可能沒有，找不到時改用修改器的近似檢查
-  const OPTIONAL = new Set(["itemFault", "saveFaults", "sanitize", "makeAffix", "affixes", "affixApplies", "classKits", "modDefs", "rankDefs", "weaponSetActive"]);
+  const OPTIONAL = new Set(["itemFault", "saveFaults", "sanitize", "makeAffix", "affixes", "affixApplies", "classKits", "modDefs", "rankDefs", "weaponSetActive", "dropItem"]);
 
   function compile(signatures) {
     return Object.entries(signatures).filter(([k]) => k !== "_")

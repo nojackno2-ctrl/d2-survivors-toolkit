@@ -810,6 +810,21 @@ export function boot(G, itemstatsText, gameIdentity = {}) {
       if (!G.__itemFault) return null;
       return items.map((it) => { try { return G.__itemFault(JSON.parse(JSON.stringify(it))); } catch (e) { return { why: String(e.message ?? e) }; } });
     },
+    // 呼叫遊戲真正的掉落函式（與怪物掉落同一個 J8）：plan＝[{ n, difficulty, ilvl, mf, cls, boost: {minRarity, uniqueBoost, rareBoost}, source }]
+    // 第一個參數與遊戲 Ay 相同：非恐懼層為 max(0, ilvl + {普通-10, 惡夢3, 地獄20})。每件另附 itemFault 結果。
+    dropItems(plan) {
+      if (!G.__dropItem) return null;
+      const off = { normal: -10, nightmare: 3, hell: 20 }, out = [];
+      for (const s of plan) for (let i = 0; i < s.n; i++) {
+        try {
+          const o = { minRarity: "magic", cls: s.cls, difficulty: s.difficulty, ...(s.boost || {}), itemLevel: s.ilvl, uniqueBoost: (s.boost?.uniqueBoost ?? 1) * (s.difficulty === "hell" ? 1.5 : 1) };
+          const it = G.__dropItem(Math.max(0, s.ilvl + off[s.difficulty]), s.mf || 0, o);
+          if (!it) continue;
+          out.push({ item: it, ctx: { difficulty: s.difficulty, ilvl: s.ilvl, mf: s.mf || 0, cls: s.cls, source: s.source }, fault: G.__itemFault ? G.__itemFault(JSON.parse(JSON.stringify(it))) : null });
+        } catch (err) { out.push({ error: String(err.message ?? err), ctx: s }); }
+      }
+      return out;
+    },
     // 遊戲讀檔時的整理結果（與遊戲 sanitize 相同）；失敗回傳 null
     sanitizeItem(it) { if (!G.__sanitize) return null; try { const c = JSON.parse(JSON.stringify(it)); return G.__sanitize(c) ? c : null; } catch (e) { return null; } },
     saveFaults(save) { if (!G.__saveFaults) return null; try { return G.__saveFaults(save, 50); } catch (e) { return [String(e.message ?? e)]; } },
