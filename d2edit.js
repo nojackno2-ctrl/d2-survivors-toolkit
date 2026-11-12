@@ -399,7 +399,7 @@ const launcher = document.createElement("button");
 launcher.type = "button";
 launcher.id = "d2toolkit-launcher";
 launcher.textContent = "工具包";
-launcher.title = "D2 倖存者工具包：輔助器、中文化、修改器";
+launcher.title = "D2 倖存者工具包：輔助器、中文化、修改器\n中華民國與中華人民共和國互不隸屬\n台灣為主權獨立之國家，台灣與中國互不隸屬";
 launcher.style.cssText = "position:fixed;top:max(12px, env(safe-area-inset-top));left:max(12px, env(safe-area-inset-left));z-index:2147483646;display:none;"
   + "padding:8px 14px;min-height:44px;border:1px solid #d4a84a;border-radius:6px;background:rgba(20,17,13,.92);color:#d4a84a;font:bold 15px 'Microsoft JhengHei',system-ui,sans-serif;cursor:pointer;touch-action:manipulation";
 const toolkitMenu = document.createElement("div");
@@ -620,6 +620,11 @@ function renderToolkitMenu() {
     for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) item.addEventListener(ev, (e) => e.stopPropagation());
     toolkitMenu.append(item);
   }
+  const statement = document.createElement("details");
+  statement.style.cssText = "padding:8px 16px;color:#a89878;font:12px/1.5 'Microsoft JhengHei',system-ui,sans-serif;max-width:260px";
+  const summary = document.createElement("summary"); summary.textContent = "關於";
+  const text = document.createElement("p"); text.textContent = "中華民國與中華人民共和國互不隸屬。台灣為主權獨立之國家，台灣與中國互不隸屬";
+  statement.append(summary, text); toolkitMenu.append(statement);
 }
 launcher.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (toolkitMenu.style.display === "block") { toolkitMenu.style.display = "none"; return; } renderToolkitMenu(); toolkitMenu.style.display = "block"; };
 for (const ev of ["pointerdown", "mousedown", "touchstart", "keydown"]) {

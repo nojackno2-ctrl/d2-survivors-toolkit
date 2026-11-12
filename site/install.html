@@ -34,6 +34,7 @@
     font: 1rem/1.75 system-ui, -apple-system, 'Segoe UI', sans-serif;
     -webkit-text-size-adjust: 100%;
   }
+  body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; background:url('roc-flag.svg') center/cover no-repeat; opacity:.09; }
   main {
     max-width: 760px;
     margin: 0 auto;
@@ -153,6 +154,7 @@
     </ol>
     <p class="dim">修改前建議先到「存檔管理」按「建立快照」，會下載一份備份檔。物品引擎直接使用遊戲本身的程式產生物品，第一次開啟需要連網。修改器預設依原版規則限制數值與裝備屬性，可在「設定」解除（後果自負）。</p>
   </section>
+  <p class="dim" style="font-size:.8rem">中華民國與中華人民共和國互不隸屬<br>台灣為主權獨立之國家，台灣與中國互不隸屬</p>
 </main>
 
 <script>
