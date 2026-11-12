@@ -818,6 +818,17 @@
       </div>
       <div class="log-filter" role="group" aria-label="依類別篩選"></div>
       <div class="log">
+        <article class="log-entry" data-date="2026-11-13">
+          <h3 class="log-date">2026-11-13</h3>
+          <section class="log-group" data-cat="修改器">
+            <h4 class="log-cat">修改器</h4>
+            <ul>
+              <li>存檔檢查新增三項（依官方遊戲上傳紀錄與載入檢查的規則）：經驗值是否超過該等級上限、技能欄是否有重複技能、存檔模式是否與儲存槽相符（硬核存檔須有硬核標記，一般存檔不得有）。發現問題時可一鍵修正。</li>
+              <li>存檔裡沒有角色進度時，新增的兩項會標示「未驗證」，不再顯示通過。</li>
+              <li>遊戲診斷說明更正：遊戲只把「頁面環境」結果放進診斷文字，玩家按「回報」時才隨回報送出；工具包自己會替換 Storage.setItem，所以這裡通常會列出它。單機模式的排行榜上傳一律關閉。</li>
+            </ul>
+          </section>
+        </article>
         <article class="log-entry" data-date="2026-11-12">
           <h3 class="log-date">2026-11-12</h3>
           <section class="log-group" data-cat="工具包"><h4 class="log-cat">工具包</h4><ul><li>更新介面與網頁背景細節。</li></ul></section>
@@ -835,6 +846,12 @@
               <li>自動配裝：稀有裝備只有接近或超過身上的裝備才存倉庫，其餘賣掉；存不進倉庫的不會一直重試。</li>
               <li>自動配裝：裝備評分加入吸血、跑速、粉碎打擊、開傷口與致命一擊，候選裝備很多時會先粗篩，換裝更快。</li>
               <li>自動配裝：修正背包有珠寶時會卡住其他換裝，以及只有物理傷害的咒符被算成 0 分的問題。</li>
+            </ul>
+          </section>
+          <section class="log-group" data-cat="相容性">
+            <h4 class="log-cat">相容性</h4>
+            <ul>
+              <li>針對官方遊戲 20261105.3 的遊戲核心、介面樣式、選卡、物品與技能變動，已執行 18 項自動測試。</li>
             </ul>
           </section>
         </article>

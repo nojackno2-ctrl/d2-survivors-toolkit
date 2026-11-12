@@ -1,9 +1,9 @@
 {
   "lastVerified": {
     "build": "20261105.3",
-    "at": "2026-11-06T01:57:07.565Z",
+    "at": "2026-11-12T23:48:13.618Z",
     "changed": [],
-    "fingerprint": "51878e6bbd1064a0af4b70a9c9a58bbe09bab1a665679a70535e87b16d01d2f0",
+    "fingerprint": "95d0efd851db79e9120ce7a804e4c5350b2604a5afcc89ab7a1212e7a2265467",
     "comparison": {
       "baseline": "20261105.1",
       "complete": true,
@@ -118,11 +118,19 @@
       "lang",
       "runeword-class-base",
       "item-db",
+      "drop-ranges",
       "skill-mods",
       "weapon-sets",
       "selfcheck",
+      "autoforge",
+      "stash-sort",
+      "forge-local",
       "weapon-sets-ui",
       "save-faults-ui",
+      "craft-affix-ui",
+      "craft-companion-ui",
+      "backup-record",
+      "write-confirm",
       "autobot"
     ]
   }

@@ -163,6 +163,13 @@
   <section>
     <h2>更新日誌</h2>
     <p class="dim">介紹網頁：<a href="https://d2-survivors-toolkit.nojackno2.workers.dev/#changelog" target="_blank" rel="noopener" style="color:var(--gold)">d2-survivors-toolkit.nojackno2.workers.dev</a></p>
+    <h3>2026-11-13</h3>
+    <h4>修改器</h4>
+    <ul>
+      <li>存檔檢查新增三項（依官方遊戲上傳紀錄與載入檢查的規則）：經驗值是否超過該等級上限、技能欄是否有重複技能、存檔模式是否與儲存槽相符（硬核存檔須有硬核標記，一般存檔不得有）。發現問題時可一鍵修正。</li>
+      <li>存檔裡沒有角色進度時，新增的兩項會標示「未驗證」，不再顯示通過。</li>
+      <li>遊戲診斷說明更正：遊戲只把「頁面環境」結果放進診斷文字，玩家按「回報」時才隨回報送出；工具包自己會替換 Storage.setItem，所以這裡通常會列出它。單機模式的排行榜上傳一律關閉。</li>
+    </ul>
     <h3>2026-11-12</h3>
     <h4>工具包</h4>
     <ul><li>更新介面與網頁背景細節。</li></ul>
@@ -174,6 +181,10 @@
       <li>自動走位：沒有怪物或怪物打不死你時站在原地，不再繞圈；裝備照樣會去撿。</li>
       <li>死亡保護：血量九成以上且單次傷害打不死時不再誤觸發；滿血但預估一擊致命時仍會離場。</li>
       <li>未開營地整備時，不會再卡在恰西的商店畫面。</li>
+    </ul>
+    <h4>相容性</h4>
+    <ul>
+      <li>針對官方遊戲 20261105.3 的遊戲核心、介面樣式、選卡、物品與技能變動，已執行 18 項自動測試。</li>
     </ul>
     <h3>2026-11-11</h3>
     <h4>修改器</h4>
@@ -2463,9 +2474,36 @@ function attributeChecks(s) {
   }
   return out.length ? out : [{ unknown: true, text: "屬性點未驗證：沒有可檢查的角色" }];
 }
+// 依遊戲上傳紀錄的 flags 規則與載入檢查（2026-11-13 自官方 20261105.3 反編譯，saveTransfer 的 Pa／ka／ja 與載入流程）：
+// ‧level：經驗值須在 0～該等級上限之間（上限＝round((5+4×(等級−1)^1.35)×1.1^max(0,等級−25)×1.1^max(0,等級−89))＋1）。
+//   實機（D2S1 存檔副本）99 級的經驗值恰好等於此公式的上限（5865600），所以 99 級也照同一條檢查。
+// ‧skills：同一角色的技能欄不可有重複技能。
+// ‧跨模式：專家存檔須帶 mode:"hc"，一般存檔不得帶 mode，否則遊戲載入時判定為被編輯。
+const xpCap = (lv) => Math.round((5 + 4 * (lv - 1) ** 1.35) * 1.1 ** Math.max(0, lv - 25) * 1.1 ** Math.max(0, lv - 89));
+function flagChecks(s, mode = $("#mode").value) {
+  const out = [], states = [];
+  for (const [cls, hero] of Object.entries(s.heroes ?? {})) for (const key of ["kept", "run"]) { const st = hero?.[key]; if (st && typeof st === "object") states.push([cls, key, st]); }
+  const label = (cls, key) => `${CLASS_ZH[cls] ?? cls}（${key === "run" ? "進行中" : "保留"}）`;
+  const badXp = states.filter(([, , st]) => { const lv = st.run?.level, xp = st.run?.xp; return Number.isInteger(lv) && lv >= 1 && lv <= 99 && Number.isFinite(xp) && (xp < 0 || xp > xpCap(lv) + 1); });
+  // 沒有角色資料（例如全新存檔、進度尚在 underway）時不能說「通過」，標示未驗證
+  const checked = states.filter(([, , st]) => Number.isInteger(st.run?.level) && Number.isFinite(st.run?.xp));
+  out.push(badXp.length ? { ok: false, text: `經驗值超過等級上限：${badXp.map(([c, k]) => label(c, k)).join("、")}`, note: "遊戲上傳紀錄的 level 旗標",
+    fix: () => { for (const [, , st] of badXp) st.run.xp = Math.max(0, Math.min(st.run.xp, xpCap(st.run.level))); }, fixText: "經驗值設為該等級上限" }
+    : checked.length ? { ok: true, text: "經驗值與等級相符" } : { unknown: true, text: "經驗值未驗證：存檔裡沒有可檢查的角色進度" });
+  const dupSkills = states.filter(([, , st]) => { const ids = (st.build?.skills ?? []).map(x => x?.id); return new Set(ids).size !== ids.length; });
+  out.push(dupSkills.length ? { ok: false, text: `技能欄有重複技能：${dupSkills.map(([c, k]) => label(c, k)).join("、")}`, note: "遊戲上傳紀錄的 skills 旗標",
+    fix: () => { for (const [, , st] of dupSkills) { const seen = new Set(); st.build.skills = st.build.skills.filter(x => !seen.has(x?.id) && seen.add(x?.id)); } }, fixText: "移除重複技能" }
+    : states.some(([, , st]) => Array.isArray(st.build?.skills)) ? { ok: true, text: "技能欄沒有重複" } : { unknown: true, text: "技能重複未驗證：存檔裡沒有可檢查的角色進度" });
+  const wantHc = mode === "hardcore", modeBad = wantHc ? s.mode !== "hc" : s.mode !== undefined;
+  out.push(modeBad ? { ok: false, text: wantHc ? "硬核存檔缺少 mode:\"hc\" 標記" : `一般存檔帶有 mode:"${s.mode}"（只有硬核存檔應有）`, note: "遊戲載入時判定為被編輯",
+    fix: () => { if (wantHc) s.mode = "hc"; else delete s.mode; }, fixText: wantHc ? "補上硬核標記" : "移除模式標記" }
+    : { ok: true, text: "存檔模式與儲存槽相符" });
+  return out;
+}
 function detect() {
   const out = [], s = save;
   out.push(...attributeChecks(s));
+  out.push(...flagChecks(s));
   // 收藏中的符文之語隨機種子對不上（遊戲 itemFault 判定 seed）：遊戲的 sanitize 修不好，改為依同名同底材重新產生
   const seedBad = (faultyItems ?? []).filter(it => it.rarity === "runeword" && (s.uniques ?? []).includes(it));
   if (seedBad.length) out.push({ ok: false, text: `收藏中的符文之語 ${seedBad.length} 件隨機種子對不上（遊戲判定「not what its roll makes」）`, note: "遊戲的 sanitize 無法修正", fixText: "依同名重新產生", fix: () => regenRunewords(seedBad) });
@@ -2601,7 +2639,7 @@ function renderDiag() {
   const live = gameSeesPage(), el = $("#diagLive");
   if (!el) return;
   el.innerHTML = live.text
-    ? `<span class="bad">✖ 原廠偵測到書籤或函式替換</span>：${esc(live.text)}<br><span class="dim">遊戲頁診斷會列出書籤與被替換的函式；依遊戲程式碼，這不影響排行榜上傳判定，伺服器端的處理前端無法確認。此診斷只顯示於本頁，不會出現在遊戲狀態列。</span>`
+    ? `<span class="bad">✖ 原廠偵測到書籤或函式替換</span>：${esc(live.text)}<br><span class="dim">遊戲只把這項結果放進診斷文字，玩家按「回報」時才隨回報送出，不在排行榜上傳資料內；官方更新日誌寫排行榜會拒絕「被修改的遊戲」，伺服器怎麼判定前端看不到。工具包自己會替換 Storage.setItem，所以這裡通常會列出它；單機模式的排行榜上傳一律關閉。此診斷只顯示於本頁，不會出現在遊戲狀態列。</span>`
     : `<span class="ok">✔ 遊戲沒有看到頁面異常</span><span class="dim">（沒有中文化書籤標記，原生函式未被替換）</span>`;
   const facts = parseDiag($("#diagIn").value || ""), keys = Object.keys(facts), out = [];
   if (keys.length) {
