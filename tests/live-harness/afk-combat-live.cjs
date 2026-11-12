@@ -68,7 +68,6 @@ app.whenReady().then(async () => {
       // 職業選擇畫面：與其他實機腳本相同，選定職業後開局
       await sleep(2000);
       if (g.state === "select") {
-        if (g.frontend?.open && !g.plainSelect().onPick) { g.frontend.actions.play(); await sleep(3000); }
         if (!g.plainSelect().onPick) { g.chooseClass(); await sleep(1500); }
         const select = g.plainSelect(), cls = ${JSON.stringify(process.env.H_CLASS || "sorceress")};
         const index = select.cards.findIndex(c => c.dataset?.class === cls);

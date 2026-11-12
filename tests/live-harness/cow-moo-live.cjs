@@ -37,7 +37,7 @@ server.listen(8773, "localhost", () => app.whenReady().then(async () => {
       await import('http://localhost:8773/d2edit.js?v='+Date.now());
       for(let i=0;i<120&&!window.__d2autobot?.game;i++){document.body.dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space',bubbles:true}));await sleep(500)}
       const bot=window.__d2autobot,g=bot?.game;if(!g)throw Error('找不到遊戲物件');
-      if(g.state==='select'){if(g.frontend?.open&&!g.plainSelect().onPick){g.frontend.actions.play();await sleep(3000)}if(!g.plainSelect().onPick){g.chooseClass();await sleep(1500)}const s=g.plainSelect(),i=s.cards.findIndex(c=>c.dataset?.class==='sorceress');if(i<0)throw Error('找不到職業');s.select(i);await sleep(300);s.confirm(false)}
+      if(g.state==='select'){if(!g.plainSelect().onPick){g.chooseClass();await sleep(1500)}const s=g.plainSelect(),i=s.cards.findIndex(c=>c.dataset?.class==='sorceress');if(i<0)throw Error('找不到職業');s.select(i);await sleep(300);s.confirm(false)}
       for(let i=0;i<120&&!g.world?.player;i++)await sleep(500);
       if(!g.world?.player)throw Error('未進入遊戲 '+JSON.stringify(bot.diagnostics()));
       const panel=document.querySelector('#d2autobot-panel')?.shadowRoot;

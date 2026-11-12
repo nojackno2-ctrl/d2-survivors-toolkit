@@ -68,7 +68,6 @@ app.whenReady().then(async () => {
       const g = window.__d2autobot?.game; if (!g) throw new Error("找不到遊戲物件");
       await sleep(2000);
       if (g.state === "select") {
-        if (g.frontend?.open && !g.plainSelect().onPick) { g.frontend.actions.play(); await sleep(3000); }
         if (!g.plainSelect().onPick) { g.chooseClass(); await sleep(1500); }
         const select = g.plainSelect(), index = select.cards.findIndex(c => c.dataset?.class === ${JSON.stringify(process.env.H_CLASS || "sorceress")});
         if (index >= 0) { select.select(index); await sleep(300); select.confirm(false); }

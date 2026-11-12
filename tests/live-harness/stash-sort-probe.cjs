@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
       const sleep=ms=>new Promise(r=>setTimeout(r,ms)), copy=x=>JSON.parse(JSON.stringify(x));
       for(let i=0;i<50&&!window.__d2autobot?.game;i++){document.body.dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space',bubbles:true}));await sleep(400)}
       const g=window.__d2autobot?.game;if(!g)throw Error('沒有遊戲物件');
-      if(g.state==='select'){if(g.frontend?.open&&!g.plainSelect().onPick){g.frontend.actions.play();await sleep(2500)}if(!g.plainSelect().onPick){g.chooseClass();await sleep(1500)}const s=g.plainSelect(),i=s.cards.findIndex(c=>c.dataset?.class==='sorceress');s.select(i);await sleep(300);s.confirm(false)}
+      if(g.state==='select'){if(!g.plainSelect().onPick){g.chooseClass();await sleep(1500)}const s=g.plainSelect(),i=s.cards.findIndex(c=>c.dataset?.class==='sorceress');s.select(i);await sleep(300);s.confirm(false)}
       for(let i=0;i<90&&!g.world?.player;i++)await sleep(500);
       window.__d2autobot.stop(); await g.enterCamp(g.kit); await sleep(1500);
       const camp={state:g.state,ready:!!g.camp}; g.openCampTrade('stash');await sleep(1000);

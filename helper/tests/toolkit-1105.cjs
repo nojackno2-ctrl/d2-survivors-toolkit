@@ -12,8 +12,8 @@ function extract(source, pattern, label) {
 const acceptsSource = extract(autobot, /function accepts\(drop\)\s*\{[\s\S]*?\n  \}/, "accepts 函式");
 const eligibleSource = extract(forge, /const eligible\s*=\s*\(it\)\s*=>[^;]+;/, "eligible 定義");
 function checkLoot(source, decision, expected) {
-  const accepts = new Function("game", "questOn", "PANDEMONIUM_BASES", source + "; return accepts;")(
-    { loot: () => decision }, () => false, []
+  const accepts = new Function("game", "questOn", "PANDEMONIUM_BASES", "WIRT_LEG", "cowWanted", source + "; return accepts;")(
+    { loot: () => decision }, () => false, [], "Wirt's Leg", () => false
   );
   assert.equal(accepts({ kind: "item", item: { type: "weapon", rarity: "normal", mods: [] } }), expected, "撿寶判斷：" + decision);
 }
