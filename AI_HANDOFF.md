@@ -67,6 +67,17 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+- **【2026-11-12 Claude：掉落語料與自動配裝審查，未提交、未發布】**
+  - 新增掉落語料產生器：修改器引擎 `dropItems`（呼叫遊戲真正的掉落函式 J8；簽章 `dropItem` 已列入 OPTIONAL；`d2edit.js` 白名單加 `dropItems`，推送即上線，須先問使用者並寫公告日誌）。實機指令 `tests/live-harness/drop-corpus-live.cjs <職業> <件數> <輸出.ndjson>`（隔離設定檔、遊戲 itemFault 驗證、職業內去重），輸出在 `backups/corpus/`（Git 忽略）。7 職業各 100,000 件共 700,000 件，itemFault 0、職業內重複 0。
+  - 分配是人為假設：難度 30/30/40，來源 horde70／冠軍20／頭目8／幕末魔王2，MF 0/100/200/300＝40/30/20/10，ilvl 取各難度遊戲區域範圍（普通 1–43、惡夢 36–66、地獄 67–85）加來源 lift；未含任務幕末魔王與可破壞物來源。咒符、珠寶、箭袋隨遊戲掉落池自然出現。
+  - **去重會改變品質比例**：未去重（每職業 5 萬次抽樣）魔法 88.4%／稀有 8.9%／暗金 1.6%／套裝 0.78%／符文之語 0.35%；去重後語料 80.3／16.6／2.0／0.47／0.58。需「依掉落機率」加權時用前者（`backups/corpus-raw/summary.json`）。
+  - 統計 `tests/corpus-stats.cjs`、理論公式 `tests/corpus-theory.cjs`（用代表值，僅供參考，不當驗證）、咒符審查 `tests/gear-audit-offline.cjs`。評估框架 `tests/live-harness/fresh-eval-live.cjs` 搭配 `gear-prelude.js`／`gear-greedy-eval.js`／`gear-blindspot.js`（需 80 級＋主技能 20 級，否則 heroNumbers 的 Damage 恆為 0）。
+  - 修正 `helper/autobot.js`：(1) `bestGear` 排除珠寶（遊戲 equip 對珠寶無作用，卻被當成「填空欄」永遠最優先；實機語料 18 組有 5 組卡死）並記住穿不上的裝備（`equipFailed`）；(2) `charmValue` 傷害正則漏掉小寫 `minDamage／maxDamage`（約 420 件咒符被算 0 分）；(3) 新增唯讀 `__d2autobot.gearTools` 供評估用。模擬測試 220 項全過（新增 3 項；珠寶那項在舊版也會通過、沒有鑑別力，鑑別證據是上述實機語料評估）。
+  - 已處理（模擬測試 222 項過）：gearScore 加計身上詞綴 lifeLeech／frw／crushingBlow／openWounds／deadlyStrike（取語料實際範圍、保守權重與上限，未經實機 A/B）；背包塞滿換裝失敗時，先賣一件普通／魔法／稀有低品質裝備再重試。
+  - 另已處理（皆模擬測試，225 項過）：bestGear 候選超過 60 件時每欄位粗篩前 12 件再精算；存倉庫只存個人分頁（開著共用分頁先 openStashTab("personal")）；自動賣裝改為先賣最低品質，背包 ≥28 件時一次賣 4 件。
+  - 營地存倉改良（模擬 227 項過）：稀有裝備只有換上後分數差 ≥ −5（gearGain）才存個人倉庫，其餘（含本職業穿不上的稀有）交給賣裝；toStash 後仍在背包（倉庫滿）就記住不再存，稀有改賣、獨特／套裝／符文之語保留不賣。
+  - 收藏庫（模擬 229 項過，未實機）：獨特／套裝／符文之語都能進收藏庫（uniquesTab 的 D() 含 runeword；拒絕訊息文字只寫 unique and set，不可據此判斷）。整備時切到 uniques 分頁逐件 toStash，由原版比較同名品質：較好的 swapIn，換出來的舊件與不較好的重複品標記後在賣裝步驟賣掉；無同名卻收不進的才退回存個人倉庫。
+  - 仍待辦：上述新權重與粗篩門檻未經實機 A/B；toStash 切分頁動作未實機驗證（以遊戲碼 openStashTab 推得）。使用者指示後續驗證以模擬為主、不必再實機。
 0000000000000o. **【2026-11-12 Codex：手機遊戲介面探查】**：官方頁面確認計時器為 `#clock`，右上資訊為 `#run-info`；其他代理十實例測試已結束，保留其未提交變更。新增隔離探查 `tests/live-harness/hud-layout-probe.cjs`：首次直向取樣碰到升級畫面而 HUD 隱藏，橫向及桌面取得座標；第二次觸控模擬未完成，已停止程序。跳動原因仍未確認，尚未修改介面或完成手機驗證。
 0000000000000n. **【2026-11-11 Claude：任務模式 10 實例實機測試，8／10 全任務完成，未提交】**：`tests/live-harness/quest-mode-10x-live.cjs`（10 個隔離 Electron、官方 `/play/`、使用者 D2S1 存檔清除通關紀錄後 99 級從普通第一幕開始；只開任務模式、自動走位、死亡保護、自動喝水，後加營地整備的買藥；`--resume` 續跑、`helper/autobot.js` 存檔即熱重載；紀錄與重設欄位說明在 `backups/quest-run-20261111/`）。結果：01、02、03、04、06、07、08、09 三難度 18 個任務全部完成、交付且獎品用完（done.json）；05、10 到 240 分鐘上限只差地獄 H4。全程 0 死亡。
    - **`helper/autobot.js` 已修（實機有觀察到效果）**：關閉營地整備時戰場恰西商店卡死（campShop）；致命預判不受喝水冷卻限制、離場失敗解除保護鎖；滿血被當成無藥可用而誤離場（healingAvailable）；生命九成以上只有單擊致死才離場／才預先喝（多怪加總高估、未計格擋減傷，聖騎士在地獄反覆被送回第一幕）；補任務就緒改讀存檔 `baalSlain[職業]`（重載後 WeakMap 清空被踢回營地）；交付獎勵後有待領先留營地（阿卡拉與凱恩輪流）；乳牛關卡 N/M/H3（維特之腿是 unique 武器、從倉庫 fromStash 取回、追格里斯華爾德、進門、追牛王）；地獄 H2 追 Pindleskin；任務獎品使用不再被技能變體介面擋住、不嘗試使用鐵鎚 hdm、獎品用完才判定任務模式達成。

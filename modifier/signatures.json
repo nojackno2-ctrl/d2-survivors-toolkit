@@ -20,5 +20,6 @@
   "runewords": "(N)=\\[N\\(`Ancients' Pledge`",
   "bases": "(N)=\\[N\\(`Cap`,`head`",
   "sanitize": "function (N)\\(e\\)\\{if\\(typeof e!=`object`\\|\\|!e\\|\\|Array\\.isArray\\(e\\)\\)return null;let\\{id:t,base:n,type:r,rarity:i,name:a,level:o,mods:s",
-  "runewordKinds": "function (N)\\(e\\)\\{let t=[\\w$]+\\.get\\(e\\);if\\(t\\)return t;let n=[\\w$]+\\.get\\(e\\);if\\(!n\\|\\|!\\w+\\(e\\)\\)return\\[\\];"
+  "runewordKinds": "function (N)\\(e\\)\\{let t=[\\w$]+\\.get\\(e\\);if\\(t\\)return t;let n=[\\w$]+\\.get\\(e\\);if\\(!n\\|\\|!\\w+\\(e\\)\\)return\\[\\];",
+  "dropItem": "function (N)\\(e,t,n=\\{\\}\\)\\{let r=n\\.itemLevel\\?\\?N\\(e,n\\.difficulty\\),i=n\\.treasureLevel\\?\\?r;if\\(n\\.bestBases\\)"
 }
