@@ -53,6 +53,7 @@
 - `modifier/`：修改器模組（`editor.html`、`engine-page.js`、`patch.mjs`、`signatures.json`、`i18n.js`、測試 `modifier/tests/`）。
 - `site/`：網站與公告站（`index.html`、`install.template.html`）。
 - `editor/`：桌面啟動器（`main.js`、`preload.js`、`core.js`、`remote.js` 等）。
+- `launcher/`：Rust 版桌面啟動器（2026-11-14 新增，尚未取代 `editor/`；見「進行中與待確認事項」）。
 - `tests/live-harness/`：實機測試框架與端到端腳本。
 - `verify/`：自動更新、驗證與發布工具套件。
 - `backups/`（Git 忽略）：歷史備份、執行檔與測試存檔。
@@ -75,6 +76,18 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+- **【2026-11-14 Claude：Rust 版桌面啟動器 `launcher/`（未提交、未發布；Electron 版 `editor/` 保留並存）】** 使用者要求桌面版改成 Rust 啟動器、工具包本體與網頁版通用、連 GitHub 隨時可熱重載。
+  - **架構**：wry＋tao＋muda（系統 WebView2，不帶 Chromium），發行版 exe 約 1.3 MB（Electron 版約 76 MB）。修改器／防護頁仍從 GitHub Pages 線上載入，工具包頁面沒有改；`src/shim.js` 注入與 Electron `preload.js` 相同的 `window.api`（`api.launcher = { protocol: 1, rust: true }`，另多 `api.reload()`）。`src/core.rs` 存檔讀寫（`rusty-leveldb`）、`src/engine.rs` 物品引擎（隱藏 WebView＋`d2engine` 協定，唯讀解析官方 `app.asar`，不修改它）、`src/asar.rs`、`src/remote.rs`、`src/main.rs`。遊戲圖檔改由 `https://d2asset.localhost` 提供（https 頁面讀不到 `file://`）。
+  - **簽章做法**：`JSON.stringify({...save, seal: undefined})` 在頁面端（shim）產生，Rust 只算 HMAC 並接上 seal——避免 Rust 重新序列化造成數字格式與遊戲不同。
+  - **熱重載**：F5／Ctrl+R／選單「重新載入」隨時重載（物品引擎一併重新準備）；每 30 秒比對 GitHub Pages 上目前頁面＋`modifier/engine-page.js`＋`patch.mjs`＋`signatures.json`＋`version.json` 的 ETag／Last-Modified，有變就在頁面頂端顯示提示列（按了才重載）；選單可勾「有更新時自動重新載入」（預設關、不記憶）；離線時顯示離線頁，網路恢復自動載入。
+  - **編譯**：這台機器的 Visual Studio 沒有 `link.exe`／`cl.exe`，且 Git Bash 的 `link` 會蓋掉連結器。要在 PowerShell 設定 `LIB`、`CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER`（rust-lld）與 `RUSTFLAGS=-C linker-flavor=lld-link` 後再 `cargo build --release`——在 `launcher/` 下先執行 `. tests/build-env.ps1` 即可（路徑寫死本機的 MSVC 14.51 與 Windows SDK 10.0.26100）。`ureq` 因此改用系統 TLS（不需 C 編譯器）。
+  - **測試用環境變數**：`D2_USER_DIR`（存檔資料夾副本）、`D2_BACKUP_DIR`、`D2_LAUNCHER_DATA`、`D2_GAME_ASAR`、`D2_TOOLKIT_BASE`、`D2_POLL_SECS`、`D2_SELFTEST_JS`＋`D2_SELFTEST`（頁面載入後執行腳本並把結果寫檔）。`launcher/tests/run-selftest.ps1 -User <副本> -Tmp <暫存> -Exe <exe>`。
+  - **已驗證（主代理親自複跑，全在存檔副本上，沒有碰真實存檔）**：`cargo test` 4 通過（簽章、localStorage 編碼、備份檔名、圖檔路徑 21 種惡意路徑）；發行版 exe 對線上 GitHub Pages 跑 `tests/selftest.js` 16／16 通過——頁面載入、`load` 為 sealed、原樣 `save` 後再讀仍 sealed 且內容相同、自動備份、快照、`readBackup`、`guardStatus`、`diag`、`i18n`（14436 筆）、圖檔顯示、物品引擎 `capabilities`／`catalog`、`reload()` 後引擎仍可用、iframe 內的 `window.ipc.postMessage` 收不到（只測同源 srcdoc／about:blank）。
+  - **子代理回報、主代理未複跑**：Rust 寫入後用 `classic-level`（真正的 LevelDB）讀回，key 數 15 不變、只有存檔 key 改變；本機伺服器只改 `patch.mjs` 的 ETag 約 8 秒出現更新提示列；離線頁與網路恢復自動載入。Codex 審查的 11 項（圖檔路徑穿越、CORS、導覽允許清單、retry、回覆送錯文件、切頁競態、引擎世代競態、合併標記、asar 邊界、HTML 跳脫、鎖 poison）子代理回報已修。AGY 讀碼比對 `core.rs`／`shim.js` 與 Electron 版行為一致。
+  - **官方遊戲讀檔驗證（2026-11-14，主代理親自執行，通過）**：完整複製 `%APPDATA%\D2 Survivors`（leveldb、save、d2、desktop.json）到暫存資料夾 → Rust 發行版把副本金幣 1213311071 改成 1213311072 寫回 → 用 `"D2 Survivors.exe" --user-data-dir=<副本> --remote-debugging-port=9347 --proxy-server=http://127.0.0.1:9`（斷網，不與伺服器往來；`--user-data-dir` 有效，與使用者正在跑的遊戲互不影響）啟動官方桌面版 20261105.3 → 經除錯埠讀遊戲頁面的 `localStorage`：長度 592529、金幣 1213311072、seal 與 Rust 寫入的相同且在頁面內以 HMAC 驗算正確 → 點 PLAY 進入營地，角色（99 級法師）正常載入，物品欄金幣顯示 1213311072（截圖 `launcher/tests/game-read-verify-20261114.jpg`）→ 關閉該實例後 Rust 再讀回仍為 sealed、可再次寫入。只驗一般模式、latin1 編碼的存檔；遊戲斷網，故沒有驗證伺服器端對這份存檔的判定。
+  - **未驗證／待辦**：(1) （已完成，見上）；(2) UTF-16 編碼的 localStorage 值（存檔含非 latin1 字元時）只有單元測試；(3) 硬核存檔、匯入／匯出對話框、開啟備份資料夾、選單各項、F5、離線頁按鈕都沒有實際點過；(4) 引擎呼叫進行中按重載的競態沒有專門測；(5) 跨來源 iframe 的 IPC 沒測；(6) Windows 10 沒有 WebView2 的機器；(7) 打包發布已接上：`node verify/publish.cjs --desktop --bump --rust`（launcher 以 `cargo build --release` 建置，輸出根目錄 `D2倖存者工具包.exe`；不加 `--rust` 仍打包 Electron 版）。僅驗證計畫輸出與建置成功，**尚未實跑 `--confirm` 發布**（工作目錄有他人未提交的 `helper/autobot.js`，發布腳本的乾淨檢查會拒絕）；沒有圖示與版本資訊、未簽章；(8) Electron 版 `editor/main.js` 的 `safeName` 用 `path.basename` 會拒絕子資料夾備份（`softcore/…json`），Rust 版允許一層子資料夾——Electron 版疑似既有問題，未處理。
+  - **注意**：子代理清理測試伺服器時用「結束最近 3 分鐘內啟動的 node 行程」，可能誤殺同時段啟動的其他 node（例如 MCP 伺服器）；之後清理請以 PID 指定。
+- **2026-11-13：輔助器新增「施法與技能冷卻最快」（`cheat.maxCastSpeed`），待官方實機驗證。** 合併為單一開關，把玩家 `castSpeed` 拉到遊戲上限（職業 200 或 250，依 `castBase` 調整；`itemArt-BPHOVK4V.js` 偏移 41000～42000）。施法速度與技能冷卻在遊戲中共用同一倍率，因此不分開。`node --check` 與 `node helper/tests/memory-only.cjs` 通過；Electron 模擬測試 245 項通過、0 項失敗。尚未在官方網址實機驗證。
 - **【2026-11-13 十存檔測試後續：三個問題的查證與修正（Codex 子代理實作，主代理複跑驗證）；2026-11-13 已合併至 main】**
   - **屬性點檢查誤判（已修，`guard/save-check.js` 約 234 行）**：舊算法以難度進度／魔典數推算上限，使用者 D2S1 副本的法師（99 級、能量花費 505、無屬性卡）被判 505／495 不合規，會擋住修改器寫入。改為與遊戲上傳 `points` 旗標一致：已用點數＝未分配＋5×屬性卡＋已花費，上限 `Sr(level)=5×max(0,level−1)+5×3+20`。**更正先前紀錄：`Sr` 裡的「×5」乘的是三種難度（normal／nightmare／hell），不是屬性種類數；99 級上限是 525，不是 530。**（`saveTransfer` 偏移 9311、`pack` 偏移 3073／3419。）屬性點不合規搬移前就沒有修正鍵，維持原狀。
   - **防護頁角色進度檢查已實機驗證**：新腳本 `tests/live-harness/guard-heroes-live.cjs`（用 `backups/quest-run-20261111/inst-01/seed.json` 副本，只讀、雜湊前後一致）10／10——原始四個角色狀態三項檢查皆通過（505／525）；製造經驗值超限、重複技能、屬性點超標後防護頁都列出；單項修正後 xp＝5865600、重複技能移除、封印 sealed、`saveFaults` 0。全新存檔即使玩到 78 級並正常離場也不會有 `save.heroes`，所以這類檢查只能用有進度的存檔測。

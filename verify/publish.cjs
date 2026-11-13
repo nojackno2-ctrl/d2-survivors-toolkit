@@ -3,6 +3,7 @@
 //   node verify/publish.cjs                列出將要做的事（不執行）
 //   node verify/publish.cjs --confirm      建置網頁版 → 提交推送（不升版號：工具包支援熱重載，書籤載入即取得最新版）
 //   --bump         升版號（只在要發 GitHub Release 時用）  --desktop  另外打包桌面版並建立 Release（需同時加 --bump）
+//   --rust         搭配 --desktop：改打包 Rust 啟動器 launcher/（輸出 D2倖存者工具包.exe），不打包 Electron 版
 //   --no-push      只建置與提交    --no-release  不建立 GitHub Release
 //   --note "說明"  更新說明（預設：相容官方遊戲版本）
 // Cloudflare 公告網站已連 GitHub：推送後由 Cloudflare 自動建置，請到後台 Deployments 確認成功。
@@ -49,6 +50,8 @@ const sourceIndex = fs.readFileSync(path.join(P.root, "modifier", "editor.html")
 // 版號預設不變：網頁版熱重載，版號只用於桌面 Release 的識別。加 --bump 才升一號。
 const next = has("bump") ? pkg.version.replace(/\d+$/, (n) => String(Number(n) + 1)) : pkg.version;
 if (has("desktop") && next === pkg.version) { console.error("桌面版發布需要加 --bump 升版號（同一版號的 Release 不能重複建立）。"); process.exit(1); }
+if (has("rust") && !has("desktop")) { console.error("--rust 需要搭配 --desktop。"); process.exit(1); }
+const RUST = has("desktop") && has("rust");
 const RELEASE_PATHS = new Set([
   "AI_HANDOFF.md", "README.md", "d2edit.js", "index.html", "version.json", ".nojekyll",
   "helper/autobot.js", "helper/selfcheck.js", "helper/tests/autobot.cjs", "helper/tests/selfcheck.cjs",
@@ -59,14 +62,15 @@ const RELEASE_PATHS = new Set([
   "site/index.html", "site/install.html", "site/install.template.html", "tools/build-web.js", "lang/tools/desktop-lang.mjs", "lang/tools/lang-missing.mjs", "tools/tests/build-web.cjs", "modifier/tests/item-db.cjs", "modifier/tests/skill-mods.cjs", "modifier/tests/runeword-class-base.cjs", "modifier/tests/load-patch.cjs", "verify/state.json",
 ]);
 // 桌面啟動器（editor/）的程式與版號（editor/package.json）；只有啟動器改動時才會一起提交。
-const RELEASE_PREFIXES = ["editor/"];
+// launcher/ 是 Rust 桌面啟動器的原始碼（target/ 由 launcher/.gitignore 忽略）；新檔案也要一起提交，故另行以 git add -A 處理。
+const RELEASE_PREFIXES = ["editor/", "launcher/"];
 const releasable = (f) => RELEASE_PATHS.has(f) || RELEASE_PREFIXES.some((p) => f.startsWith(p));
 
 const plan = [
   `驗證通過的遊戲版本：${verified.build}（${verified.at}）`,
   `工具包版本：${pkg.version}${next === pkg.version ? "（不升版，網頁版熱重載）" : ` → ${next}（改 editor/package.json 與 modifier/editor.html）`}`,
   `1. 建置網頁版：node tools/build-web.js ${HOST}（更新說明：${note}）`,
-  has("desktop") ? "2. 打包桌面版：npm run dist → 舊執行檔備份到 backups/exe/ → 覆蓋根目錄執行檔 → 記錄 SHA-256" : "2. （略過）桌面版（只有 --desktop 才打包；啟動器程式不變時不需要）",
+  has("desktop") ? (RUST ? "2. 打包 Rust 桌面版：launcher/ 以 cargo build --release 建置（tests/build-env.ps1）→ 舊執行檔備份到 backups/exe/ → 輸出根目錄 D2倖存者工具包.exe → 記錄 SHA-256" : "2. 打包桌面版：npm run dist → 舊執行檔備份到 backups/exe/ → 覆蓋根目錄執行檔 → 記錄 SHA-256") : "2. （略過）桌面版（只有 --desktop 才打包；啟動器程式不變時不需要）",
   has("no-push") ? "3. 提交根目錄倉庫（不推送）" : "3. 提交並推送根目錄倉庫到 GitHub（origin）",
   !has("desktop") || has("no-push") || has("no-release") ? "4. （略過）GitHub Release" : `4. 建立 GitHub Release v${next}（附桌面版執行檔與 SHA-256）`,
   "   更新日誌：同一天的內容併入當日條目（公告站與工具內各一處；可用 --log \"項目一|項目二\" 加入自訂內容）",
@@ -125,8 +129,17 @@ const addChangelog = () => {
   console.log("建置網頁版…"); run("node", [path.join("tools", "build-web.js"), HOST, note], P.root);
   let exe = null, hash = "";
   if (has("desktop")) {
-    console.log("打包桌面版（需要數分鐘）…"); run("npm", ["run", "dist"], P.editor, { timeout: 900000 });
-    const built = path.join(P.editor, "dist", "D2倖存者存檔修改器.exe"), target = path.join(P.root, "D2倖存者存檔修改器.exe");
+    let built, target;
+    if (RUST) {
+      // 本機 MSVC 沒有 link.exe，tests/build-env.ps1 改用 rust-lld（路徑寫死本機 VS／SDK 版本，換機器請改該檔）
+      console.log("打包 Rust 桌面版（需要數分鐘）…");
+      const cwd = path.join(P.root, "launcher");
+      run("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ". .\\tests\\build-env.ps1; cargo build --release; exit $LASTEXITCODE"], cwd, { timeout: 900000 });
+      built = path.join(cwd, "target", "release", "d2-toolkit.exe"); target = path.join(P.root, "D2倖存者工具包.exe");
+    } else {
+      console.log("打包桌面版（需要數分鐘）…"); run("npm", ["run", "dist"], P.editor, { timeout: 900000 });
+      built = path.join(P.editor, "dist", "D2倖存者存檔修改器.exe"); target = path.join(P.root, "D2倖存者存檔修改器.exe");
+    }
     if (!fs.existsSync(built)) throw new Error("打包後找不到 " + built);
     const stamp = new Date().toISOString().slice(0, 10).replaceAll("-", "");
     fs.mkdirSync(path.join(P.root, "backups", "exe"), { recursive: true });
@@ -139,7 +152,8 @@ const addChangelog = () => {
   if (unexpectedStaged.length) throw new Error("暫存區含非本次發布檔案，拒絕提交：" + unexpectedStaged.join("、"));
   const stageArgs = [...RELEASE_PATHS].filter((f) => fs.existsSync(path.join(P.web, f)));
   run("git", ["add", "--", ...stageArgs], P.web);
-  run("git", ["add", "-u", "--", ...RELEASE_PREFIXES], P.web);
+  run("git", ["add", "-u", "--", "editor/"], P.web);
+  if (fs.existsSync(path.join(P.web, "launcher"))) run("git", ["add", "-A", "--", "launcher/"], P.web);
   const status = run("git", ["status", "--porcelain", "--untracked-files=all"], P.web).split(/\r?\n/).filter(Boolean);
   const unexpectedWorking = status.map((line) => line.slice(3)).filter((f) => !releasable(f));
   if (unexpectedWorking.length) throw new Error("工作目錄含非本次發布檔案，已僅暫存允許清單，拒絕提交：" + unexpectedWorking.join("、"));
