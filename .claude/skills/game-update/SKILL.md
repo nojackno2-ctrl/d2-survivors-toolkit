@@ -1,75 +1,77 @@
 ---
 name: game-update
-description: 使用者說「遊戲更新了」「官方更新」「驗收新版」時使用。先由 AI 讀官方更新訊息並反編譯比對新舊版差異，分析對工具包的影響；沒變動的部分用腳本快速測試；最後以實機驗證，通過並經使用者確認後才發布。
+description: 使用者說「遊戲更新了」「官方更新」「驗收新版」時使用。讀官方更新訊息、比對新舊遊戲程式及偵測差異，評估工具包影響，完成回歸與官方網址實機驗證，經使用者確認後發布。
 ---
 
 # 遊戲更新與工具包適配
 
-> **2026-11-05 起：使用者說「遊戲更新了」＝授權全自動相容發布**（不建立排程）。第一步直接執行 `node verify/auto.cjs`（偵測→驗證→官方網址實機煙霧測試→網頁版自動發布），完成後回報 `verify/reports/auto-log.md` 最後一行與 `verify/reports/new-content.md` 的新內容清單，由使用者決定要不要加入。只有 auto.cjs 失敗（看 `ticket.json`／`live.json`，修根因後重跑 `node verify/auto.cjs --force`）或使用者指定加入新內容時，才走下列完整流程。auto.cjs 因工作目錄有未提交修改而未發布時，告知使用者是哪些檔案。
+全程繁體中文。流程：官方更新訊息 → 下載新版 bundle → 新舊差異與偵測掃描 → 影響評估 → 腳本快速回歸 → 官方網址實機 → 使用者確認後發布。任何步驟失敗即停，查明並修正後重跑受影響項目；模擬與腳本通過不代表實機完成。新遊戲內容先分析，由使用者決定是否加入。
 
-原則：**先分析、後測試、最後實機**。AI 負責判斷「更新了什麼、影響工具包哪裡」；腳本只負責重複性工作（下載快照、比對、回歸測試）。不得僅憑腳本通過或關鍵字分類就判定相容。一律用繁體中文回覆。
+目前 `verify/auto.cjs` 可能直接發布，且不包含以下人工分析與偵測掃描；不要直接執行。依序分段執行，不得繞過使用者確認。發布前以 `git status --short` 檢查含未追蹤檔案的工作樹，有未提交修改不得發布。
 
-## 1. 取得新版與官方更新訊息
-- 執行 `node verify/verify.cjs --update`（背景執行，等完成通知，不輪詢）：偵測新 build、下載快照到 `game-bundles/<build>/`、產生 `verify/reports/impact.json`、`language.json`。
-- 讀官方更新訊息：`https://d2survivors.lol/changelog.json` 第一筆（已下載到快照的 `changelog.json`）與官方新聞。逐條列出與合法性、存檔欄位、掉落、經驗、技能、物品、選卡、介面有關的改動，先建立「官方說改了什麼」的清單。
-- 版本來源以官方 `/changelog.json` 第一筆 `build` 與 `/assets/Game-*.js` 檔名為準；版本號沒變就沿用舊結論前，仍須確認檔案雜湊是否改變（`--force` 可強制重跑）。
+## 1. 官方訊息、新版快照與差異
 
-## 2. 反編譯比對新舊版（AI 主導）
-- 以 `game-bundles/<新>/assets` 與 `game-bundles/<舊>/assets` 為對象，用反編譯／格式化後的原始碼做差異比對（可用 `verify/lib/compare.cjs` 的輸出當起點，或 REA 等反編譯工具、`docs/game-analysis/formatter.js`）。
-- 重點看：Game 主模組、`itemArt`、`saveTransfer`、技能與物品資料、選卡與升級、掉落與經驗公式、存檔結構與簽章、`localStorage` 鍵名。
-- 把差異對回第 1 步的官方清單：**官方沒提但程式有變的**要特別標出（隱藏改動）；官方提了但程式沒變的也要記錄。
-- 必要時更新 `docs/game-analysis/` 的對應分析檔，記錄新 build 的差異。
+1. 讀取 `https://d2survivors.lol/changelog.json` 第一筆與官方新聞，逐條建立更新清單；記下新版與舊版 build、官方 `/play/` 載入的 bundle 與雜湊。
+2. 執行 `node verify/verify.cjs --update`，等待完成；此指令也會適配檔名、執行部分測試並可能更新版本常數，先檢查工作樹與其改動。快照在 `game-bundles/<build>/`，報告在 `verify/reports/impact.json`、`language.json`、`latest.json`；失敗查 `ticket.json`。同 build 仍須確認官方檔案雜湊；既有快照會被沿用，必要時另行取得並比對官方檔案。
+3. 格式化或反編譯新舊 `assets`，比對 Game、itemArt、saveTransfer、record、ui、技能與物品資料、掉落、經驗、選卡、存檔與簽章。逐條對照官方更新，標出未公告的程式變動及公告但尚未找到依據的項目。
+4. 評估對防護、輔助器、修改器、中文化的影響，提供新版檔名、位置及依據。`impact.json` 僅在分析完整且有具體證據時標「已完成」；不確定保留待分析。修正受影響功能並補必要測試，不以修改斷言掩蓋失敗。
 
-## 3. 分析與工具包是否相符（AI 主導）
-逐項對照三個模組，判斷是否受影響，並給出具體依據：
-- **修改器**（`modifier/`）：`signatures.json`／`patch.mjs` 特徵碼、`engine-page.js` 的物品產生與合法性規則、`gamedata.json`、存檔欄位、雙武器組等。
-- **輔助器**（`helper/autobot.js`）：各原版函式掛接點、選卡回呼、撿寶 `loot()`、自訂鍵位、任務與技能邏輯。
-- **語言**（`lang/`）：`language.json` 的翻譯缺漏、官方字串改動；官方同英文多譯不可盲目覆寫。
-- 有受影響的就實際修改（網頁版與 `editor/` 桌面副本都要評估同步），並補有意義的測試；不需修改的，記錄具體判斷依據。
-- 在 `impact.json` 的 `items` 逐項填入 `status: "已完成"` 與具體 `evidence`；做不到的保持待分析，不得虛構佐證。
+## 2. 偵測與線上存檔檢查（每次必做）
 
-## 3.5 裝備資料庫完整檢查（每次更新必做，不得略過）
-- `verify` 會自動跑 `item-db`（`editor/tests/item-db.cjs`，登記為 `always`，不受快照比對篩選影響）；也可單獨執行 `node editor/tests/item-db.cjs`（`D2_BUILD` 指定快照）。
-- 它用新快照程式碼＋官方 `itemstats.json`（**必須帶 `/play/` 頁 `d2-files` 的 `?h=` 雜湊**，否則會拿到 CDN 舊檔，2026-11-05 曾因此缺地獄火炬屬性）啟動修改器引擎，逐件產生全部暗金／套裝／符文之語，檢查：特徵碼全找到、目錄數量等於遊戲資料、物品資料涵蓋每件、產出品質與名稱正確（2026-11-05 曾因 `makeSet` 特徵碼抓到暗金包裝函式，127 件套裝被做成暗金）、遊戲讀檔不丟棄、遊戲 `itemFault` 判定合法；並以魔法／稀有品質試做每種部位（製作裝備）。
-- 輸出會列出與前一版快照的物品增減；有新增裝備時，另外確認是否有職業相關屬性（例：地獄火炬「+3 職業技能」依目前角色給，見 `fitTorch`）。
-- 失敗時先修特徵碼或引擎，不得改測試放行。
+新版快照完成後，將下列版本替換成實際資料夾名稱：
 
-## 4. 沒有變動的部分：腳本快速回歸
-- 受影響項目修好後，重新執行 `node verify/verify.cjs --update`（可加 `--force`），跑 `verify/suite.cjs` 登記的測試（`lang`、`weapon-sets`、`weapon-sets-ui`、`autobot` 等）作為回歸；其他旗標：`--dry` 不改來源、`--workers N`、`--full` 實機長流程（使用者明說才加）。
-- 測試失敗先查根因，不得為了通過而改驗證腳本或略過失敗。
-- 模擬測試不等於真實遊戲驗收。
+```powershell
+node verify/lib/detection-scan.cjs --build game-bundles/<版本資料夾> --diff
+```
 
-## 5. 實機驗證（發布前必做）
-- 用 `tests/live-harness`（Electron，隔離 TEMP 設定檔，不碰使用者存檔）開 **官方網址 `https://d2survivors.lol/play/`**，載入待發布工具包（本機修改用書籤從本機伺服器 `import()`）。每個存檔獨立設定檔；測試用新存檔，由修改器製作裝備、輔助器自動配裝。
-- 確認：遊戲與工具按鈕正常載入、修改器可開啟並讀寫、輔助器掛接成功、繁中顯示正常。測試前提醒使用者備份存檔。
-- 記錄到 `verify/reports/live.json`（`ok: true`、`build`、`fingerprint`、`at`、`url`、`evidence`）。不得把遊戲首頁或模擬當成工具包正常載入。
+掃描與 `verify/detection-baseline.json` 比對新增／移除的 `/api` 端點、`localStorage` 鍵、封印金鑰字串、MOD 診斷檢查的原生 API 清單、受限網址參數、上傳紀錄欄位。工具或基準不存在、執行失敗或輸出不完整時停止，不得當成無差異。
 
-## 6. 發布
-- 維護訪客看得懂的更新日誌，並更新 `AI_HANDOFF.md`。
-- 先執行 `node verify/publish.cjs`（不加 `--confirm`）列出計畫給使用者看；**只有使用者明確說「確認發布」才執行 `node verify/publish.cjs --confirm`**，前次同意不延用。
-- 發布前再確認官方最新 build 仍等於已驗證與實機載入的版本；若又更新，回到第 1 步。任一條件未達成就回報阻礙，不得發布。
+AI 必須精讀每項差異對應的新舊程式、呼叫鏈與用途，在 `AI_HANDOFF.md` 記錄位置、證據、影響及未確認事項；不能只依關鍵字或掃描結果下結論。完成審查並確認基準應更新後才執行：
 
-## 回覆格式
-結尾列出：新舊 build、官方更新重點、反編譯發現的差異（含官方沒提的）、各模組是否受影響與依據、已改動的檔案、回歸與實機結果、尚待使用者決定的事項。
+```powershell
+node verify/lib/detection-scan.cjs --build game-bundles/<版本資料夾> --update
+```
 
-## 實戰補充（2026-11-04 首次完整走完流程後修訂）
+出現存檔上傳、下載、同步跡象（包括新端點、新鍵或帳號登入）時，遊戲可能推出線上存檔：**停下來向使用者報告，不自動發布**；追查證據、評估 `guard/guard.js` 的 `detectors` 如何辨識及哪些輔助器功能受影響。未確認伺服器行為前，不得聲稱已支援真實線上存檔；手動線上模式測試不代表真實線上存檔驗證。
 
-- **verify 訊息不等於發布授權**：`verify.cjs --update` 結尾可能印出「完成…後自動發布」。那是工具的文字，**不是授權**；第 6 步仍需使用者說「確認發布」。看到此字樣時，回報並停在第 6 步。
-- **分析結論的判定標準**：`impact.json` 的「已完成」只在**有具體程式碼位置**（檔名:行號＋片段）且能說明工具包影響時才標。Codex 回報「部分」「尚未完整追通」「NOT FOUND」一律保留「待分析」，並在 evidence 註明缺什麼證據，不可為了清單好看而標完成。
-- **不要把譯文當分析**：字典已含某句譯文，不代表該項已分析受影響；`impact` 的完成與翻譯是兩件事。
-- **回歸失敗先看是不是過時路徑**：`editor/tests/skill-mods.cjs` 曾因整理資料夾後 `signatures.json` 搬家而 `MODULE_NOT_FOUND`，修路徑即可，斷言不動。
-- **實機流程（harness）**：
-  1. 本機伺服器：在暫存目錄放一支帶 CORS、`.mjs`／`.js` 回 `text/javascript` 的靜態伺服器（不進倉庫），例如 `localhost:8766`。`.mjs` 漏設 MIME 會讓修改器載入失敗。
-  2. 注入：`tests/live-harness` 支援環境變數 `H_BASE`（如 `http://localhost:8766/`），由 `boot.js` 從該處 `import d2edit.js`；未設則用 GitHub Pages。網址仍是官方 `https://d2survivors.lol/play/`。
-  3. 存檔：使用者提供的存檔格式為 `D2S1:` + base64url + deflate（zlib）。解碼：去前綴 → base64url 還原 → `zlib.inflateSync` → JSON。解碼結果放暫存目錄，**不改原檔**；以 `H_SEED` 寫入隔離設定檔。
-  4. 啟動 Electron：用 `editor/node_modules/electron/dist/electron.exe` 開 `tests/live-harness`，**必須 `env -u ELECTRON_RUN_AS_NODE` 取消該變數**；設為空字串也會讓 Electron 以 Node 模式執行而報 `MODULE_NOT_FOUND`。
-  5. 讀結果：`H_OUT/log.txt`（載入失敗、console 錯誤）與 `status.json`（`diag.gameBuild`、`diag.connected`、`hookNote`、`tested`）。`tested` 與新版不同時代表網頁版 `TESTED_GAME_BUILD` 尚未更新。
-- **Codex 分派**：用 `delegate_parallel`、`sandbox: read-only`、`fallback_agent: none`，每組 8–11 項；要求每項給 NEW 檔名:行號與片段。回來後**抽樣用 grep 複核**，尤其是「是」與「已完成」的結論。
-- **版本常數**：實機通過後才把網頁版 `TESTED_GAME_BUILD` 改為新版（`helper/autobot.js`、`modifier/editor.html`）；`editor/` 副本由 `verify` 自動改，但仍要實機確認。
+## 3. 分模組重驗
 
-## 兩階段流程（2026-11-04 使用者指定）
+- **防護 `guard/`（存檔檢查＋反偵測）**：追查 fetch／XHR／sendBeacon 的排行榜非 GET 上傳封鎖、`leaderboard.off` 鎖定、上傳佇列清除與攔截、封印金鑰與簽章、存檔檢查及模式判定。執行 `guard/tests/*` 適用測試，實機執行 `tests/live-harness/toolkit-roles-live.cjs`、`no-upload-live.cjs`；單機與線上模式都須確認上傳封鎖。
+- **輔助器 `helper/`（只改記憶體）**：重驗使用的 `Game` 掛接成員及方法、選卡、撿寶與受變更影響的功能；執行 `helper/tests/*` 適用測試及 `node helper/tests/memory-only.cjs`。不得直接讀寫遊戲存檔鍵、簽章或使用 `__d2editBackend`。實機執行 `cheat-restore-live.cjs`、`invincible-live.cjs`，並檢查線上模式受限功能。
+- **修改器 `modifier/`（只改單機存檔）**：重驗 `signatures.json`、`patch.mjs`、物品資料與合法性規則、`engine-page.js`、封印與寫入；線上模式必須拒絕寫入。執行 `modifier/tests/*` 適用測試，尤其 `item-db` 與 `drop-ranges`，並在官方遊戲以隔離存檔驗證讀寫。官方 `itemstats.json` 須使用 `/play/` 的 `d2-files` 所帶 `?h=`，避免 CDN 舊資料；新增裝備另查職業屬性。
+- **中文化 `lang/`**：檢查 `language.json` 的新增及變更字串、遊戲和新聞未翻譯項，對照官方 D2R 繁中及語境；執行 `node lang/tests/test_lang.cjs`，實機確認遊戲內顯示。字典已有譯文不代表更新影響已分析。
 
-- **階段 A：先讓工具包上線**（本次必做）：①官方更新中影響工具包的修正（存檔、首領、選關）②翻譯：新字串全部補上，`language.json` 的遊戲與新聞未翻譯項歸零 ③原有功能回歸：`verify --update --force` 全部套件、`helper/tests/autobot.cjs`、實機用使用者存檔載入（輔助器掛接、修改器可開、存檔可讀寫）④全部通過後發布。
-- **階段 B：遊戲新增內容**（另案）：新 uber、新地點、新機制等，只做分析與記錄，不阻擋階段 A 的發布。
-- **發布授權**：使用者在指令中明說「通過即發布」時，階段 A 完成後直接執行 `publish.cjs --confirm`；否則仍停在第 6 步等「確認發布」。
-- **選關安全**：自動推層一律避開 `uber`、`finale` 選項（會消耗鑰匙與器官）。
+## 4. 快速回歸與平行分析
+
+分析及修正後，執行 `node verify/verify.cjs --update --force`；可用 `node verify/verify.cjs --quick` 快速重跑登記的靜態與隔離整合測試。查看 `latest.json` 的已執行、略過與結果；`verify/suite.cjs` 的 `always` 項目每次更新必跑。按差異增加針對性測試，未變動部分用腳本快速回歸。`--full` 僅在需要長流程時使用；腳本輸出中「自動發布」不是發布授權。
+
+可平行派子代理：不同 bundle 分塊差異、官方更新日誌逐條核對、各模組回歸；要求回報新版檔案位置、證據、指令、結果及未驗證事項。主代理必須親自核實關鍵差異與呼叫鏈、偵測掃描每項差異、線上存檔跡象、跨模組影響、測試結果與官方網址實機證據，並決定是否建議發布。派 Codex 前先確認本機 Ollama 正在執行：
+
+```powershell
+Test-NetConnection 127.0.0.1 -Port 11434
+```
+
+`TcpTestSucceeded` 為 `False` 時不要派 Codex，避免等待網路；改用其他可用代理或自行處理。
+
+## 5. 官方網址實機
+
+使用 `tests/live-harness` 的隔離 Electron 設定檔開 `https://d2survivors.lol/play/`，以本機伺服器載入待驗證工具包；不可用本地遊戲快照代替官方網址。一般使用 D2S1 存檔副本，多存檔各用獨立設定檔；自動配裝使用新存檔並以修改器解鎖裝備庫。確認載入的 build 與本機來源，依第 3 節及實際改動操作驗證，記錄通過與未覆蓋項目。
+
+```powershell
+node verify/live-smoke.cjs --build <版本>
+node modifier/tests/write-confirm.cjs
+```
+
+煙霧測試只證明其檢查範圍，不能取代各功能實機。Windows 執行個別 Electron 腳本時，以等待結束的方式啟動，並從子行程環境刪除 `ELECTRON_RUN_AS_NODE`（空字串也不行）。以下以防護實機腳本為例；依各腳本參數提供隔離輸出路徑：
+
+```powershell
+node -e 'const {spawnSync}=require("node:child_process"); const env={...process.env}; delete env.ELECTRON_RUN_AS_NODE; const r=spawnSync("editor/node_modules/electron/dist/electron.exe",["tests/live-harness/no-upload-live.cjs"],{env,stdio:"inherit",windowsHide:true}); if(r.error) throw r.error; process.exit(r.status ?? 1)'
+```
+
+`modifier/tests/write-confirm.cjs` 是 Node 測試，不可用 Electron 執行。檢查個別腳本的輸出與結束碼；測試結束後清理本次測試殘留行程及暫存設定檔，勿刪使用者資料。`verify/reports/live.json` 記錄煙霧測試的 build、fingerprint、網址與證據。
+
+## 6. 發布與回報
+
+確認所有必要分析、回歸與實機通過，更新玩家可讀日誌及 `AI_HANDOFF.md`。再次確認官方最新 build 與實機版本一致，工作樹沒有任何未提交修改；否則停止。執行 `node verify/publish.cjs` 查看發布計畫，**只有使用者確認後**才執行 `node verify/publish.cjs --confirm`。新內容是否加入另由使用者決定。
+
+回報包括：新舊 build、官方更新與未公告差異、各模組影響及證據、偵測差異摘要與線上存檔判斷、已執行測試結果、**實機驗證了什麼／未驗證什麼**、已改檔案及**是否建議發布**。任何未完成或失敗都列出具體阻礙。

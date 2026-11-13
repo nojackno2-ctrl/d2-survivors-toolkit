@@ -11,7 +11,7 @@ engine:async(fn)=> fn==='saveFaults' ? window.__sf : fn==='faults' ? window.__if
 const watchdog = setTimeout(() => { console.error('存檔檢查測試逾時'); app.exit(1); }, 30000);
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, webPreferences: { preload, contextIsolation: false, nodeIntegration: false } });
-  await win.loadFile(path.join(__dirname, '..', 'editor.html'));
+  await win.loadFile(path.join(__dirname, '..', '..', 'guard', 'guard.html'));
   const run = (sf, itemFaults = null) => win.webContents.executeJavaScript(`(async()=>{
     window.__sf = ${JSON.stringify(sf)};
     window.__if = ${JSON.stringify(itemFaults)};

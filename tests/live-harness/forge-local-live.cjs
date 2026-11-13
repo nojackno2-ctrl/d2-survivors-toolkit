@@ -3,7 +3,7 @@
 //   - 隔離環境與全新存檔：使用獨立 userData，官方網址 https://d2survivors.lol/play/。
 //   - 工具包由 protocol.handle 攔截至本機檔案，計數所有送往 d2survivors.lol 的 /forge 網路請求。
 //   - 階段 A（本地化＋sure）：
-//       開 cheat.enabled、forgeMax、forgeLocal、forgeLocalSure。
+//       開啟獨立本地淬鍊與必定成功設定，注入實體測試精華。
 //       注入獨特裝備（The Stone of Jordan），連續 temper 10 次（每次結果文字 Raised 開頭、
 //       forge.t 累計到 10、精華每次 -1）；第 11 次 temper 應被拒（Temper stops at 10，精華不變）；
 //       hellforge（文字含 doubled、總數 20、hf=1）；再 hellforge 應被拒（used）。
@@ -222,15 +222,9 @@ app.whenReady().then(async () => {
 
       const countT = (item) => Object.values(item?.forge?.t || {}).reduce((s, n) => s + Number(n || 0), 0);
 
-      // 1. 開啟作弊與本地化設定
-      toggle("cheat.forgeMax", true);
-      toggle("cheat.forgeLocal", true);
-      toggle("cheat.forgeLocalSure", true);
-      toggle("cheat.enabled", true);
-      await sleep(1500);
-      // 精華補到 99 後關掉補滿，否則每次扣掉又被補回，量不到扣除
+      // 使用獨立設定與實體精華，不依賴虛擬精華。
       toggle("cheat.forgeMax", false);
-      await sleep(800);
+      window.__d2forgeLocal.set({ enabled: true, sure: true });
 
       const failures = [];
 
@@ -248,6 +242,7 @@ app.whenReady().then(async () => {
       g.save.inventoryByClass = g.save.inventoryByClass || {};
       g.save.inventoryByClass[cls] = g.save.inventoryByClass[cls] || [];
       g.save.inventoryByClass[cls].push(item1);
+      g.save.inventoryByClass[cls].push({ id: "test_essence_" + Date.now(), base: "Burning Essence of Terror", type: "essence", name: "Burning Essence of Terror", count: 99 });
 
       g.anvil = item1.id;
 
@@ -373,7 +368,7 @@ app.whenReady().then(async () => {
       const failures = [];
 
       // 關閉 sure
-      toggle("cheat.forgeLocalSure", false);
+      window.__d2forgeLocal.set({ sure: false });
       await sleep(500);
 
       // 注入第二件裝備
@@ -604,7 +599,7 @@ app.whenReady().then(async () => {
         const failures = [];
 
         // 關閉本地化
-        toggle("cheat.forgeLocal", false);
+        window.__d2forgeLocal.set({ enabled: false });
         toggle("cheat.enabled", true);
         await sleep(500);
 

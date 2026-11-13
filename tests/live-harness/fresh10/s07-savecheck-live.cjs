@@ -1,0 +1,48 @@
+// S07：官方遊戲與獨立全新設定檔的存檔檢查實機測試。
+const { app, BrowserWindow, session, net } = require('electron');
+const fs = require('fs'), os = require('os'), path = require('path');
+const { spawn } = require('child_process');
+const ROOT = path.resolve(__dirname, '../../..');
+const PAGES = 'https://nojackno2-ctrl.github.io/d2-survivors-toolkit/';
+const OUT = process.argv[2];
+const PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), 'd2fresh10-s07-'));
+const MIME = { '.js':'text/javascript', '.mjs':'text/javascript', '.json':'application/json', '.html':'text/html', '.css':'text/css', '.svg':'image/svg+xml' };
+app.setPath('userData', PROFILE);
+app.on('window-all-closed', () => {});
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const results = [];
+let win, timer;
+const add = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
+async function main() {
+  await app.whenReady();
+  await session.defaultSession.protocol.handle('https', req => {
+    const u = new URL(req.url);
+    if (u.hostname === 'd2survivors.lol' && u.pathname.startsWith('/api/') && req.method !== 'GET') return new Response('blocked by harness', { status:503 });
+    if (!req.url.startsWith(PAGES)) return net.fetch(req, { bypassCustomProtocolHandlers:true });
+    const file = path.resolve(ROOT, decodeURIComponent(u.pathname.slice('/d2-survivors-toolkit/'.length)));
+    if (!file.startsWith(ROOT + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return new Response('not found', {status:404});
+    return new Response(fs.readFileSync(file), {headers:{'content-type':(MIME[path.extname(file)] || 'application/octet-stream')+'; charset=utf-8','access-control-allow-origin':'*','cache-control':'no-store'}});
+  });
+  win = new BrowserWindow({width:1100,height:800,show:true,webPreferences:{webSecurity:false,backgroundThrottling:false}});
+  const ev = code => win.webContents.executeJavaScript(`(async()=>{${code}})()`);
+  const run = async (name, fn) => { try { const d=await fn(); add(name,d.ok,d); return d; } catch(e) { add(name,false,{error:String(e.stack||e)}); return null; } };
+  const toolkit = () => ev(`await import(${JSON.stringify(PAGES+'d2edit.js?v=')}+Date.now());const s=ms=>new Promise(r=>setTimeout(r,ms));for(let i=0;i<120&&(!window.__d2guard||!window.__d2autobot?.game);i++){document.body.dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space',bubbles:true}));await s(500)}return {ok:!!window.__d2guard&&!!window.__d2autobot?.game}`);
+  await win.loadURL('https://d2survivors.lol/play/').catch(()=>{}); await sleep(8000);
+  await ev(`const b=[...document.querySelectorAll('button')].find(x=>/hosted/i.test(x.textContent));if(b)b.click()`); await sleep(12000);
+  await run('載入工具包', toolkit);
+  await run('全新刺客進場',()=>ev(`const s=ms=>new Promise(r=>setTimeout(r,ms)),g=window.__d2autobot.game;if(g.state==='select'){if(!g.plainSelect().onPick){g.chooseClass();await s(1500)}const q=g.plainSelect(),i=q.cards.findIndex(c=>c.dataset?.class==='assassin');if(i<0)throw Error('找不到刺客');q.select(i);await s(300);q.confirm(false)}for(let i=0;i<120&&!g.world?.player;i++)await s(500);return {ok:!!g.world?.player&&g.kit?.id==='assassin',state:g.state,cls:g.kit?.id}`));
+  await run('自動戰鬥與無敵遊玩',()=>ev(`const s=ms=>new Promise(r=>setTimeout(r,ms)),g=window.__d2autobot.game,root=document.querySelector('#d2autobot-panel')?.shadowRoot;const toggle=(n,v)=>{const b=root?.querySelector('[data-setting="'+n+'"]');if(!b)throw Error('找不到設定 '+n);if((b.getAttribute('aria-checked')==='true')!==v)b.click()};toggle('enabled',true);toggle('progressEnabled',true);toggle('cheat.enabled',true);toggle('cheat.invincible',true);toggle('cheat.oneHitKill',true);toggle('cheat.summonAllBosses',true);const samples=[];for(let i=0;i<19;i++){await s(10000);samples.push({state:g.state,time:g.world?.time,act:g.world?.act,level:g.world?.player?.level,savedAct:g.savedAct?.(),heroes:!!g.save?.heroes?.assassin});if(g.save?.heroes?.assassin)break}return {ok:samples.some(x=>x.time>20),samples,keys:Object.keys(g.save||{}),heroes:g.save?.heroes,underway:g.save?.underway}`));
+  const leave=await run('正常離場並讀取角色進度',()=>ev(`const s=ms=>new Promise(r=>setTimeout(r,ms)),g=window.__d2autobot.game,root=document.querySelector('#d2autobot-panel')?.shadowRoot,b=root?.querySelector('[data-setting="enabled"]');if(b?.getAttribute('aria-checked')==='true')b.click();if(g.state==='playing')g.pause();if(g.state==='paused')await g.leaveRun();await s(4000);const l=await window.__d2editBackend.load('softcore');return {ok:!!l.save?.heroes?.assassin,state:g.state,keys:Object.keys(l.save||{}),heroes:l.save?.heroes,underway:l.save?.underway}`));
+  if(leave?.ok){
+    await run('製造三項異常並寫入',()=>ev(`const b=window.__d2editBackend,l=await b.load('softcore'),h=l.save.heroes.assassin,k=h.run?'run':'kept',st=h[k],lv=st.run.level,cap=Math.round((5+4*(lv-1)**1.35)*1.1**Math.max(0,lv-25)*1.1**Math.max(0,lv-89));if(!Array.isArray(st.build.skills)||!st.build.skills.length)throw Error('角色沒有技能可重複：'+JSON.stringify(st.build));st.run.xp=cap+10;st.build.skills.push(JSON.parse(JSON.stringify(st.build.skills[0])));st.build.unspent=1000;const result=await b.save('softcore',l.save),stored=await b.load('softcore');return {ok:result?.ok===true&&stored.save.heroes.assassin[k].run.xp===cap+10,key:k,level:lv,cap,xp:stored.save.heroes.assassin[k].run.xp,skills:stored.save.heroes.assassin[k].build.skills,unspent:stored.save.heroes.assassin[k].build.unspent,result}`));
+    await win.reload();await sleep(12000);await run('重新載入工具包',toolkit);
+  }
+  let frame;
+  await run('防護頁與診斷',async()=>{await ev(`window.__d2editLauncher.click();const b=[...window.__d2toolkitMenu.children].find(x=>x.textContent.trim()==='存檔檢查與防護');if(!b)throw Error('找不到選單');b.click()`);for(let i=0;i<120;i++){frame=win.webContents.mainFrame.framesInSubtree.find(x=>x.url.includes('/guard/guard.html'));if(frame&&await frame.executeJavaScript("document.readyState==='complete' && /已讀取|無法讀取|找不到/.test(document.body.innerText)").catch(()=>false))break;await sleep(250)}if(!frame)throw Error('防護頁逾時');return frame.executeJavaScript(`(()=>{const input=document.querySelector('#diagIn');input.value='build: 20261105.3\\npage: replaced Storage.setItem\\nleaderboard queue: 0';input.dispatchEvent(new Event('input',{bubbles:true}));const diag=document.querySelector('#diagOut').innerText,rows=[...document.querySelectorAll('#guardStatusBody tr')].map(r=>[...r.cells].map(c=>c.innerText));const issues=document.querySelector('#issues').innerText;return {ok:rows.length>0&&rows.every(r=>!!r[1])&&rows.some(r=>r.join(' ').includes('Storage.setItem'))&&diag.includes('Storage.setItem')&&diag.includes('leaderboard queue'),rows,diag,issues}})()`)});
+  if(leave?.ok&&frame){
+    await run('三項問題列出',()=>frame.executeJavaScript(`(()=>{const rows=[...document.querySelectorAll('#issues tr')].map(x=>x.innerText);return {ok:['經驗值超過','技能欄有重複','屬性點不合規'].every(t=>rows.some(r=>r.includes(t)&&r.includes('會被偵測'))),rows}})()`));
+    for(const [name,label] of [['經驗值單項修正','經驗值設為該等級上限'],['技能單項修正','移除重複技能'],['屬性點單項修正','屬性']]) await run(name,async()=>{const before=await frame.executeJavaScript(`(()=>{const b=[...document.querySelectorAll('[data-fix]')].find(x=>x.innerText.includes(${JSON.stringify(label)}));if(!b)return {found:false,buttons:[...document.querySelectorAll('[data-fix]')].map(x=>x.innerText)};b.click();return {found:true}})()`);if(!before.found)return {ok:false,...before};await sleep(2500);return frame.executeJavaScript(`(()=>({ok:/已修正單項問題|已寫回|並寫入存檔/.test(document.querySelector('#status').innerText),status:document.querySelector('#status').innerText,issues:document.querySelector('#issues').innerText}))()`)});
+    await run('重讀修正、封印與遊戲檢查',()=>ev(`const b=window.__d2editBackend,l=await b.load('softcore'),h=l.save.heroes.assassin,k=h.run?'run':'kept',st=h[k],lv=st.run.level,cap=Math.round((5+4*(lv-1)**1.35)*1.1**Math.max(0,lv-25)*1.1**Math.max(0,lv-89)),ids=st.build.skills.map(x=>x.id),seal=await window.__d2guard.sealState(l.save),faults=await b.engine('saveFaults',l.save),m=await import(${JSON.stringify(PAGES+'guard/save-check.js')}),attrs=m.attributeChecks(l.save);return {ok:st.run.xp===cap&&new Set(ids).size===ids.length&&attrs.every(x=>x.ok)&&seal==='sealed'&&Array.isArray(faults)&&faults.length===0,level:lv,xp:st.run.xp,cap,ids,unspent:st.build.unspent,attrs,seal,faults}`));
+  }else add('角色進度三項異常與單項修正',false,{未驗證:'未取得遊戲產生的 heroes.assassin；未偽造角色進度'});
+}
+(async()=>{try{await Promise.race([main(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('實機測試整體逾時')),280000)})])}catch(e){add('執行錯誤',false,{error:String(e.stack||e)})}finally{clearTimeout(timer);try{if(OUT)fs.writeFileSync(OUT,JSON.stringify({partial:true,profile:PROFILE,results},null,2))}catch{}if(win&&!win.isDestroyed())win.destroy();try{if(app.isReady())await session.defaultSession.flushStorageData()}catch(e){add('清理設定檔',false,{error:String(e)})}let err;for(let i=0;i<5;i++){try{fs.rmSync(PROFILE,{recursive:true,force:true});err=null;break}catch(e){err=e;await sleep(300)}}process.on('exit',()=>{try{fs.rmSync(PROFILE,{recursive:true,force:true})}catch{}});if(err){const p=spawn(process.execPath,['-e',"const fs=require('fs');const p=process.argv[1];let n=0;const t=setInterval(()=>{try{fs.rmSync(p,{recursive:true,force:true});clearInterval(t)}catch(e){if(++n>=30)clearInterval(t)}},500)",PROFILE],{detached:true,stdio:'ignore',windowsHide:true,env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});p.unref()}const passed=results.filter(x=>x.ok).length,failed=results.length-passed;try{fs.writeFileSync(OUT,JSON.stringify({url:'https://d2survivors.lol/play/',isolatedFreshProfile:true,profile:PROFILE,results,passed,failed},null,2))}catch(e){console.error(e);app.exit(1);return}app.exit(failed?1:0)}})();

@@ -9,6 +9,15 @@ const BASE = process.env.D2_TOOLKIT_BASE || "https://nojackno2-ctrl.github.io/d2
 if (!BASE.endsWith("/")) throw new Error("D2_TOOLKIT_BASE 結尾要有 /");
 const ORIGIN = new URL(BASE).origin;
 const PAGE = BASE + "modifier/editor.html";
+const GUARD_PAGE = BASE + "guard/guard.html";
+function pageUrl(target = "editor", opts = {}) {
+  const base = target === "guard" || target === GUARD_PAGE ? GUARD_PAGE : PAGE;
+  const v = opts && typeof opts === "object" && opts.v !== undefined ? opts.v : Date.now();
+  const mode = typeof opts === "string" ? opts : opts?.mode;
+  const params = new URLSearchParams({ v: String(v) });
+  if (mode === "hardcore" || mode === "softcore") params.set("mode", mode);
+  return `${base}?${params.toString()}`;
+}
 const cacheDir = () => path.join(app.getPath("userData"), "remote-cache");
 const cacheFile = (rel) => path.join(cacheDir(), rel.replace(/[\\/]/g, "__"));
 
@@ -31,4 +40,4 @@ async function text(rel) {
 // 只比對整個工具包的路徑前綴（BASE 結尾有 /），同一網域下其他 repo 的頁面不信任
 const trusted = (url) => typeof url === "string" && url.startsWith(BASE);
 
-module.exports = { BASE, PAGE, text, trusted };
+module.exports = { BASE, PAGE, GUARD_PAGE, pageUrl, text, trusted };

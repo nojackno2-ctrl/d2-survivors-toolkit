@@ -146,6 +146,8 @@
   <button id="closeWeb" hidden>關閉</button>
   <span id="status">請先關閉遊戲</span>
   <div id="versionWarn" class="version-warn" hidden><span id="versionMsg"></span><button type="button" id="versionDismiss" aria-label="關閉提示">×</button></div>
+  <div id="onlineModeBanner" class="version-warn" hidden>線上存檔模式：修改器只修改單機存檔，目前僅供檢視</div>
+  <div id="moduleError" class="version-warn" hidden>檢查模組載入失敗 <button id="retryModule">重試</button></div>
 </header>
 <nav>
   <button data-page="items" class="on">物品</button>
@@ -164,6 +166,10 @@
     <h2>更新日誌</h2>
     <p class="dim">介紹網頁：<a href="https://d2-survivors-toolkit.nojackno2.workers.dev/#changelog" target="_blank" rel="noopener" style="color:var(--gold)">d2-survivors-toolkit.nojackno2.workers.dev</a></p>
     <h3>2026-11-13</h3>
+    <h4>工具包</h4>
+    <ul>
+      <li>工具包功能重新劃分：輔助器只在遊戲記憶體運作不碰存檔、修改器專門修改單機存檔、存檔檢查與防護獨立成選單中的新功能。</li>
+    </ul>
     <h4>修改器</h4>
     <ul>
       <li>存檔檢查新增三項（依官方遊戲上傳紀錄與載入檢查的規則）：經驗值是否超過該等級上限、技能欄是否有重複技能、存檔模式是否與儲存槽相符（硬核存檔須有硬核標記，一般存檔不得有）。發現問題時可一鍵修正。</li>
@@ -543,28 +549,7 @@
 <div class="page" id="guard">
   <section>
     <h2>存檔檢查</h2>
-    <p id="verdict" style="font-weight:600"></p>
-    <div class="bar"><button id="lbOff" hidden>關閉排行榜上傳</button></div>
-    <h3>問題明細</h3>
-    <table><thead><tr><th style="width:30%">位置</th><th>問題</th><th style="width:26%">怎麼修正</th></tr></thead><tbody id="details"></tbody></table>
-    <h2 style="margin-top:16px">偵測結果</h2>
-    <p class="dim">依照遊戲本身的檢查規則（金幣上限、光之碎片、物品合法性、角色等級、簽章、標記與匯入痕跡）掃描目前的存檔內容。</p>
-    <div class="bar"><button id="scan">重新掃描</button><button class="primary" id="fixAll">一鍵全部規避</button></div>
-    <table style="margin-top:8px"><thead><tr><th style="width:70px">狀態</th><th>項目</th><th style="width:140px"></th></tr></thead><tbody id="issues"></tbody></table>
-  </section>
-  <section>
-    <h2>遊戲診斷</h2>
-    <p class="dim">遊戲的「複製診斷訊息」（選項裡）會把頁面環境、排行榜佇列等資訊寫成文字。下面顯示遊戲此刻看到的頁面狀態；也可以貼上診斷訊息，標出和排行榜有關的欄位。這裡只是顯示，不會修改遊戲。</p>
-    <p id="diagLive" style="font-weight:600"></p>
-    <textarea id="diagIn" rows="6" placeholder="貼上遊戲的診斷訊息（D2 Survivors diagnostics …）" style="width:100%;box-sizing:border-box"></textarea>
-    <table style="margin-top:8px"><tbody id="diagOut"></tbody></table>
-    <details style="margin-top:8px"><summary>遊戲診斷訊息的所有項目（從遊戲程式碼反編譯）</summary><table><tbody id="diagRef"></tbody></table></details>
-  </section>
-  <section>
-    <h2>存檔識別碼</h2>
-    <table><tbody id="ids"></tbody></table>
-    <div class="bar"><button id="newLbId">重新產生排行榜與角色識別碼</button></div>
-    <p class="note">此操作會重設所有角色的爬塔紀錄與恐懼最佳、連勝與被換下角色保存的恐懼紀錄；已開啟的恐懼階會保留。變更需寫入存檔後生效。</p>
+    <p>存檔檢查已移到工具包選單的「存檔檢查與防護」。</p>
   </section>
 </div>
 
@@ -1039,31 +1024,6 @@ async function unlock(list) {
   let n = 0, near = 0;
   for (const r of out) if (r?.item) { delete r.item.at; arr.push(r.item); n++; if (!r.max) near++; }
   return { n, near, msg: skipped(out) };
-}
-// 收藏中隨機種子對不上的符文之語：依同名同底材重新產生，逐件用遊戲檢查確認後才替換原項目（失敗的保留原樣）
-async function regenRunewords(bad) {
-  const idx = bad.map(it => (save.uniques ?? []).indexOf(it)).filter(i => i >= 0);
-  if (!idx.length) return { n: 0, failed: [] };
-  const out = await generate(idx.map(i => ({ rarity: "runeword", name: save.uniques[i].name, base: save.uniques[i].base })), "重新產生符文之語");
-  const cand = idx.map((i, j) => ({ i, it: out[j]?.item ?? null }));
-  // 先套用遊戲讀檔時的整理（sanitize），讓寫入的內容與遊戲讀回的一致（否則讀回後 roll／mod 會被重算而對不上）
-  // 不附 roll（保留 stats）：帶 roll 的符文之語讀回時會被遊戲改寫版本（roll[0] 1→2）而對不上種子；不附 roll 的做法與既有產生器一致，讀檔不會改回
-  for (const c of cand) {
-    if (!c.it) continue;
-    delete c.it.roll;
-    const s = await window.api.engine("sanitizeItem", JSON.parse(JSON.stringify(c.it))).catch(() => null);
-    c.it = s && typeof s === "object" ? s : null;
-  }
-  const withItem = cand.filter(c => c.it);
-  // 遊戲檢查不可用（null）時不替換，避免把未驗證的項目寫進存檔
-  const chk = withItem.length ? await window.api.engine("faults", withItem.map(c => JSON.parse(JSON.stringify(c.it)))) : [];
-  const okIdx = new Set(Array.isArray(chk) ? withItem.filter((c, k) => !chk[k]).map(c => c.i) : []);
-  let n = 0; const failed = [];
-  for (const c of cand) {
-    if (okIdx.has(c.i)) { delete c.it.at; save.uniques[c.i] = c.it; n++; }
-    else failed.push(save.uniques[c.i].name);
-  }
-  return { n, failed };
 }
 // 一鍵：先把已有的全部調最高，再補齊缺的（補的本來就是最高值）
 // 範圍：收藏、角色身上、傭兵身上、倉庫、背包、咒符欄（商店商品不動）
@@ -1872,48 +1832,6 @@ async function makeCustom() {
 }
 
 /* ---------- 放置 ---------- */
-/* ---------- 錯誤獨特／倉庫重疊修復 ---------- */
-function isFakeUnique(it) {
-  return it && it.rarity === "unique" && it.type !== "quest" && !!A?.sets?.[it.name] && !A?.uniques?.[it.name];
-}
-function fakeContainers(s) {
-  return [...Object.entries(s.stashTabs ?? {}), ...Object.entries(s.inventoryByClass ?? {}), ...Object.entries(s.charmsByClass ?? {})];
-}
-function fakeUniqueItems(s) {
-  return fakeContainers(s).flatMap(([, arr]) => (arr ?? []).filter(isFakeUnique).map(it => ({ it })));
-}
-function removeFakeUniques(s) {
-  for (const [, arr] of fakeContainers(s)) for (let i = arr.length - 1; i >= 0; i--) if (isFakeUnique(arr[i])) arr.splice(i, 1);
-}
-function stashConts(s) {
-  const out = [];
-  for (const t of Object.keys(s.stashTabs ?? {})) { const c = contById("st:" + t); if (c) out.push(c); }
-  return out;
-}
-// 需要移動的物品：缺座標、超出格子、或與前面物品重疊
-function overlapping(c) {
-  const [cols, rows] = GRID[c.kind], occ = new Set(), bad = [];
-  for (const it of c.arr()) {
-    const [w, h] = sizeOf(it), a = it.at, ok0 = a && Number.isInteger(a.x) && Number.isInteger(a.y) && a.x >= 0 && a.y >= 0 && a.x + w <= cols && a.y + h <= rows;
-    const cells = [];
-    if (ok0) for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) cells.push((a.x + x) + "," + (a.y + y));
-    if (!ok0 || cells.some(k => occ.has(k))) bad.push(it); else cells.forEach(k => occ.add(k));
-  }
-  return bad;
-}
-function stashOverlaps(s) {
-  return stashConts(s).map(c => ({ label: c.label, items: overlapping(c) })).filter(b => b.items.length);
-}
-function repackStash(s) {
-  for (const c of stashConts(s)) {
-    const bad = new Set(overlapping(c)), arr = c.arr(), keep = arr.filter(it => !bad.has(it)), tmp = { kind: c.kind, arr: () => keep };
-    for (const it of arr) if (bad.has(it)) {
-      const at = freeSpot(tmp, it);
-      if (!at) throw new Error(c.label + " 空間不足，無法容納所有物品；請先刪除部分物品。");
-      it.at = at; keep.push(it);
-    }
-  }
-}
 function freeSpot(c, it, skip) {
   const [cols, rows] = GRID[c.kind], [w, h] = sizeOf(it), occ = new Set();
   c.arr().forEach((o, i) => { if (o === skip) return; const [ow, oh] = sizeOf(o), pos = o.at ?? { x: 0, y: 0 }, a = { x: Number(pos.x) || 0, y: Number(pos.y) || 0 };
@@ -2422,8 +2340,8 @@ function checkGold() {
   $("#goldWarn").hidden = unlocked() || !(Number(el.value) >= 1e10);
 }
 
-/* ---------- 反修改偵測（對應遊戲的 z2 / F2 / r9 / E7） ---------- */
-let lastSeal = "sealed", traceKeys = [];
+/* ---------- 反修改偵測（純邏輯已移至 ../guard/save-check.js） ---------- */
+let lastSeal = "sealed";
 function allItems(s) {
   const flat = (o) => Object.values(o ?? {}).flatMap(v => v ?? []);
   return [...flat(s.stashTabs), ...(s.uniques ?? []), ...flat(s.inventoryByClass), ...flat(s.charmsByClass), ...flat(s.stockByClass),
@@ -2432,286 +2350,67 @@ function allItems(s) {
     ...Object.values(s.mercs ?? {}).flatMap(m => Object.values(m?.hired ?? {}).flatMap(h => Object.values(h?.worn ?? {}))),
     ...Object.values(s.imbueByClass ?? {})].filter(it => it && typeof it === "object");
 }
-// 與 allItems 同範圍，但附上位置說明，讓玩家知道問題物品在哪裡
-function itemsWithWhere(s) {
-  const out = [], cz = (c) => CLASS_ZH[c] ?? c;
-  const add = (where, list) => { for (const it of list ?? []) if (it && typeof it === "object") out.push({ item: it, where }); };
-  for (const [t, v] of Object.entries(s.stashTabs ?? {})) add(`共用倉庫 → 分頁 ${t}`, v);
-  add("獨特收藏庫", s.uniques);
-  for (const [c, v] of Object.entries(s.inventoryByClass ?? {})) add(`${cz(c)} → 背包`, v);
-  for (const [c, v] of Object.entries(s.charmsByClass ?? {})) add(`${cz(c)} → 咒符欄`, v);
-  for (const [c, v] of Object.entries(s.stockByClass ?? {})) add(`${cz(c)} → 恰西商店`, v);
-  for (const [c, v] of Object.entries(s.gambleByClass ?? {})) add(`${cz(c)} → 賭博商店`, v);
-  for (const [c, v] of Object.entries(s.akaraByClass ?? {})) add(`${cz(c)} → 阿卡拉商店`, v);
-  for (const [c, o] of Object.entries(s.equippedByClass ?? {})) for (const [slot, it] of Object.entries(o ?? {})) add(`${cz(c)} → 身上裝備 → ${SLOT_ZH[slot] ?? slot}`, [it]);
-  add("備用武器", alternateWeaponItems(s));
-  for (const [c, m] of Object.entries(s.mercs ?? {})) for (const h of Object.values(m?.hired ?? {})) for (const [slot, it] of Object.entries(h?.worn ?? {})) add(`${cz(c)} → 傭兵 → ${SLOT_ZH[slot] ?? slot}`, [it]);
-  for (const [c, it] of Object.entries(s.imbueByClass ?? {})) add(`${cz(c)} → 附魔欄`, [it]);
-  return out;
-}
 // 遊戲對「獨特／符文之語且沒有 stats」的物品直接略過檢查；其他品質沒有 roll（種子）就會被判定不合法
 const riskyItem = (it) => it.type !== "quest" && !((it.rarity === "unique" || it.rarity === "runeword") && !it.stats) && !it.roll;
-// 依遊戲 Ci／wi／Ti 與角色保存的最高 Tome 進度檢查。
-function attributeChecks(s) {
-  const difficulties = ["normal", "nightmare", "hell"];
-  const out = [];
-  if (!s.heroes || typeof s.heroes !== "object" || Array.isArray(s.heroes)) return [{ unknown: true, text: "屬性點未驗證：缺少角色資料" }];
-  for (const [cls, hero] of Object.entries(s.heroes)) for (const key of ["kept", "run"]) {
-    const state = hero?.[key];
-    if (state == null) continue;
-    const name = CLASS_ZH[cls] ?? cls, label = name + " " + key;
-    const unknown = () => out.push({ unknown: true, text: "屬性點未驗證：" + label });
-    const validState = v => v && difficulties.includes(v.difficulty) && Number.isInteger(v.act) && v.act >= 1 && v.act <= 5 && v.run && typeof v.run === "object";
-    const b = state.build, level = state.run?.level;
-    const unlockedDifficulty = s.unlocked?.[cls] ?? "normal";
-    const tome = hero.tomes ?? 0;
-    if (!validState(state) || !b || !Array.isArray(b.history) || !b.history.every(x => typeof x === "string") || !Number.isInteger(level) || level < 1 || level > 99 || b.level !== level || !Number.isInteger(b.unspent ?? 0) || (b.unspent ?? 0) < 0 || !Number.isInteger(tome) || tome < 0 || tome > 3 || !difficulties.includes(unlockedDifficulty) || (s.terror?.[cls] != null && typeof s.terror[cls] !== "object") || (hero.kept != null && !validState(hero.kept))) { unknown(); continue; }
-    const reached = v => difficulties.indexOf(v.difficulty) + (v.run.terror !== undefined || v.act - 1 >= 2 ? 1 : 0);
-    const highest = s.terror?.[cls] ? 3 : Math.max(difficulties.indexOf(unlockedDifficulty), tome, reached(state), hero.kept ? reached(hero.kept) : 0);
-    const used = (b.unspent ?? 0) + b.history.reduce((n, x) => n + (x.startsWith("attribute:") ? 5 : x.startsWith("point:") ? 1 : 0), 0);
-    const cap = 5 * (level - 1) + 5 * highest;
-    out.push({ ok: used <= cap, text: (used <= cap ? "屬性點合規：" : "屬性點不合規：") + label + "（" + used + " / " + cap + "）" });
-  }
-  return out.length ? out : [{ unknown: true, text: "屬性點未驗證：沒有可檢查的角色" }];
+let saveCheckMod = null;
+let saveCheckPromise, moduleAttempt = 0;
+function loadSaveCheck() {
+  $("#moduleError").hidden = true;
+  const v = new URLSearchParams(location.search).get("v") || TOOLKIT_VERSION;
+  saveCheckPromise = import(`../guard/save-check.js?v=${encodeURIComponent(v)}&retry=${moduleAttempt++}`).then((m) => {
+    saveCheckMod = m; updateWriteAvailability(); return m;
+  }).catch(() => { $("#moduleError").hidden = false; updateWriteAvailability(); return null; });
+  updateWriteAvailability();
+  return saveCheckPromise;
 }
-// 依遊戲上傳紀錄的 flags 規則與載入檢查（2026-11-13 自官方 20261105.3 反編譯，saveTransfer 的 Pa／ka／ja 與載入流程）：
-// ‧level：經驗值須在 0～該等級上限之間（上限＝round((5+4×(等級−1)^1.35)×1.1^max(0,等級−25)×1.1^max(0,等級−89))＋1）。
-//   實機（D2S1 存檔副本）99 級的經驗值恰好等於此公式的上限（5865600），所以 99 級也照同一條檢查。
-// ‧skills：同一角色的技能欄不可有重複技能。
-// ‧跨模式：專家存檔須帶 mode:"hc"，一般存檔不得帶 mode，否則遊戲載入時判定為被編輯。
-const xpCap = (lv) => Math.round((5 + 4 * (lv - 1) ** 1.35) * 1.1 ** Math.max(0, lv - 25) * 1.1 ** Math.max(0, lv - 89));
-function flagChecks(s, mode = $("#mode").value) {
-  const out = [], states = [];
-  for (const [cls, hero] of Object.entries(s.heroes ?? {})) for (const key of ["kept", "run"]) { const st = hero?.[key]; if (st && typeof st === "object") states.push([cls, key, st]); }
-  const label = (cls, key) => `${CLASS_ZH[cls] ?? cls}（${key === "run" ? "進行中" : "保留"}）`;
-  const badXp = states.filter(([, , st]) => { const lv = st.run?.level, xp = st.run?.xp; return Number.isInteger(lv) && lv >= 1 && lv <= 99 && Number.isFinite(xp) && (xp < 0 || xp > xpCap(lv) + 1); });
-  // 沒有角色資料（例如全新存檔、進度尚在 underway）時不能說「通過」，標示未驗證
-  const checked = states.filter(([, , st]) => Number.isInteger(st.run?.level) && Number.isFinite(st.run?.xp));
-  out.push(badXp.length ? { ok: false, text: `經驗值超過等級上限：${badXp.map(([c, k]) => label(c, k)).join("、")}`, note: "遊戲上傳紀錄的 level 旗標",
-    fix: () => { for (const [, , st] of badXp) st.run.xp = Math.max(0, Math.min(st.run.xp, xpCap(st.run.level))); }, fixText: "經驗值設為該等級上限" }
-    : checked.length ? { ok: true, text: "經驗值與等級相符" } : { unknown: true, text: "經驗值未驗證：存檔裡沒有可檢查的角色進度" });
-  const dupSkills = states.filter(([, , st]) => { const ids = (st.build?.skills ?? []).map(x => x?.id); return new Set(ids).size !== ids.length; });
-  out.push(dupSkills.length ? { ok: false, text: `技能欄有重複技能：${dupSkills.map(([c, k]) => label(c, k)).join("、")}`, note: "遊戲上傳紀錄的 skills 旗標",
-    fix: () => { for (const [, , st] of dupSkills) { const seen = new Set(); st.build.skills = st.build.skills.filter(x => !seen.has(x?.id) && seen.add(x?.id)); } }, fixText: "移除重複技能" }
-    : states.some(([, , st]) => Array.isArray(st.build?.skills)) ? { ok: true, text: "技能欄沒有重複" } : { unknown: true, text: "技能重複未驗證：存檔裡沒有可檢查的角色進度" });
-  const wantHc = mode === "hardcore", modeBad = wantHc ? s.mode !== "hc" : s.mode !== undefined;
-  out.push(modeBad ? { ok: false, text: wantHc ? "硬核存檔缺少 mode:\"hc\" 標記" : `一般存檔帶有 mode:"${s.mode}"（只有硬核存檔應有）`, note: "遊戲載入時判定為被編輯",
-    fix: () => { if (wantHc) s.mode = "hc"; else delete s.mode; }, fixText: wantHc ? "補上硬核標記" : "移除模式標記" }
-    : { ok: true, text: "存檔模式與儲存槽相符" });
-  return out;
-}
-function detect() {
-  const out = [], s = save;
-  out.push(...attributeChecks(s));
-  out.push(...flagChecks(s));
-  // 收藏中的符文之語隨機種子對不上（遊戲 itemFault 判定 seed）：遊戲的 sanitize 修不好，改為依同名同底材重新產生
-  const seedBad = (faultyItems ?? []).filter(it => it.rarity === "runeword" && (s.uniques ?? []).includes(it));
-  if (seedBad.length) out.push({ ok: false, text: `收藏中的符文之語 ${seedBad.length} 件隨機種子對不上（遊戲判定「not what its roll makes」）`, note: "遊戲的 sanitize 無法修正", fixText: "依同名重新產生", fix: () => regenRunewords(seedBad) });
-  out.push(lastSeal === "sealed" ? { ok: true, text: "簽章正確" } : { ok: false, text: "簽章損壞或不存在", note: "寫入時自動修復" });
-  out.push(s.gold <= 1e10 ? { ok: true, text: "金幣在上限內（≤ 100 億）" }
-    : { ok: false, text: `金幣 ${s.gold.toLocaleString(LOCALE)} 超過 100 億上限`, fix: () => { s.gold = 1e10; }, fixText: "設為 100 億" });
-  const l = s.light;
-  if (l?.wings && l.shards < 10) out.push({ ok: false, text: `擁有翅膀但光之碎片只有 ${l.shards}`, fix: () => { l.shards = 10; }, fixText: "碎片設為 10" });
-  else if (l && !l.wings && Object.keys(l.worn ?? {}).length) out.push({ ok: false, text: "穿戴翅膀但尚未取得", fix: () => { l.wings = true; l.shards = Math.max(l.shards ?? 0, 10); }, fixText: "補上翅膀" });
-  else out.push({ ok: true, text: "光之碎片／翅膀正常" });
-  // 優先用遊戲自己的檢查（物品引擎）；引擎無法使用時才用近似規則
-  const risky = faultyItems ?? allItems(s).filter(riskyItem);
-  const regen = risky.filter(it => ["unique", "set", "runeword"].includes(it.rarity)), other = risky.filter(it => !regen.includes(it));
-  out.push(risky.length ? { ok: false, text: `${risky.length} 件物品會被判定為不合法：${risky.slice(0, 5).map(nameZh).join("、")}${risky.length > 5 ? "…" : ""}`,
-    note: faultyItems ? "遊戲檢查" : "近似檢查",
-    fix: async () => { if (regen.length) await maxItems(regen); for (const it of other) { if (hasForge(it)) continue; it.rarity = "unique"; delete it.stats; delete it.roll; } }, fixText: "重新產生為合法物品" }
-    : { ok: true, text: "物品合法性檢查通過", note: faultyItems ? "遊戲檢查" : "近似檢查" });
-  // 套裝裝備被標成獨特（舊版修復／自動放裝備殘留）：遊戲會當成錯誤物品，直接移除
-  const fakeUniques = fakeUniqueItems(s);
-  out.push(fakeUniques.length ? { ok: false, text: `${fakeUniques.length} 件「套裝」被標成獨特（名稱屬於套裝）：${fakeUniques.slice(0, 5).map(r => nameZh(r.it)).join("、")}${fakeUniques.length > 5 ? "…" : ""}`,
-    note: "倉庫／背包／咒符欄", fix: () => { removeFakeUniques(s); }, fixText: "刪除這些錯誤物品" }
-    : { ok: true, text: "沒有被標錯品質的套裝裝備" });
-  // 倉庫物品重疊、沒有座標、超出格子
-  const bad = stashOverlaps(s);
-  out.push(bad.length ? { ok: false, text: `倉庫 ${bad.reduce((n, b) => n + b.items.length, 0)} 件物品重疊、缺座標或超出格子`,
-    note: bad.map(b => b.label).join("、"), fix: () => { repackStash(s); }, fixText: "重新排列倉庫" }
-    : { ok: true, text: "倉庫物品位置正常" });
-  const badLv = [];
-  for (const [c, h] of Object.entries(s.heroes ?? {})) for (const k of ["kept", "run"]) { const lv = h?.[k]?.build?.level; if (lv !== undefined && !(Number.isInteger(lv) && lv >= 1 && lv <= 99)) badLv.push([c, k]); }
-  out.push(badLv.length ? { ok: false, text: `角色等級超出 1–99：${badLv.map(([c]) => CLASS_ZH[c]).join("、")}`, fix: () => { for (const [c, k] of badLv) s.heroes[c][k].build.level = 99; }, fixText: "設為 99" }
-    : { ok: true, text: "角色等級正常" });
-  const lb = s.leaderboard ?? {};
-  out.push(lb.edited ? { ok: false, text: "存檔已被標記「外部修改」", fix: () => { delete s.leaderboard.edited; }, fixText: "清除標記" } : { ok: true, text: "沒有「外部修改」標記" });
-  const marks = ["imported", "rechecked"].filter(k => lb[k]);
-  out.push(marks.length ? { ok: false, text: `存檔留有紀錄：${marks.map(k => ({ imported: "曾從遊戲匯入", rechecked: "曾被重新檢查" })[k]).join("、")}`, fix: () => { for (const k of marks) delete s.leaderboard[k]; }, fixText: "清除紀錄" }
-    : { ok: true, text: "沒有匯入／檢查紀錄" });
-  const unranked = Object.entries(s.heroes ?? {}).filter(([, h]) => h?.unranked).map(([c]) => c);
-  const lives = Object.entries(s.lives ?? {}).filter(([, v]) => v?.why).map(([c]) => c);
-  if (unranked.length || lives.length) out.push({ ok: false, text: `硬核角色被標記不計排名：${[...new Set([...unranked, ...lives])].map(c => CLASS_ZH[c]).join("、")}`,
-    fix: () => { for (const c of unranked) delete s.heroes[c].unranked; for (const c of lives) delete s.lives[c].why; }, fixText: "清除標記" });
-  out.push(traceKeys.length ? { ok: false, text: "瀏覽器存放區留有遊戲匯入前的舊存檔", fix: async () => { await window.api.traces($("#mode").value, true); traceKeys = []; }, fixText: "立即刪除" }
-    : { ok: true, text: "瀏覽器存放區沒有匯入痕跡" });
-  // 遊戲自己的存檔總檢查（saveFaults）：逐條明細見 renderDetails
-  out.push(gameSaveFaults == null ? { unknown: true, text: "遊戲存檔總檢查未驗證：引擎無法使用遊戲的檢查（saveFaults）" }
-    : gameSaveFaults.length ? { ok: false, text: `遊戲存檔檢查判定 ${gameSaveFaults.length} 項問題（遊戲判定，詳見下方明細）`, note: "遊戲檢查" }
-    : { ok: true, text: "遊戲存檔總檢查通過（saveFaults）", note: "遊戲檢查" });
-  return out;
-}
-let faultyItems = null, faultyReasons = new WeakMap(), ruleBad = null, gameSaveFaults = null;
-async function renderGuard() {
-  const items = allItems(save), f = await window.api.engine("faults", items);
-  // 遊戲自己的存檔總檢查（saveFaults，與排行榜合規性校驗同一套規則）；引擎不可用時為 null
-  const sf = await window.api.engine("saveFaults", JSON.parse(JSON.stringify(save))).catch(() => null);
-  gameSaveFaults = Array.isArray(sf) ? sf.map(String) : null;
-  // 賭博商店清單是遊戲自己以普通品質底材展示（含戒指、咒符），買下時才決定品質，不算玩家物品
-  const gamble = new Set(Object.values(save.gambleByClass ?? {}).flatMap(v => v ?? []));
-  ruleBad = null; // 已移除原版規則檢查（依使用者要求），不再計算額外的詞綴規則提示
-  faultyReasons = new WeakMap();
-  faultyItems = Array.isArray(f) ? items.filter((it, i) => {
-    if (!f[i]) return false;
-    const why = typeof f[i] === "string" ? f[i] : (f[i].why ?? f[i].fault ?? JSON.stringify(f[i]));
-    if (why) faultyReasons.set(it, String(why));
-    return true;
-  }) : null;
-  const t = await window.api.traces($("#mode").value, false);
-  traceKeys = Array.isArray(t) ? t : [];
-  const list = detect();
-  $("#issues").innerHTML = list.map((x, i) => `<tr><td class="${x.unknown ? "dim" : x.ok ? "ok" : "bad"}">${x.unknown ? "未驗證" : x.ok ? "✔ 安全" : "✖ 會被偵測"}</td><td>${esc(x.text)}${x.note ? ` <span class="dim">（${x.note}）</span>` : ""}</td>
-    <td>${x.fix ? `<button data-fix="${i}">${x.fixText}</button>` : ""}</td></tr>`).join("");
-  for (const b of document.querySelectorAll("[data-fix]")) b.onclick = async () => { await list[b.dataset.fix].fix(); renderGuard(); status("已規避（記得寫入存檔）", "ok"); };
-  renderDetails(list); renderDiag();
-  const lb = save.leaderboard ?? {}, row = (k, v) => `<tr><td class="dim" style="width:160px">${k}</td><td>${esc(v ?? "—")}</td></tr>`;
-  $("#ids").innerHTML = row("排行榜識別碼", lb.id) + row("排行榜名稱", lb.name) + row("排行榜", "已關閉（工具包單機模式，無法開啟）")
-    + Object.entries(save.climbs ?? {}).map(([c, v]) => row(`${CLASS_ZH[c] ?? c} 角色識別碼`, v.hero)).join("")
-    + row("存檔建立時間", save.born ? new Date(save.born * 1000).toLocaleString(LOCALE) : null);
-}
-// 詳細問題清單：列出每個問題的位置與原因，不截斷
-function renderDetails(list) {
-  const rows = [];
-  for (const x of list) if (!x.ok && !x.unknown && !/物品|原版屬性規則|遊戲存檔檢查/.test(x.text)) rows.push({ where: "存檔欄位", what: x.text, fix: x.fixText ?? "" });
-  for (const f of gameSaveFaults ?? []) rows.push({ where: "遊戲存檔檢查（saveFaults）", what: `遊戲判定：${f}`, fix: "遊戲原文，目前沒有自動修正；請依內容到對應位置處理" });
-  const gamble = new Set(Object.values(save.gambleByClass ?? {}).flatMap(v => v ?? []));
-  const where = new Map(itemsWithWhere(save).map(w => [w.item, w.where]));
-  const notes = [];
-  for (const x of ruleBad ?? []) {
-    if (gamble.has(x.item)) continue;
-    for (const p of x.problems) notes.push({ where: where.get(x.item) ?? "（位置不明）", what: `「${(x.item.name && nameZh(x.item)) || baseZh(x.item)}」：${problemText(p)}`, fix: "額外規則的提示，以遊戲本身的檢查為準，不必修正" });
-  }
-  for (const it of faultyItems ?? []) if (!(ruleBad ?? []).some(x => x.item === it)) {
-    const why = faultyReasons.get(it);
-    rows.push({ where: where.get(it) ?? "（位置不明）", what: `「${(it.name && nameZh(it)) || baseZh(it)}」：${why ? `遊戲判定：${why}` : "缺少遊戲需要的隨機種子（roll），遊戲會判定不合法"}`, fix: "重新產生為合法物品" });
-  }
-  const lb = save.leaderboard ?? {};
-  const edited = rows.length > 0 || lb.edited;
-  const unknown = list.some(x => x.unknown);
-  $("#verdict").innerHTML = edited
-    ? `<span class="bad">✖ 已編輯／有問題，不會上傳排行榜</span>　共 ${rows.length} 項待處理（工具包單機模式，排行榜上傳一律關閉）`
-    : unknown ? `<span class="dim">未驗證，無法確認存檔是否有問題</span>` : `<span class="ok">✔ 沒有發現問題</span>`;
-  $("#lbOff").hidden = true; // 單機模式：上傳一律關閉，不需要此按鈕
-  const tr = (r, c = "") => `<tr class="${c}"><td>${esc(r.where)}</td><td>${esc(r.what)}</td><td class="dim">${esc(r.fix)}</td></tr>`;
-  $("#details").innerHTML = (rows.length ? rows.map(r => tr(r)).join("") : `<tr><td colspan="3" class="dim">${unknown ? "部分檢查未驗證" : "沒有問題"}</td></tr>`)
-    + (notes.length ? `<tr><td colspan="3" class="dim">以下僅供參考（額外規則的提示，不算問題）</td></tr>` + notes.map(r => tr(r, "dim")).join("") : "");
-}
-/* ---------- 遊戲診斷（由遊戲程式碼反編譯，讓玩家知道遊戲看到了什麼） ---------- */
-// 遊戲診斷訊息的每個項目（來源：遊戲 20261103.2 的 C.fact／z.fact 登記）；key 為診斷訊息中的欄位名
-const DIAG_FACTS = {
-  build: "遊戲版本與組建編號", app: "網頁版（網址）或桌面版", browser: "瀏覽器 User-Agent", screen: "視窗與螢幕尺寸、像素比", memory: "JS 記憶體與裝置記憶體",
-  uptime: "頁面已開啟時間", page: "頁面環境：偵測 d2_zh.js 中文化書籤，以及 7 個瀏覽器原生函式是否被替換（WeakMap.get、Storage.setItem、drawImage、putImageData、addEventListener、requestAnimationFrame、devicePixelRatio）",
-  desktop: "桌面版資訊", "last session": "上一次工作階段如何結束", "lighter start": "上次在局中當掉後以較輕設定啟動", run: "目前的局（職業、難度、幕、等級、怪物數）",
-  "game files": "遊戲檔案來源（hosted／桌面）", menus: "選單樣式", fonts: "字型載入", "skipped game files": "略過的遊戲檔案", store: "商店樣式", sound: "音效狀態",
-  steering: "操控狀態", death: "上次死亡原因", "monster art": "怪物圖片記憶體", textures: "GPU 貼圖記憶體", viewport: "視窗大小", "freed texture": "已釋放的貼圖",
-  renderer: "繪圖引擎與顯示卡", "gpu limits": "GPU 限制", display: "顯示狀態", frames: "影格統計", stalls: "卡頓統計", "render scale": "繪製縮放",
-  "leaderboard queue": "排行榜佇列：等待上傳與被伺服器拒絕的局數及拒絕原因"
-};
-const NATIVE_CHECKS = [["WeakMap.get", w => w.WeakMap?.prototype.get], ["Storage.setItem", w => w.Storage?.prototype.setItem], ["drawImage", w => w.CanvasRenderingContext2D?.prototype.drawImage],
-  ["putImageData", w => w.CanvasRenderingContext2D?.prototype.putImageData], ["addEventListener", w => w.EventTarget?.prototype.addEventListener], ["requestAnimationFrame", w => w.requestAnimationFrame],
-  ["devicePixelRatio", w => Object.getOwnPropertyDescriptor(w, "devicePixelRatio")?.get]];
-// 與遊戲 ie() 相同的判斷：回傳遊戲「page」欄位會寫的內容（null = 遊戲沒看到異常）
-function gameSeesPage(w = window) {
-  const native = f => typeof f !== "function" || /\[native code\]\s*\}\s*$/.test(Function.prototype.toString.call(f));
-  const replaced = NATIVE_CHECKS.filter(([, g]) => { try { return !native(g(w)); } catch { return false; } }).map(([n]) => n);
-  const v = w.__D2ZH_VERSION;
-  const parts = [w.__D2ZH ? `the d2_zh.js bookmarklet${typeof v === "string" ? " " + v : ""}` : null, replaced.length ? `replaced ${replaced.join(", ")}` : null].filter(Boolean);
-  return { text: parts.length ? parts.join("; ") : null, replaced, zh: !!w.__D2ZH };
-}
-// 解析玩家貼上的遊戲診斷訊息
-function parseDiag(text) {
-  const facts = {};
-  for (const line of String(text).split(/\r?\n/)) { const m = /^([a-z][a-z ]*?):\s*(.*)$/.exec(line.trim()); if (m && !/^\[/.test(line.trim())) facts[m[1]] ??= m[2]; }
-  return facts;
-}
-function renderDiag() {
-  const live = gameSeesPage(), el = $("#diagLive");
-  if (!el) return;
-  el.innerHTML = live.text
-    ? `<span class="bad">✖ 原廠偵測到書籤或函式替換</span>：${esc(live.text)}<br><span class="dim">遊戲只把這項結果放進診斷文字，玩家按「回報」時才隨回報送出，不在排行榜上傳資料內；官方更新日誌寫排行榜會拒絕「被修改的遊戲」，伺服器怎麼判定前端看不到。工具包自己會替換 Storage.setItem，所以這裡通常會列出它；單機模式的排行榜上傳一律關閉。此診斷只顯示於本頁，不會出現在遊戲狀態列。</span>`
-    : `<span class="ok">✔ 遊戲沒有看到頁面異常</span><span class="dim">（沒有中文化書籤標記，原生函式未被替換）</span>`;
-  const facts = parseDiag($("#diagIn").value || ""), keys = Object.keys(facts), out = [];
-  if (keys.length) {
-    out.push(facts.page ? `<tr><td class="bad">✖ page</td><td>遊戲偵測到：${esc(facts.page)}</td></tr>` : `<tr><td class="ok">✔ page</td><td>沒有 page 欄位：遊戲沒偵測到頁面被改動</td></tr>`);
-    const q = facts["leaderboard queue"];
-    if (q) out.push(`<tr><td class="${/ [1-9]\d* refused/.test(q) ? "bad" : "ok"}">${/ [1-9]\d* refused/.test(q) ? "✖" : "✔"} leaderboard queue</td><td>${esc(q)}<br><span class="dim">括號內是伺服器拒絕的檢查項目（build＝遊戲版本、gear＝裝備、forged＝製作／鍛造、ranks＝強化等級）</span></td></tr>`);
-    const ls = facts["last session"]; if (ls) out.push(`<tr><td>last session</td><td>${esc(ls)}</td></tr>`);
-    out.push(`<tr><td class="dim">其他</td><td class="dim">${keys.filter(k => !["page", "leaderboard queue", "last session"].includes(k)).map(k => `${esc(k)}（${esc(DIAG_FACTS[k] ?? "未知項目")}）`).join("、")}</td></tr>`);
-  }
-  $("#diagOut").innerHTML = out.join("");
-  $("#diagRef").innerHTML = Object.entries(DIAG_FACTS).map(([k, v]) => `<tr><td style="white-space:nowrap">${esc(k)}</td><td class="dim">${esc(v)}</td></tr>`).join("");
-}
-function lbTurnOff() { save.leaderboard = { ...save.leaderboard, off: true }; renderGuard(); status("已關閉排行榜上傳（記得寫入存檔）", "ok"); }
-async function fixAll() {
-  for (const x of detect()) if (!x.ok && x.fix) await x.fix();
-  await renderGuard(); status("已全部規避（記得寫入存檔）", "ok");
-}
-// 與遊戲相同格式：16 個隨機位元組的 base64url
-function newLeaderboardId() {
-  const newId = () => {
-    const b = crypto.getRandomValues(new Uint8Array(16));
-    return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  };
-  save.leaderboard = { ...save.leaderboard, id: newId() };
-  const climbs = save.climbs ?? (save.climbs = {});
-  const classes = new Set([...Object.keys(save.heroes ?? {}), ...Object.keys(climbs), ...Object.keys(save.terror ?? {}), ...Object.keys(save.retired ?? {})]);
-  for (const className of classes) {
-    const entry = climbs[className] ?? (climbs[className] = {});
-    if (typeof entry !== "object") continue;
-    for (const key of Object.keys(entry)) delete entry[key];
-    entry.hero = newId();
-    resetTerror(className);
-  }
-  renderGuard(); status("已重新產生排行榜與角色識別碼，並重設爬塔紀錄與恐懼階層（記得寫入存檔）", "ok");
-}
-// 清除單一職業的恐懼階層：目前的 terror 狀態、連勝（cain.terror）、舊的 best，以及被換下的前任角色保存的恐懼紀錄
-// 依據：遊戲 saveTransfer 的 xA（清 terror[職業]）、Xl（開始恐懼時讀 heroes[職業].best）、swap（還原 reached.terror）
-function resetTerror(className) {
-  const dropKey = (obj, key) => {
-    if (!obj || !(key in obj)) return obj;
-    const { [key]: _removed, ...rest } = obj;
-    return rest;
-  };
-  // 已開啟的恐懼階（open）與候選（offers）保留，英雄應保有已解鎖的恐懼階；只清最佳、通過數與進行中欄位
-  // 依據：遊戲 Xl 只在 terror[職業] 不存在時才以 open:1 開始；刪除整筆會讓已開啟的階數消失
-  const t = save.terror?.[className];
-  if (t && typeof t === "object") {
-    // 只有該職業真的打完地獄（baalSlain 為 hell）才保留恐懼階；否則整筆丟棄，遊戲不會列出恐懼選項
-    if (save.baalSlain?.[className] === "hell" && Number.isInteger(t.open) && t.open >= 1 && Array.isArray(t.offers) && t.offers.length === 3) {
-      save.terror = { ...save.terror, [className]: { open: t.open, best: 0, cleared: 0, offers: t.offers, ...(t.waves !== undefined && { waves: t.waves }) } };
-    } else {
-      save.terror = dropKey(save.terror, className);
-      if (!Object.keys(save.terror).length) delete save.terror;
+function attributeChecks(s) { return saveCheckMod.attributeChecks(s); }
+function flagChecks(s, mode = $("#mode").value) { return saveCheckMod.flagChecks(s, mode); }
+function detect() { return saveCheckMod.detect(save, { mode: $("#mode").value, seal: lastSeal, assets: A, sizeOf, nameZh }); }
+
+let onlineSaveMode = true, saveModeSequence = 0;
+function updateWriteAvailability() { $("#write").disabled = onlineSaveMode || !saveCheckMod; }
+function queryBackendSaveMode() {
+  if (typeof window.api?.saveMode === "function") return Promise.resolve().then(() => window.api.saveMode()).catch(() => null);
+  if (!window.api?.web || !window.parent || window.parent === window) return Promise.resolve({ error: "不支援的操作：saveMode" });
+  const target = new URLSearchParams(location.search).get("origin") || "https://d2survivors.lol";
+  return new Promise((resolve) => {
+    const id = "sm_" + Math.random().toString(36).slice(2);
+    const timer = setTimeout(() => { window.removeEventListener("message", onMsg); resolve(null); }, 3000);
+    function onMsg(e) {
+      if (e.source !== window.parent || e.origin !== target || e.data?.d2edit !== "reply" || e.data.id !== id) return;
+      clearTimeout(timer);
+      window.removeEventListener("message", onMsg);
+      resolve(e.data.result);
     }
-  }
-  if (save.cain?.terror) {
-    save.cain.terror = dropKey(save.cain.terror, className);
-    if (!Object.keys(save.cain.terror).length) delete save.cain.terror;
-  }
-  const hero = save.heroes?.[className];
-  if (hero && "best" in hero) delete hero.best;
-  // 進行中的恐懼局（run.run.terror）與續玩點（kept）若帶恐懼狀態，一併丟棄，否則可直接續玩恐懼階
-  if (hero) {
-    if (hero.run?.run?.terror !== undefined) delete hero.run;
-    if (hero.kept?.run?.terror !== undefined) delete hero.kept;
-    if (!Object.keys(hero).length) delete save.heroes[className];
-  }
-  for (const old of save.retired?.[className] ?? []) {
-    if ("best" in old) delete old.best;
-    if (old.reached && "terror" in old.reached) delete old.reached.terror;
-  }
+    window.addEventListener("message", onMsg);
+    window.parent.postMessage({ d2edit: "call", id, fn: "saveMode", args: [] }, target);
+  });
 }
+// 舊桌面啟動器與舊網頁後端沒有線上存檔概念；僅明確不支援時回退單機，逾時或其他錯誤仍拒絕寫入。
+async function resolveSaveMode(query) {
+  try {
+    const result = await Promise.race([Promise.resolve().then(query), new Promise(resolve => setTimeout(() => resolve(null), 3000))]);
+    if (typeof result?.error === "string" && /^不支援的操作[：:]\s*saveMode\s*$/.test(result.error)) return "local";
+    const mode = typeof result === "string" ? result : !result?.error ? result?.saveMode ?? result?.mode : null;
+    return mode === "local" || mode === "online" ? mode : "unknown";
+  } catch { return "unknown"; }
+}
+async function checkSaveMode() {
+  const seq = ++saveModeSequence;
+  onlineSaveMode = true; updateWriteAvailability();
+  const mode = await resolveSaveMode(queryBackendSaveMode);
+  if (seq !== saveModeSequence) return false;
+  onlineSaveMode = mode !== "local";
+  const banner = $("#onlineModeBanner"), writeBtn = $("#write");
+  if (banner) banner.hidden = !onlineSaveMode;
+  if (banner) banner.textContent = mode === "online" ? "線上存檔模式：修改器只修改單機存檔，目前僅供檢視" : "無法確認存檔模式，請重試";
+  if (writeBtn) updateWriteAvailability();
+  return !onlineSaveMode;
+}
+$("#retryModule").onclick = loadSaveCheck;
+window.addEventListener("focus", () => { void checkSaveMode(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) void checkSaveMode(); });
+loadSaveCheck();
 
 /* ---------- 全新存檔 ---------- */
 // 以遊戲的空白存檔（l9）為底，只帶入勾選的內容；識別碼、時間、爬塔紀錄、旗標一律不帶，交給遊戲重新產生
@@ -2772,7 +2471,6 @@ function showPage(p) {
   if (p === "hero") renderHero();
   if (p === "raw") $("#rawText").value = JSON.stringify(save, null, 1);
   if (p === "items") refresh();
-  if (p === "guard") renderGuard();
   if (p === "craft") renderCraft();
   if (p === "library") renderLibrary();
   if (p === "settings") applyUnlockUI();
@@ -2789,7 +2487,7 @@ function renderAll() {
 }
 let zhMissing = false;
 async function load() {
-  versionDismissed = false; refreshVersionNotice(); void checkGameVersion(); startToolkitCheck();
+  versionDismissed = false; refreshVersionNotice(); void checkGameVersion(); startToolkitCheck(); void checkSaveMode();
   supportsWeaponSets = null;
   gameSupported = null;
   compatibilityNotice = ""; refreshVersionNotice();
@@ -2820,13 +2518,18 @@ async function load() {
 async function write() {
   if (!save) return;
   if (page === "hero") collectHero();
+  const sc = await saveCheckPromise;
+  if (!sc) return status("檢查模組載入失敗，請重試", "bad");
   if (!unlocked()) {
-    const invalidPoints = attributeChecks(save).filter(x => x.ok === false);
+    const invalidPoints = sc.attributeChecks(save).filter(x => x.ok === false);
     if (invalidPoints.length) return fail(new Error(invalidPoints.map(x => x.text).join("；")));
     if (save.gold > 1e10) return fail(new Error("金幣超過原版上限 10,000,000,000，已拒絕寫入（如需強制修改，請到「設定」開啟解除修改限制）。"));
     try { await assertLegal(allItems(save).filter(it => !BASELINE.has(itemKey(it)))); } catch (e) { return fail(e); }
   }
+  const detectedIssues = sc.detect(save, { mode: $("#mode").value, seal: lastSeal, assets: A, sizeOf, nameZh }).filter(x => x.ok === false);
+  void detectedIssues;
   if (!confirm(window.api.web ? "確定寫入？原存檔會先自動備份至瀏覽器 localStorage；一般與硬核模式各只保留一份，後續寫入會覆蓋該模式的備份。" : "確定寫入？原存檔會先自動備份。")) return;
+  if (!await checkSaveMode()) return status($("#onlineModeBanner").textContent, "bad");
   status("寫入中…");
   const r = await window.api.save($("#mode").value, save);
   if (r.error) return status(r.error, "bad");
@@ -2838,11 +2541,6 @@ $("#reload").onclick = load;
 $("#mode").onchange = load;
 $("#write").onclick = write;
 $("#backups").onclick = () => window.api.openBackups();
-$("#scan").onclick = renderGuard;
-$("#fixAll").onclick = fixAll;
-$("#lbOff").onclick = lbTurnOff;
-$("#diagIn").oninput = renderDiag;
-$("#newLbId").onclick = newLeaderboardId;
 $("#snap").onclick = async () => { const r = await window.api.snapshot(save, $("#snapName").value || "快照"); if (r.error) return status(r.error, "bad"); $("#snapName").value = ""; renderSaves(); status("已建立快照", "ok"); };
 $("#export").onclick = async () => { const r = await window.api.exportSave(save); if (r.error) return status(r.error, "bad"); if (!r.canceled) status("已匯出：" + r.path, "ok"); };
 $("#import").onclick = async () => { const r = await window.api.importSave(); if (r.error) return status(r.error, "bad"); if (r.canceled) return; save = r.save; lastSeal = "none"; sel = null; renderAll(); status("已匯入檔案（尚未寫入存檔）", "ok"); };
@@ -2897,5 +2595,6 @@ applyUnlockUI();
 $("#keepList").innerHTML = Object.entries(KEEP).map(([k, [label]]) => `<label style="justify-content:flex-start"><input type="checkbox" data-keep="${k}" checked><span style="color:var(--text)">${label}</span></label>`).join("");
 load();
 </script>
+<script type="module">await saveCheckPromise;</script>
 </body>
 </html>

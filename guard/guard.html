@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>D2倖存者工具包 — 存檔檢查與防護</title>
+<style>
+  :root { --bg:#14110d; --panel:#1f1a14; --line:#3a3026; --text:#e8dcc4; --dim:#9c8f78; --gold:#d4a84a; --bad:#e06050; --ok:#7fbf6a;
+          --unique:#c7b377; --set:#1ec31e; --rare:#ffff64; --magic:#6969ff; --runeword:#c7b377; --normal:#e8dcc4; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; height:100dvh; -webkit-text-size-adjust:100%; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.5 "Microsoft JhengHei", system-ui, sans-serif; display:flex; flex-direction:column; overflow:hidden; }
+  header { padding:10px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  h1 { font-size:17px; margin:0 10px 0 0; color:var(--gold); }
+  main { flex:1; overflow:auto; padding:14px 16px; -webkit-overflow-scrolling:touch; }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px 14px; margin-bottom:14px; }
+  h2 { font-size:15px; margin:0 0 8px; color:var(--gold); }
+  h3 { font-size:13px; margin:12px 0 6px; color:var(--gold); }
+  input, select, textarea, button { background:#0e0c09; color:var(--text); border:1px solid var(--line); border-radius:4px; padding:6px 12px; font:inherit; min-height:44px; touch-action:manipulation; }
+  textarea { width:100%; font:12px Consolas, monospace; min-height:110px; }
+  button { cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--gold); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--gold); color:#1a1408; border-color:var(--gold); font-weight:bold; }
+  button.active-mode { border-color:var(--gold); color:var(--gold); font-weight:bold; background:#2a231b; }
+  #status { color:var(--dim); }
+  .bad { color:var(--bad); } .ok { color:var(--ok); } .dim { color:var(--dim); }
+  table { border-collapse:collapse; width:100%; }
+  td, th { padding:6px 8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .note { color:var(--dim); font-size:12px; margin-top:8px; }
+  .mode-banner { padding:8px 12px; border-radius:4px; border:1px solid #c84b31; background:#3b1812; color:#ffded8; font-weight:bold; }
+  .version-warn[hidden], .mode-banner[hidden] { display:none !important; }
+  .version-warn { width:100%; background:#3b1812; border:1px solid #c84b31; color:#ffded8; border-radius:4px; padding:6px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; font-weight:bold; box-sizing:border-box; margin-top:4px; }
+  .version-warn button { background:transparent; border:none; color:#ffded8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; min-height:32px; }
+  @media (max-width: 820px) {
+    body { font-size:14px; }
+    header { padding:max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left)); gap:6px; }
+    h1 { font-size:15px; }
+    main { padding:10px max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+    #status { flex-basis:100%; overflow-wrap:anywhere; font-size:13px; }
+    section { padding:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    input, select, textarea { font-size:16px; max-width:100%; }
+    table { display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 title="中華民國與中華人民共和國互不隸屬&#10;台灣為主權獨立之國家，台灣與中國互不隸屬">存檔檢查與防護</h1>
+  <select id="mode" aria-label="存檔模式"><option value="softcore">一般模式</option><option value="hardcore">硬核模式</option></select>
+  <button id="reload">重新讀取</button>
+  <span id="status">讀取中…</span>
+  <button id="closeBtn" style="margin-left:auto">關閉</button>
+  <div id="versionWarn" class="version-warn" hidden><span id="versionMsg"></span><button type="button" id="versionDismiss" aria-label="關閉提示">×</button></div>
+</header>
+
+<main id="guard">
+  <!-- (a) 存檔檢查 -->
+  <section id="sec-save-check">
+    <h2>存檔檢查</h2>
+    <p id="verdict" style="font-weight:600"></p>
+    <div id="onlineNotice" class="mode-banner" hidden>線上存檔：只檢查、不寫入</div>
+    <div id="moduleError" class="mode-banner" hidden>檢查模組載入失敗 <button id="retryModule">重試</button></div>
+    <div class="bar">
+      <button id="scan">重新掃描</button>
+      <button class="primary" id="fixAll">一鍵修正</button>
+      <button id="lbOff" hidden>關閉排行榜上傳</button>
+    </div>
+    <h3>問題明細</h3>
+    <table><thead><tr><th style="width:28%">位置</th><th>問題</th><th style="width:26%">怎麼修正</th></tr></thead><tbody id="details"></tbody></table>
+    <h3 style="margin-top:16px">檢查清單</h3>
+    <p class="dim">依照遊戲本身的檢查規則（屬性點、經驗值上限、重複技能、存檔模式標記、金幣上限、光之碎片、物品合法性、角色等級、簽章、標記與匯入痕跡）掃描目前的存檔內容。在單機存檔模式下按「一鍵修正」會修正問題並寫回存檔。</p>
+    <table style="margin-top:8px"><thead><tr><th style="width:80px">狀態</th><th>項目</th><th style="width:150px"></th></tr></thead><tbody id="issues"></tbody></table>
+    <h3 style="margin-top:16px">存檔識別碼</h3>
+    <table><tbody id="ids"></tbody></table>
+    <div class="bar"><button id="newLbId">重新產生排行榜與角色識別碼</button></div>
+    <p class="note">此操作會重設所有角色的爬塔紀錄與恐懼最佳、連勝與被換下角色保存的恐懼紀錄；已開啟的恐懼階會保留。在單機存檔模式下按此按鈕會直接寫回存檔。</p>
+  </section>
+
+  <!-- (b) 防護狀態（反偵測） -->
+  <section id="sec-guard-status">
+    <h2>防護狀態（反偵測）</h2>
+    <p class="dim">顯示工具包目前的反偵測與上傳攔截狀態，並說明每一項「遊戲會不會看到、後果是什麼」。說明依據官方 20261105.3 程式碼與更新日誌已確認的結論；前端無法得知或尚未實機擷取的伺服器端判定皆明確標示「未確認」。</p>
+    <div class="bar" style="margin-bottom:10px">
+      <span>存檔模式切換：</span>
+      <button type="button" data-set-mode="auto" id="modeBtnAuto">自動</button>
+      <button type="button" data-set-mode="local" id="modeBtnLocal">單機</button>
+      <button type="button" data-set-mode="online" id="modeBtnOnline">線上</button>
+      <button type="button" id="refreshGuardStatus">重新整理狀態</button>
+      <span id="modeSwitchMsg" class="dim"></span>
+    </div>
+    <table>
+      <thead><tr><th style="width:22%">項目</th><th style="width:24%">目前狀態</th><th>遊戲會不會看到、後果是什麼（白話說明）</th></tr></thead>
+      <tbody id="guardStatusBody"></tbody>
+    </table>
+  </section>
+
+  <!-- (c) 遊戲診斷 -->
+  <section id="sec-game-diag">
+    <h2>遊戲診斷</h2>
+    <p class="dim">遊戲的「複製診斷訊息」（選項裡）會把頁面環境、排行榜佇列等資訊寫成文字。下面顯示遊戲此刻看到的頁面狀態；也可以貼上診斷訊息，標出和排行榜有關的欄位。這裡只是顯示，不會修改遊戲。</p>
+    <p id="diagLive" style="font-weight:600"></p>
+    <textarea id="diagIn" rows="6" placeholder="貼上遊戲的診斷訊息（D2 Survivors diagnostics …）" style="width:100%;box-sizing:border-box"></textarea>
+    <table style="margin-top:8px"><tbody id="diagOut"></tbody></table>
+    <details style="margin-top:8px"><summary>遊戲診斷訊息的所有項目（從遊戲程式碼反編譯）</summary><table><tbody id="diagRef"></tbody></table></details>
+  </section>
+</main>
+
+<script>
+// 載入繁體中文名稱轉換（與 editor.html 共用 modifier/zh.js，帶相同 v 參數避免快取）
+(() => {
+  const v = new URLSearchParams(location.search).get("v") || String(Date.now());
+  document.write('<script src="../modifier/zh.js?v=' + encodeURIComponent(v) + '"><' + '/script>');
+})();
+</script>
+
+<script>
+const LOCALE = "zh-TW";
+const TESTED_GAME_BUILD = "20261105.3";
+const TOOLKIT_VERSION = "1.0.13";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// 建立後端呼叫橋接：支援桌面／Electron preload 的 window.api，以及網頁版全螢幕 iframe 的 postMessage 協定；
+// 呼叫不存在或失敗的方法一律回傳 { error }，頁面容錯不崩潰。
+const backend = (() => {
+  const GAME = "https://d2survivors.lol";
+  const target = new URLSearchParams(location.search).get("origin") || GAME;
+  let seq = 0;
+  const waiting = new Map();
+  const inIframe = typeof window !== "undefined" && window.parent && window.parent !== window;
+  if (inIframe) {
+    window.addEventListener("message", (e) => {
+      if (e.origin !== target || !e.data || e.data.d2edit !== "reply") return;
+      const w = waiting.get(e.data.id);
+      if (!w) return;
+      waiting.delete(e.data.id);
+      w(e.data.result);
+    });
+  }
+  const rpc = (fn, args = []) => {
+    if (!inIframe) return Promise.resolve({ error: "不支援的操作：" + fn });
+    return new Promise((resolve) => {
+      const id = "guard_" + (++seq);
+      const timer = setTimeout(() => {
+        if (waiting.has(id)) {
+          waiting.delete(id);
+          resolve({ error: "後端逾時：" + fn });
+        }
+      }, 15000);
+      waiting.set(id, (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      });
+      try {
+        window.parent.postMessage({ d2edit: "call", id, fn, args }, target);
+      } catch (err) {
+        clearTimeout(timer);
+        waiting.delete(id);
+        resolve({ error: String(err?.message ?? err) });
+      }
+    });
+  };
+  // 桌面版 preload 提供的原生 api 先記下來；之後 window.api 可能被指到下面的 obj，直接查 window.api 會自己呼叫自己。
+  const native = window.api || null;
+  const call = async (fn, ...args) => {
+    try {
+      if (native && typeof native[fn] === "function" && native[fn] !== obj[fn]) {
+        return await native[fn](...args);
+      }
+      if (inIframe) return await rpc(fn, args);
+      return { error: "不支援的操作：" + fn };
+    } catch (err) {
+      return { error: String(err?.message ?? err) };
+    }
+  };
+  const methods = ["load", "save", "assets", "i18n", "engine", "traces", "diag", "gameBuild", "close", "guardStatus", "saveMode", "setSaveMode"];
+  const obj = { web: Boolean(window.api?.web || inIframe), call };
+  for (const m of methods) obj[m] = (...args) => call(m, ...args);
+  if (!window.api) window.api = obj;
+  else {
+    for (const m of methods) if (typeof window.api[m] !== "function") window.api[m] = obj[m];
+  }
+  return obj;
+})();
+window.backend = backend;
+
+let save = null, A = null, lastSeal = "sealed", traceKeys = [];
+let loadedMode = null, loadSequence = 0, moduleReady = false;
+let faultyItems = null, faultyReasons = new WeakMap(), ruleBad = null, gameSaveFaults = null;
+let currentSaveMode = "local", currentSaveModeSource = "default", lastGuardStatus = null;
+let torchCls = "sorceress";
+
+function status(t, cls = "") {
+  const s = $("#status");
+  if (!s) return;
+  s.textContent = t;
+  s.className = cls;
+}
+
+const camel = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+(.)/g, (_, c) => c.toUpperCase()).replace(/[^a-zA-Z0-9]/g, "");
+function invOf(it) {
+  if (!A || !it) return null;
+  const list = (it.rarity === "unique" && A.uniques?.[it.name]) || (it.rarity === "set" && A.sets?.[it.name]) || A.bases?.[it.base]
+    || A.quest?.[camel(it.name)] || A.runes?.[it.name] || A.gems?.[it.name] || A.uniques?.[it.name];
+  if (!list?.length) return null;
+  return list[(it.roll?.[1] ?? 0) % list.length];
+}
+function sizeOf(it) {
+  const v = invOf(it);
+  return v ? [Math.max(1, Math.round(v[1] / 28)), Math.max(1, Math.round(v[2] / 28))] : [1, 1];
+}
+function safeNameZh(it) {
+  if (!it) return "?";
+  if (typeof nameZh === "function" && it.name) return nameZh(it);
+  if (typeof baseZh === "function" && it.base) return baseZh(it);
+  return it.name || it.base || "?";
+}
+
+function fitTorch(it) {
+  if (!it || it.rarity !== "unique" || it.name !== "Hellfire Torch" || !torchCls) return;
+  const order = typeof CLASS_ORDER !== "undefined" ? CLASS_ORDER : ["amazon", "sorceress", "necromancer", "paladin", "barbarian", "druid", "assassin"];
+  const idx = order.indexOf(torchCls);
+  if (idx < 0) return;
+  for (const s of it.stats ?? []) if (s.stat === "item_addclassskills") s.param = idx;
+  for (const m of it.mods ?? []) if (/^classskills\d$/.test(m.stat)) m.stat = "classskills" + idx;
+}
+
+async function generateItems(list) {
+  const out = [], BATCH = 20;
+  for (let i = 0; i < list.length; i += BATCH) {
+    const part = list.slice(i, i + BATCH);
+    const r = await backend.engine("generateMany", part.map((x) => ({ rarity: x.rarity, name: x.name, base: x.rarity === "runeword" ? x.base : undefined, free: false })), true);
+    if (!Array.isArray(r)) throw new Error(r?.error ?? "物品引擎沒有回應");
+    out.push(...r);
+  }
+  for (const x of out) if (x?.item) fitTorch(x.item);
+  return out;
+}
+
+async function regenRunewords(bad) {
+  const idx = bad.map((it) => (save?.uniques ?? []).indexOf(it)).filter((i) => i >= 0);
+  if (!idx.length) return { n: 0, failed: [] };
+  const out = await generateItems(idx.map((i) => ({ rarity: "runeword", name: save.uniques[i].name, base: save.uniques[i].base })));
+  const cand = idx.map((i, j) => ({ i, it: out[j]?.item ?? null }));
+  for (const c of cand) {
+    if (!c.it) continue;
+    delete c.it.roll;
+    const s = await backend.engine("sanitizeItem", JSON.parse(JSON.stringify(c.it))).catch(() => null);
+    c.it = s && typeof s === "object" && !s.error ? s : null;
+  }
+  const withItem = cand.filter((c) => c.it);
+  const chk = withItem.length ? await backend.engine("faults", withItem.map((c) => JSON.parse(JSON.stringify(c.it)))) : [];
+  const okIdx = new Set(Array.isArray(chk) ? withItem.filter((c, k) => !chk[k]).map((c) => c.i) : []);
+  let n = 0;
+  const failed = [];
+  for (const c of cand) {
+    if (okIdx.has(c.i)) {
+      delete c.it.at;
+      save.uniques[c.i] = c.it;
+      n++;
+    } else failed.push(save.uniques[c.i].name);
+  }
+  return { n, failed };
+}
+
+async function maxItemsInGuard(all) {
+  const items = all.filter((it) => !hasForge(it));
+  if (!items.length) return;
+  const out = await generateItems(items);
+  out.forEach((r, i) => {
+    if (!r?.item) return;
+    const it = items[i], keep = { id: it.id, at: it.at };
+    for (const k of Object.keys(it)) delete it[k];
+    Object.assign(it, r.item, { id: keep.id }, keep.at && { at: keep.at });
+  });
+}
+
+function detectCurrent() {
+  const list = detect(save, {
+    mode: $("#mode").value,
+    seal: lastSeal,
+    faultyItems,
+    traceKeys,
+    gameSaveFaults,
+    assets: A,
+    sizeOf,
+    itemName: safeNameZh,
+    onRegenRunewords: regenRunewords,
+    onMaxItems: maxItemsInGuard,
+    onClearTraces: async () => {
+      await backend.traces($("#mode").value, true);
+      traceKeys = [];
+    },
+  });
+  if (!A || Object.values(save.stashTabs ?? {}).flat().some(it => {
+    if (!it) return false;
+    const data = invOf(it);
+    return !data || !Number.isFinite(data[1]) || data[1] <= 0 || !Number.isFinite(data[2]) || data[2] <= 0;
+  })) {
+    const i = list.findIndex(x => /倉庫.*(重疊|位置正常)/.test(x.text));
+    if (i >= 0) list[i] = { unknown: true, text: "倉庫物品重疊檢查未驗證：物品尺寸資料不可用" };
+  }
+  return list;
+}
+
+function renderDetails(list) {
+  const { rows, notes, edited, unknown } = buildDetails(save, list, {
+    gameSaveFaults,
+    faultyItems,
+    faultyReasons,
+    ruleBad,
+    itemLabel: safeNameZh,
+  });
+  $("#verdict").innerHTML = edited
+    ? `<span class="bad">✖ 已編輯／有問題，不會上傳排行榜</span>　共 ${rows.length} 項待處理（工具包單機模式，排行榜上傳一律關閉）`
+    : unknown
+    ? `<span class="dim">未驗證，無法確認存檔是否有問題</span>`
+    : `<span class="ok">✔ 沒有發現問題</span>`;
+  $("#lbOff").hidden = true;
+  const tr = (r, c = "") => `<tr class="${c}"><td>${esc(r.where)}</td><td>${esc(r.what)}</td><td class="dim">${esc(r.fix)}</td></tr>`;
+  $("#details").innerHTML =
+    (rows.length ? rows.map((r) => tr(r)).join("") : `<tr><td colspan="3" class="dim">${unknown ? "部分檢查未驗證" : "沒有問題"}</td></tr>`) +
+    (notes.length ? `<tr><td colspan="3" class="dim">以下僅供參考（額外規則的提示，不算問題）</td></tr>` + notes.map((r) => tr(r, "dim")).join("") : "");
+}
+
+function applySaveModeUI() {
+  const blocked = currentSaveMode !== "local";
+  $("#onlineNotice").hidden = !blocked;
+  $("#onlineNotice").textContent = currentSaveMode === "online" ? "線上存檔：只檢查、不寫入" : "無法確認存檔模式，請重試";
+  const unavailable = !moduleReady || !save || loadedMode !== $("#mode").value;
+  $("#scan").disabled = unavailable;
+  $("#fixAll").disabled = blocked || unavailable;
+  $("#newLbId").disabled = blocked || unavailable;
+  $("#lbOff").disabled = blocked || unavailable;
+  for (const b of document.querySelectorAll("[data-fix]")) b.disabled = blocked || unavailable;
+  const activeKey = currentSaveModeSource === "override" ? currentSaveMode : "auto";
+  for (const b of document.querySelectorAll("[data-set-mode]")) {
+    b.classList.toggle("active-mode", b.dataset.setMode === activeKey);
+  }
+}
+
+// 舊桌面啟動器與舊網頁後端沒有線上存檔概念；僅明確不支援時回退單機，逾時或其他錯誤仍拒絕寫入。
+async function resolveSaveMode(query) {
+  try {
+    const result = await Promise.race([Promise.resolve().then(query), new Promise(resolve => setTimeout(() => resolve(null), 3000))]);
+    if (typeof result?.error === "string" && /^不支援的操作[：:]\s*saveMode\s*$/.test(result.error)) return "local";
+    const mode = typeof result === "string" ? result : !result?.error ? result?.saveMode ?? result?.mode : null;
+    return mode === "local" || mode === "online" ? mode : "unknown";
+  } catch { return "unknown"; }
+}
+async function saveAfterFix(actionLabel) {
+  const target = loadedMode, snapshot = save, seq = loadSequence;
+  if (!moduleReady || !snapshot || !target || target !== $("#mode").value) {
+    status("存檔槽已變更，請重新讀取", "bad");
+    return false;
+  }
+  currentSaveMode = await resolveSaveMode(() => backend.saveMode());
+  applySaveModeUI();
+  if (currentSaveMode !== "local") { status(currentSaveMode === "online" ? "線上存檔：只檢查、不寫入" : "無法確認存檔模式，請重試", "bad"); return false; }
+  if (seq !== loadSequence || target !== $("#mode").value || snapshot !== save) { status("存檔槽已變更，請重新讀取", "bad"); return false; }
+  const r = await backend.save(target, snapshot);
+  if (r && !r.error && (r.ok || r.bytes !== undefined)) {
+    lastSeal = "sealed";
+    await renderGuard();
+    status(`${actionLabel}並寫入存檔；請按右上角「關閉」讓遊戲重新載入以套用修改`, "ok");
+    return true;
+  }
+  if (r?.error && !/不支援的操作/.test(r.error)) {
+    await renderGuard();
+    status(`寫入存檔失敗：${r.error}`, "bad");
+    return false;
+  }
+  await renderGuard();
+  status(`${actionLabel}（已完成記憶體修正）`, "ok");
+  return true;
+}
+
+async function renderGuard() {
+  if (!save || !moduleReady) return;
+  const snapshot = save, seq = loadSequence;
+  const items = allItems(save);
+  const f = await backend.engine("faults", items);
+  const sf = await backend.engine("saveFaults", JSON.parse(JSON.stringify(save))).catch(() => null);
+  gameSaveFaults = Array.isArray(sf) ? sf.map(String) : null;
+  ruleBad = null;
+  faultyReasons = new WeakMap();
+  faultyItems = Array.isArray(f)
+    ? items.filter((it, i) => {
+        if (!f[i]) return false;
+        const why = typeof f[i] === "string" ? f[i] : (f[i].why ?? f[i].fault ?? JSON.stringify(f[i]));
+        if (why) faultyReasons.set(it, String(why));
+        return true;
+      })
+    : null;
+  const t = await backend.traces($("#mode").value, false);
+  if (seq !== loadSequence || snapshot !== save) return;
+  traceKeys = Array.isArray(t) ? t : [];
+  const list = detectCurrent();
+  const isOnline = currentSaveMode === "online";
+  $("#issues").innerHTML = list
+    .map(
+      (x, i) => `<tr><td class="${x.unknown ? "dim" : x.ok ? "ok" : "bad"}">${x.unknown ? "未驗證" : x.ok ? "✔ 安全" : "✖ 會被偵測"}</td><td>${esc(x.text)}${x.note ? ` <span class="dim">（${esc(x.note)}）</span>` : ""}</td>
+    <td>${x.fix ? `<button data-fix="${i}" ${isOnline ? "disabled" : ""}>${esc(x.fixText)}</button>` : ""}</td></tr>`
+    )
+    .join("");
+  for (const b of document.querySelectorAll("[data-fix]")) {
+    b.onclick = async () => {
+      if (currentSaveMode !== "local" || snapshot !== save || loadedMode !== $("#mode").value) return status("存檔狀態已變更，請重新讀取", "bad");
+      await list[b.dataset.fix].fix();
+      if (seq !== loadSequence || snapshot !== save) return status("存檔槽已變更，請重新讀取", "bad");
+      await saveAfterFix("已修正單項問題");
+    };
+  }
+  renderDetails(list);
+  renderDiag();
+  const lb = save.leaderboard ?? {};
+  const row = (k, v) => `<tr><td class="dim" style="width:160px">${esc(k)}</td><td>${esc(v ?? "—")}</td></tr>`;
+  const cz = (c) => (typeof CLASS_ZH !== "undefined" && CLASS_ZH[c]) || c;
+  $("#ids").innerHTML =
+    row("排行榜識別碼", lb.id) +
+    row("排行榜名稱", lb.name) +
+    row("排行榜", "已關閉（工具包單機模式，無法開啟）") +
+    Object.entries(save.climbs ?? {}).map(([c, v]) => row(`${cz(c)} 角色識別碼`, v?.hero)).join("") +
+    row("存檔建立時間", save.born ? new Date(save.born * 1000).toLocaleString(LOCALE) : null);
+  applySaveModeUI();
+}
+
+async function fixAll() {
+  if (!save || !moduleReady || loadedMode !== $("#mode").value) return;
+  if (currentSaveMode !== "local") {
+    status("線上存檔：只檢查、不寫入", "bad");
+    return;
+  }
+  const snapshot = save, seq = loadSequence;
+  for (const x of detectCurrent()) {
+    if (snapshot !== save || seq !== loadSequence || loadedMode !== $("#mode").value) return status("存檔槽已變更，請重新讀取", "bad");
+    if (!x.ok && x.fix) await x.fix();
+  }
+  if (snapshot !== save || seq !== loadSequence) return status("存檔槽已變更，請重新讀取", "bad");
+  await saveAfterFix("已一鍵修正全部可規避問題");
+}
+
+async function newLeaderboardId() {
+  if (!save || !moduleReady || loadedMode !== $("#mode").value) return;
+  if (currentSaveMode !== "local") {
+    status("線上存檔：只檢查、不寫入", "bad");
+    return;
+  }
+  applyNewLeaderboardId(save);
+  await saveAfterFix("已重新產生排行榜與角色識別碼");
+}
+
+function renderDiag() {
+  const localLive = gameSeesPage(window);
+  const replaced = Array.isArray(lastGuardStatus?.replacedNatives) ? lastGuardStatus.replacedNatives : localLive.replaced;
+  const zh = typeof lastGuardStatus?.d2zh === "boolean" ? lastGuardStatus.d2zh : localLive.zh;
+  const parts = [zh ? "the d2_zh.js bookmarklet" : null, replaced?.length ? `replaced ${replaced.join(", ")}` : null].filter(Boolean);
+  const liveText = parts.length ? parts.join("; ") : null;
+  const el = $("#diagLive");
+  if (!el) return;
+  el.innerHTML = liveText
+    ? `<span class="bad">✖ 原廠偵測到書籤或函式替換</span>：${esc(liveText)}<br><span class="dim">遊戲只把這項結果放進診斷文字，玩家按「回報」時才隨回報送出，不在排行榜上傳資料內；官方更新日誌寫排行榜會拒絕「被修改的遊戲」，伺服器怎麼判定前端看不到（未確認）。工具包自己會替換 Storage.setItem，所以這裡通常會列出它；單機模式的排行榜上傳一律關閉。此診斷只顯示於本頁，不會出現在遊戲狀態列。</span>`
+    : `<span class="ok">✔ 遊戲沒有看到頁面異常</span><span class="dim">（沒有中文化書籤標記，原生函式未被替換）</span>`;
+  const facts = parseDiag($("#diagIn").value || ""), keys = Object.keys(facts), out = [];
+  if (keys.length) {
+    out.push(facts.page ? `<tr><td class="bad">✖ page</td><td>遊戲偵測到：${esc(facts.page)}</td></tr>` : `<tr><td class="ok">✔ page</td><td>沒有 page 欄位：遊戲沒偵測到頁面被改動</td></tr>`);
+    const q = facts["leaderboard queue"];
+    if (q) out.push(`<tr><td class="${/ [1-9]\d* refused/.test(q) ? "bad" : "ok"}">${/ [1-9]\d* refused/.test(q) ? "✖" : "✔"} leaderboard queue</td><td>${esc(q)}<br><span class="dim">括號內是伺服器拒絕的檢查項目（build＝遊戲版本、gear＝裝備、forged＝製作／鍛造、ranks＝強化等級）</span></td></tr>`);
+    const ls = facts["last session"];
+    if (ls) out.push(`<tr><td>last session</td><td>${esc(ls)}</td></tr>`);
+    out.push(`<tr><td class="dim">其他</td><td class="dim">${keys.filter((k) => !["page", "leaderboard queue", "last session"].includes(k)).map((k) => `${esc(k)}（${esc(DIAG_FACTS[k] ?? "未知項目")}）`).join("、")}</td></tr>`);
+  }
+  $("#diagOut").innerHTML = out.join("");
+  $("#diagRef").innerHTML = Object.entries(DIAG_FACTS).map(([k, v]) => `<tr><td style="white-space:nowrap">${esc(k)}</td><td class="dim">${esc(v)}</td></tr>`).join("");
+}
+
+function sealTextZh(v) {
+  if (v === "sealed") return '<span class="ok">✔ 簽章正確（sealed）</span>';
+  if (v === "broken") return '<span class="bad">✖ 簽章損壞（broken）</span>';
+  if (v === "none") return '<span class="bad">✖ 無簽章（none）</span>';
+  if (v === "missing" || v === null) return '<span class="dim">無存檔</span>';
+  return `<span class="dim">未確認（${esc(v ?? "後端未提供")}）</span>`;
+}
+
+async function refreshGuardStatus() {
+  const gs = await backend.guardStatus();
+  const sm = gs && !gs.error && gs.saveMode ? gs.saveMode : await resolveSaveMode(() => backend.saveMode());
+  if (gs && !gs.error && typeof gs === "object") {
+    lastGuardStatus = gs;
+    currentSaveMode = gs.saveMode === "online" || gs.saveMode === "local" ? gs.saveMode : "unknown";
+    currentSaveModeSource = gs.saveModeSource || "default";
+  } else {
+    lastGuardStatus = null;
+    const modeStr = typeof sm === "string" ? sm : sm?.saveMode ?? sm?.mode;
+    currentSaveMode = modeStr === "online" || modeStr === "local" ? modeStr : "unknown";
+    currentSaveModeSource = sm?.saveModeSource || "default";
+  }
+  applySaveModeUI();
+  renderGuardStatusTable(gs && !gs.error ? gs : null);
+  renderDiag();
+}
+
+function renderGuardStatusTable(gs) {
+  const localPage = gameSeesPage(window);
+  const sourceZh = { override: "手動切換（override）", detected: "自動偵測（detected）", default: "預設單機（default）" }[currentSaveModeSource] ?? currentSaveModeSource;
+  const modeStatusHtml = currentSaveMode === "online"
+    ? `<span class="bad">線上存檔模式（online）</span><br><span class="dim">來源：${esc(sourceZh)}</span>`
+    : currentSaveMode === "local" ? `<span class="ok">單機存檔模式（local）</span><br><span class="dim">來源：${esc(sourceZh)}</span>`
+    : '<span class="dim">無法確認存檔模式</span>';
+
+  const noUploadHtml = gs
+    ? (gs.noUpload ? '<span class="ok">✔ 恆為開啟（不可關閉）</span>' : '<span class="bad">✖ 未開啟</span>')
+    : '<span class="dim">未確認（後端未提供 guardStatus）</span>';
+
+  const lbOffHtml = gs
+    ? (gs.leaderboardOff === true
+        ? '<span class="ok">✔ 已鎖定為 true（關閉上傳）</span>'
+        : gs.leaderboardOff === false
+        ? '<span class="bad">✖ 未鎖定（false）</span>'
+        : '<span class="dim">尚未載入記憶體存檔</span>')
+    : (save?.leaderboard?.off ? '<span class="ok">✔ 存檔內為 true</span>' : '<span class="dim">未確認（後端未提供）</span>');
+
+  const queueHtml = gs
+    ? (gs.queuePresent ? '<span class="bad">✖ 存在待上傳佇列</span>' : '<span class="ok">✔ 已清空（無等待上傳紀錄）</span>')
+    : '<span class="dim">未確認（後端未提供）</span>';
+
+  const blockedHtml = gs && Number.isFinite(Number(gs.blockedUploads))
+    ? `<span class="ok">已攔截 ${Number(gs.blockedUploads)} 次</span>`
+    : '<span class="dim">未確認（後端未提供）</span>';
+
+  const scSeal = gs?.seals ? gs.seals.softcore : ($("#mode").value === "softcore" ? lastSeal : undefined);
+  const hcSeal = gs?.seals ? gs.seals.hardcore : ($("#mode").value === "hardcore" ? lastSeal : undefined);
+  const sealsHtml = `一般：${sealTextZh(scSeal)}<br>硬核：${sealTextZh(hcSeal)}`;
+
+  const replacedList = Array.isArray(gs?.replacedNatives) ? gs.replacedNatives : localPage.replaced;
+  const d2zhVal = typeof gs?.d2zh === "boolean" ? gs.d2zh : localPage.zh;
+  const nativesHtml =
+    (replacedList.length
+      ? `<span class="bad">已被替換：${esc(replacedList.join("、"))}</span>`
+      : '<span class="ok">✔ 7 項皆為原生 [native code]</span>') +
+    `<br><span class="dim">__D2ZH 標記：${d2zhVal ? "有（已偵測）" : "無"}</span>`;
+
+  const webdriverVal = typeof gs?.webdriver === "boolean" ? gs.webdriver : Boolean(navigator.webdriver);
+  const webdriverHtml = webdriverVal
+    ? '<span class="bad">✖ true（自動化瀏覽器）</span>'
+    : '<span class="ok">✔ false（一般瀏覽器）</span>';
+
+  const paramsList = Array.isArray(gs?.restrictedParams) ? gs.restrictedParams : [];
+  const paramsHtml = gs || !backend.web
+    ? (paramsList.length ? `<span class="bad">✖ 含有：${esc(paramsList.join("、"))}</span>` : '<span class="ok">✔ 無受限參數</span>')
+    : '<span class="dim">未確認（後端未提供）</span>';
+
+  const rows = [
+    [
+      "目前存檔模式與來源",
+      modeStatusHtml,
+      "【已確認】單機模式允許修改器與本頁「一鍵修正」寫入本機存檔（寫入時自動把 leaderboard.off 設為 true 並重簽章）；線上存檔模式則鎖定所有存檔寫入（只檢查、不修改），避免動到線上存檔。",
+    ],
+    [
+      "排行榜上傳封鎖（恆為開、不可關）",
+      noUploadHtml,
+      "【已確認】工具包載入即攔截所有送往 /api/leaderboard 的非 GET 請求（fetch／XHR／sendBeacon，含結算 /runs、/hc/* 與每 ~30 秒抽查 /checks；僅放行 /forge 淬鍊）。遊戲程式碼不會檢查 fetch 是否被覆寫（已靜態確認 47 個 JS 模組）。後果：任何成績與抽查都不會送到官方伺服器；專家榜因要求伺服器全程見證（20261027.2 已確認），載入工具包遊玩的專家角色不會上榜。",
+    ],
+    [
+      "記憶體存檔 leaderboard.off",
+      lbOffHtml,
+      "【已確認】工具包把遊戲記憶體中的 game.save.leaderboard.off 鎖定為不可改、不可刪的 true，並每 300ms 巡檢。遊戲會看到 leaderboard.off === true，結算函式（postRun → wC）直接跳過上傳，遊戲選項中的「上傳」開關也無法打開。",
+    ],
+    [
+      "等待上傳佇列（d2s:leaderboard-queue）",
+      queueHtml,
+      "【已確認】遊戲離線或送出失敗時會把成績暫存於 localStorage[\"d2s:leaderboard-queue\"]。工具包載入時立即刪除該鍵並攔截後續寫入。遊戲不會在背景補送舊的待上傳紀錄。",
+    ],
+    [
+      "已擋下上傳次數",
+      blockedHtml,
+      "【已確認】本次工作階段工具包攔截到的排行榜非 GET 請求次數。官方自 20261103.1 起天梯只排恐懼階與專家模式，一般難度軟核局本來就不會發送上傳請求，顯示 0 次屬正常現象。",
+    ],
+    [
+      "存檔封印狀態（HMAC-SHA256）",
+      sealsHtml,
+      "【已確認】遊戲載入存檔時以內建金鑰驗證 seal 簽章（saveTransfer 的 OD／kD）。若簽章損壞或缺漏，一般模式會標記 leaderboard.edited = true 並清掉 chase，專家模式會把角色標為 unranked:\"edited\"。工具包寫入存檔時使用同一組金鑰重簽，封印保持有效。",
+    ],
+    [
+      "被替換的原生 API 與 __D2ZH（MOD 診斷）",
+      nativesHtml,
+      "【客戶端已確認／伺服器端未確認】遊戲 ui 模組的 ie() 會檢查 __D2ZH 及 7 個原生 API（WeakMap.get、Storage.setItem、drawImage、putImageData、addEventListener、requestAnimationFrame、devicePixelRatio）。工具包因攔截佇列會替換 Storage.setItem，故遊戲的 page 診斷欄位會看到 replaced Storage.setItem。但此結果【只在玩家主動按「回報（Report）」送出 /api/report 時才會隨診斷文字送出】，排行榜上傳資料不含此欄位（已確認）。收到回報後官方伺服器如何處理則屬伺服器端實作（未確認）。",
+    ],
+    [
+      "自動化標記（navigator.webdriver）",
+      webdriverHtml,
+      "【已確認】遊戲在 TC、jre 與營地／專家模式會檢查 navigator.webdriver。為 true 時遊戲直接判定不計入排行榜。一般瀏覽器為 false，工具包不會修改此屬性。",
+    ],
+    [
+      "網址受限參數（40 個除錯參數）",
+      paramsHtml,
+      "【已確認】遊戲檢查網址是否帶有 god、speed、difficulty、terror、power、mf 等 40 個受限參數（只要網址出現參數名即算）。若有，遊戲會把該局標記為 tainted、上傳紀錄 notes 加上 \"debug\" 並拒絕排名。工具包不改網址。",
+    ],
+    [
+      "其他伺服器端與未實機項目說明",
+      '<span class="dim">部分已確認／伺服器端未確認</span>',
+      "【已確認】客戶端上傳 flags（裝備、技能重複、屬性點、等級經驗、通關最短時間：一般 1800 秒／恐懼階 90 秒）、專家模式世代 gen 回溯偵測（拿舊檔覆蓋標為 restored）與官方桌面版 app.asar 雜湊檢查（本工具包啟動器不改官方 app.asar，不觸發 patched）。<br>【未確認】官方伺服器端實際拒收門檻與經濟總量檢查細節、本地淬鍊（攔截 /forge）在停用工具包後伺服器的判定、恐懼階 /checks 與專家模式實機上傳本文——因伺服器端不公開而標明「未確認」；單機模式下上傳已全面封鎖，資料不會送出。",
+    ],
+  ];
+
+  $("#guardStatusBody").innerHTML = rows
+    .map(([name, st, desc]) => `<tr><td style="font-weight:bold">${esc(name)}</td><td>${st}</td><td class="dim">${desc}</td></tr>`)
+    .join("");
+}
+
+async function switchSaveMode(targetMode) {
+  const arg = targetMode === "auto" ? null : targetMode;
+  $("#modeSwitchMsg").textContent = "切換中…";
+  const r = await backend.setSaveMode(arg);
+  if (r?.error) {
+    // 後端尚未支援 setSaveMode 時本機模擬切換以維持介面可用
+    currentSaveMode = arg === "online" ? "online" : "local";
+    currentSaveModeSource = arg === null ? "default" : "override";
+    applySaveModeUI();
+    renderGuardStatusTable(lastGuardStatus);
+    if (save) await renderGuard();
+    $("#modeSwitchMsg").textContent = `已切換為${arg === "online" ? "線上" : arg === "local" ? "單機" : "自動"}（本機狀態；後端回應：${r.error}）`;
+    return;
+  }
+  await refreshGuardStatus();
+  if (save) await renderGuard();
+  $("#modeSwitchMsg").textContent = `已切換為${currentSaveMode === "online" ? "線上存檔模式（只檢查、不寫入）" : "單機存檔模式"}`;
+}
+
+async function load() {
+  if (!moduleReady) return status("檢查模組尚未載入，請重試", "bad");
+  const seq = ++loadSequence, mode = $("#mode").value;
+  save = null; loadedMode = null;
+  for (const id of ["verdict", "details", "issues", "ids"]) $("#" + id).textContent = "";
+  applySaveModeUI();
+  status("讀取中…");
+  await refreshGuardStatus();
+  if (!A) {
+    try {
+      const [assets, zh] = await Promise.all([backend.assets(), backend.i18n()]);
+      if (assets && !assets.error) A = assets;
+      if (zh && !zh.error && typeof zhInit === "function") zhInit(zh);
+    } catch {}
+  }
+  try {
+    const d = await backend.diag();
+    const c = d?.classPick?.[mode === "hardcore" ? "hardcore" : "softcore"];
+    if (c) torchCls = c;
+  } catch {}
+  const r = await backend.load(mode);
+  if (seq !== loadSequence) return;
+  if (!r || r.error) {
+    save = null;
+    status(r?.error ?? "無法讀取存檔", "bad");
+    $("#verdict").innerHTML = `<span class="bad">✖ ${esc(r?.error ?? "無法讀取存檔")}</span>`;
+    $("#details").innerHTML = "";
+    $("#issues").innerHTML = "";
+    $("#ids").innerHTML = "";
+    return;
+  }
+  save = r.save;
+  loadedMode = mode;
+  lastSeal = r.seal || "sealed";
+  await renderGuard();
+  if (seq !== loadSequence) return;
+  const SOURCE_ZH = { localStorage: "瀏覽器存放區", "save.json": "備份存檔檔案" };
+  const sealZh = { sealed: "簽章正確", broken: "簽章已損壞", none: "無簽章" }[lastSeal] ?? lastSeal;
+  status(`已讀取（來源：${SOURCE_ZH[r.source] ?? r.source}，${sealZh}）`, lastSeal === "sealed" ? "ok" : "bad");
+}
+
+const initMode = new URLSearchParams(location.search).get("mode");
+if (initMode === "hardcore" || initMode === "softcore") $("#mode").value = initMode;
+$("#reload").onclick = load;
+$("#mode").onchange = load;
+$("#scan").onclick = renderGuard;
+$("#fixAll").onclick = fixAll;
+$("#newLbId").onclick = newLeaderboardId;
+$("#diagIn").oninput = renderDiag;
+$("#closeBtn").onclick = () => backend.close();
+$("#refreshGuardStatus").onclick = refreshGuardStatus;
+for (const b of document.querySelectorAll("[data-set-mode]")) {
+  b.onclick = () => switchSaveMode(b.dataset.setMode);
+}
+$("#versionDismiss").onclick = () => { $("#versionWarn").hidden = true; };
+
+window.__initGuardPage = async () => {
+  moduleReady = true;
+  renderDiag();
+  await load();
+};
+</script>
+
+<script type="module">
+let attempt = 0;
+async function loadModule() {
+  document.querySelector("#moduleError").hidden = true;
+  try {
+    const v = new URLSearchParams(location.search).get("v") || String(Date.now());
+    const mod = await import("../guard/save-check.js?v=" + encodeURIComponent(v) + "&retry=" + attempt++);
+    Object.assign(window, mod);
+    await window.__initGuardPage();
+  } catch (err) {
+    document.querySelector("#moduleError").hidden = false;
+    document.querySelector("#status").textContent = "檢查模組載入失敗";
+  }
+}
+document.querySelector("#retryModule").onclick = loadModule;
+for (const id of ["scan", "fixAll", "newLbId", "lbOff"]) document.querySelector("#" + id).disabled = true;
+await loadModule();
+</script>
+</body>
+</html>

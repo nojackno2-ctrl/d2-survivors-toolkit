@@ -60,7 +60,7 @@ const HELPER_SETTINGS = {
   gear: { autoEquip: false },
   town: { enabled: true, collect: false, stash: false, sellJunk: false, buyPotions: true, charsiUpgrades: false, buyGear: false },
   build: { ladder: false, autoStats: false, redraft: false, autoReroll: false },
-  cheat: { enabled: false, invincible: false, maxCrit: false, oneHitKill: false, maxSkills: false, maxMonsterDensity: false, monsterDensity10x: false, allElites: false, forgeMax: false, forgeLocal: false, forgeLocalSure: false, larzukMax: false, pauseStageTime: false, summonAllBosses: false, infiniteRerolls: false, maxDropRate: false, maxGoldRate: false, maxXp: false, summonCloneOnTerror: false },
+  cheat: { enabled: false, invincible: false, maxCrit: false, oneHitKill: false, maxSkills: false, maxMonsterDensity: false, monsterDensity10x: false, allElites: false, forgeMax: false, larzukMax: false, pauseStageTime: false, summonAllBosses: false, infiniteRerolls: false, maxDropRate: false, maxGoldRate: false, maxXp: false, summonCloneOnTerror: false },
 };
 
 if (!process.versions.electron) {

@@ -133,4 +133,34 @@ assert.strictEqual(zhContext.zhTest.nameZh({ rarity: "unique", name: "Frostburn"
 assert.strictEqual(zhContext.zhTest.baseZh({ base: "Maul" }), "重鎚");
 assert.strictEqual(zhContext.zhTest.nameZh({ rarity: "normal", name: "Maul", base: "Maul" }), "重鎚");
 assert.strictEqual(zhContext.zhTest.T("Maul"), "槌擊");
+
+// 執行產品翻譯函式，模擬遊戲翻譯器把整串詞綴提早翻成中文的情況。
+const langSource = fs.readFileSync(path.join(__dirname, "..", "lang.js"), "utf8");
+const langContext = vm.createContext({
+  window: { location: { href: "https://example.test/" } },
+  document: { querySelectorAll: () => [] },
+  localStorage: { removeItem() {} }, URL, console,
+  testDict: dict,
+  testTranslator: {
+    translate(s) {
+      const translations = {
+        "Extra Strong Aura Enchanted": "特別強壯 靈氣強化",
+        "Extra Strong - Aura Enchanted": "特別強壯\u00a0靈氣強化",
+        "Stone - Maggot - the Witch": "石塊蛆蟲巫異",
+        "Stone Maggot the Witch": "石塊蛆蟲巫異",
+        "Ring of the Lamprey": "八目鰻之戒指"
+      };
+      return translations[s] || dict[s] || s;
+    },
+    translateAs(_type, s) { return this.translate(s); }
+  }
+});
+vm.runInContext(langSource.replace("  window.__d2lang = api;", "  useDict(testDict); gameTr = testTranslator; window.__d2lang = api; return;"), langContext);
+const actualTranslate = langContext.window.__d2lang.translate;
+assert.strictEqual(actualTranslate("Extra Strong Aura Enchanted"), "特別強壯\u00a0靈氣強化");
+assert.strictEqual(actualTranslate("Extra Strong - Aura Enchanted"), "特別強壯\u00a0靈氣強化");
+assert.strictEqual(actualTranslate("Cursed Lightning Enchanted"), dict.Cursed + "\u00a0" + dict["Lightning Enchanted"]);
+assert.strictEqual(actualTranslate("Stone Maggot the Witch"), "石塊蛆蟲巫異");
+assert.strictEqual(actualTranslate("Stone - Maggot - the Witch"), "石塊蛆蟲巫異");
+assert.strictEqual(actualTranslate("Ring of the Lamprey"), "八目鰻之戒指");
 console.log("=== 所有語言模組單元測試均成功通過！ ===");

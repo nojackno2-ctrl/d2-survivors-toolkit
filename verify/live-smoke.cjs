@@ -65,7 +65,7 @@ async function main() {
       if (st?.diag?.connected && st.state && st.state !== "select") break;
     }
     result.evidence.status = st;
-    const checks = await ask(`{lang: window.__d2lang?.debug?.() ?? null, autobot: !!window.__d2autobot, game: !!window.__d2autobot?.game, editor: !!window.__d2editLauncher, gamedata: !!window.__d2gamedataPromise}`);
+    const checks = await ask(`{lang: window.__d2lang?.debug?.() ?? null, autobot: !!window.__d2autobot, game: !!window.__d2autobot?.game, editor: !!window.__d2editLauncher, guard: !!window.__d2guard, gamedata: !!window.__d2gamedataPromise}`);
     result.evidence.checks = checks;
     const selfCheck = await ask(`window.__d2editSelfCheck ?? null`);
     result.evidence.selfCheck = selfCheck;
@@ -78,6 +78,7 @@ async function main() {
     if (!st?.state || st.state === "select") problems.push("未進入遊戲（狀態：" + (st?.state ?? "無") + "）");
     if (!checks?.lang?.gameHooked) problems.push("語言包未掛上遊戲翻譯（gameHooked=false）");
     if (!checks?.editor) problems.push("修改器入口未載入（__d2editLauncher 不存在）");
+    if (!checks?.guard) problems.push("防護模組未載入（__d2guard 不存在）");
     if (gameBuild && typeof gameBuild === "string" && gameBuild !== build) problems.push(`遊戲版本 ${gameBuild} 與驗證版本 ${build} 不同`);
     if (!selfCheck) problems.push("工具包自檢沒有產生結果（__d2editSelfCheck 不存在）");
     for (const i of selfCheck?.issues || []) if (i.level === "error") problems.push(`自檢錯誤［${i.area}］${i.msg}`);

@@ -5,12 +5,19 @@
 ## 專案概況
 - **定位**：靜態網頁工具包（純 JavaScript，無 Rust）。`d2edit.js` 書籤入口載入各模組：
   - `lang/lang.js`：遊戲內繁體中文化（只有繁中，無語言切換），共用字典 `lang/zh-TW.json`，譯名對齊 D2R 官方繁中。
+  - `guard/guard.js`：防護核心（最先載入；載不到會重試 3 次，仍失敗則整個工具包不啟動）。
   - `helper/autobot.js`：遊戲輔助器（自動戰鬥、走位、喝水、選卡、換裝、作弊輔助）。
   - `modifier/engine-page.js`：存檔物品引擎（讀寫、合法性驗證、詞綴產生）。
   - `modifier/editor.html`：存檔修改器介面。
+  - `guard/guard.html`：「存檔檢查與防護」頁（選單獨立一項）。
+- **三塊定位（2026-11-13 起，長期規則）**：
+  - **輔助器 `helper/`＝只動遊戲記憶體**：只透過 `__d2autobot.game` 物件與遊戲自己的方法運作；**不得**自己讀寫遊戲存檔鍵（`d2-survivors/save/v1`、`d2-survivors/hc/v1`）、不得簽章、不得使用 `__d2editBackend`（`helper/tests/memory-only.cjs` 會靜態擋下）。目的是遊戲未來改成線上存檔後仍能運作。會把遊戲沒產生的資料寫進存檔或假造伺服器回應的項目（`cheat.larzukMax`、`cheat.forgeMax`、自動淬鍊面板的本地淬鍊）在線上存檔模式停用（面板顯示關閉＋停用＋「線上存檔不可用」，設定值保留）；`cheat.infiniteRerolls` 線上模式只改本局、不寫 `save.ranks`。
+  - **修改器 `modifier/`＝只改單機存檔**：`backend.save` 在線上存檔模式拒絕寫入（簽章前後各檢查一次），頁首顯示唯讀橫幅。
+  - **防護 `guard/`＝存檔檢查＋反偵測**：排行榜上傳封鎖、`leaderboard.off` 鎖定、上傳佇列清除、存檔封印（`sealText`／`sealState`）、寫入後防覆寫（`protectWrite`）、存檔模式判定都在 `guard/guard.js`（`window.__d2guard`）；檢查邏輯在 `guard/save-check.js`（修改器寫入前檢查也 import 它，不要複製第二份）。**排行榜上傳封鎖在單機與線上模式都生效，不提供關閉入口。**
+  - **存檔模式 `__d2guard.saveMode()`**：`"local"`／`"online"`。遊戲目前（20261105.3）沒有線上存檔，所以沒有自動偵測——預設 `local`；可在防護頁手動切換（存 `localStorage["d2toolkit.saveMode"]`），遊戲推出線上存檔後把偵測函式加進 `__d2guard.detectors`。**線上存檔的實際行為（伺服器驗證什麼、存檔怎麼同步）全部未知，上述線上模式行為只在「手動切換」下實機驗證過。**
 - **桌面版**：位於 `editor/`，已改為固定啟動器架構，介面與引擎線上載入，桌面端僅負責存檔本機讀寫。
 - **發布環境**：GitHub Pages（main 分支託管網頁版）；公告站 `site/` 由 Cloudflare 自動連動 GitHub 部署（`wrangler.jsonc`），無須 API Token。
-- **單機定位（2026-11-08 起）**：工具包讓玩家單機爽玩。`d2edit.js` 載入即擋下所有送往 `/api/leaderboard` 的非 GET 請求（fetch／XHR／sendBeacon），並把遊戲記憶體存檔（`__d2autobot.game.save`）的 `leaderboard.off` 鎖成不可改、不可刪的 `true`（遊戲選項按「上傳」時 `delete` 會失敗，維持關閉）；修改器寫入的存檔也一律 `off: true`；載入時刪除等待上傳佇列 `localStorage["d2s:leaderboard-queue"]`，之後攔下對該鍵的寫入。修改器「關閉排行榜上傳」按鈕已隱藏。文件不再說明「如何讓成績上榜」，只說明上傳強制關閉。
+- **單機定位（2026-11-08 起；程式 2026-11-13 搬到 `guard/guard.js`）**：工具包讓玩家單機爽玩。防護模組載入即擋下所有送往 `/api/leaderboard` 的非 GET 請求（fetch／XHR／sendBeacon），並把遊戲記憶體存檔（`__d2autobot.game.save`）的 `leaderboard.off` 鎖成不可改、不可刪的 `true`（遊戲選項按「上傳」時 `delete` 會失敗，維持關閉）；修改器寫入的存檔也一律 `off: true`；載入時刪除等待上傳佇列 `localStorage["d2s:leaderboard-queue"]`，之後攔下對該鍵的寫入。修改器「關閉排行榜上傳」按鈕已隱藏。文件不再說明「如何讓成績上榜」，只說明上傳強制關閉。
 - **最新相容版本**：`TESTED_GAME_BUILD = "20261105.3"`（`helper/autobot.js`、`modifier/editor.html`、`helper/selfcheck.js` 同步）。
 
 ## 反覆發生的問題（必讀）
@@ -40,7 +47,8 @@
 
 ## 資料夾結構
 - **根目錄**：共用進入點與設定（`d2edit.js`、`index.html`、`version.json`、`AGENTS.md`、`AI_HANDOFF.md`、`wrangler.jsonc`）。
-- `helper/`：輔助器模組（`autobot.js`、`selfcheck.js`、測試 `helper/tests/`）。
+- `guard/`：防護模組（`guard.js`、`guard.html`、`save-check.js`、測試 `guard/tests/`）。
+- `helper/`：輔助器模組（`autobot.js`、`selfcheck.js`、自動淬鍊 `autoforge*.js`、本地淬鍊 `forge-local.js`、測試 `helper/tests/`）。
 - `lang/`：語言模組（`lang.js`、字典 `zh-TW.json`、語言與官方字串工具 `tools/`、測試 `lang/tests/`）。
 - `modifier/`：修改器模組（`editor.html`、`engine-page.js`、`patch.mjs`、`signatures.json`、`i18n.js`、測試 `modifier/tests/`）。
 - `site/`：網站與公告站（`index.html`、`install.template.html`）。
@@ -67,7 +75,50 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
-- **【2026-11-13 Claude：把偵測追查成果用到修改器「存檔檢查」，未提交、未發布】**
+- **【2026-11-13 十存檔測試後續：三個問題的查證與修正（Codex 子代理實作，主代理複跑驗證）；2026-11-13 已合併至 main】**
+  - **屬性點檢查誤判（已修，`guard/save-check.js` 約 234 行）**：舊算法以難度進度／魔典數推算上限，使用者 D2S1 副本的法師（99 級、能量花費 505、無屬性卡）被判 505／495 不合規，會擋住修改器寫入。改為與遊戲上傳 `points` 旗標一致：已用點數＝未分配＋5×屬性卡＋已花費，上限 `Sr(level)=5×max(0,level−1)+5×3+20`。**更正先前紀錄：`Sr` 裡的「×5」乘的是三種難度（normal／nightmare／hell），不是屬性種類數；99 級上限是 525，不是 530。**（`saveTransfer` 偏移 9311、`pack` 偏移 3073／3419。）屬性點不合規搬移前就沒有修正鍵，維持原狀。
+  - **防護頁角色進度檢查已實機驗證**：新腳本 `tests/live-harness/guard-heroes-live.cjs`（用 `backups/quest-run-20261111/inst-01/seed.json` 副本，只讀、雜湊前後一致）10／10——原始四個角色狀態三項檢查皆通過（505／525）；製造經驗值超限、重複技能、屬性點超標後防護頁都列出；單項修正後 xp＝5865600、重複技能移除、封印 sealed、`saveFaults` 0。全新存檔即使玩到 78 級並正常離場也不會有 `save.heroes`，所以這類檢查只能用有進度的存檔測。
+  - **怪物數量最大化在新手期無效（已修，`helper/autobot.js` 約 2197 行）**：根因覆核屬實——一般難度第一幕、非農場、非恐懼階、未過巴爾時，開局 60 秒內導演目標怪數上限 8、批次量 0（`report-*.js` 偏移 80824／81416／81916、`itemArt` 偏移 253467）；`owed`／`waveDue` 突破不了批次量 0；整個 bundle 沒有任何地方讀 `world.monsterDensity`／`spawnRate`。改用原版 `director.spawnPack`，每半秒最多一批、以存活 80 隻為目標上限，呼叫期間暫改的導演欄位立即還原，不碰 `game.save` 與 `world.actStart`。實機（`fresh10/s04-monsters-live.cjs` 9／9）：開啟 8 秒 19→41 隻、約 55 FPS，關閉後回落。`helper/tests/selfcheck.cjs` 的 E 段斷言已改成新行為。其他幕、恐懼階、長時間效能未驗證。
+  - **怪物詞綴空白相接缺 U+00A0（已修，`lang/lang.js` 約 562 行）**：遊戲是逐項呼叫翻譯後再以空白（或逗號）串接（`Game-*.js` 偏移約 87412），所以玩家實際是否看得到這個問題並未實證；修法只在整串能完全拆成已知詞綴時才以 U+00A0 串接，怪物／物品名稱不受影響。`fresh10/s09-lang-live.cjs` 6／6。
+  - **主代理最終複跑**：`verify --quick` 22／22、`test_lang` 通過、`live-smoke` 通過；官方網址實機：toolkit-roles、guard-fix、guard-heroes、forge-local、cheat-restore、no-upload、fresh10 s04、s09 皆 exit 0。
+  - **原本不穩定的腳本（已修）**：`fresh10/s03-cheats-live.cjs` 的「全作弊戰鬥金幣大量增加」原本固定只看 40 秒，複跑 4 次 2 過 2 敗（金幣 0）。腳本改為每 2 秒取樣地上金幣、40 秒內沒入帳就最多等到 120 秒，並記錄是否有金幣掉在地上沒被吸走。修正後連跑 4 次皆 11／11，每次結束時地上都沒有殘留金幣（全圖吸金幣正常）；先前的 0 是該 40 秒內沒有金幣掉落。
+  - **子代理備註**：AGY 額度於 2026-11-13 中午用盡（429），之後改全由 Codex 執行。
+- **【2026-11-13 十個全新存檔實機測試（十個子代理各一個存檔、一個功能；官方 `/play/`、隔離設定檔；腳本在 `tests/live-harness/fresh10/`，結果為子代理回報＋主代理讀結果 JSON，未逐支複跑）】**
+  - 全過：S01 亞馬遜自動戰鬥／走位／撿寶／喝水 12／12；S03 野蠻人純記憶體作弊生效與還原、輔助器直接寫存檔鍵 0 次、`tainted`／`runRecord` 旗標不變 11／11；S06 德魯伊修改器（一鍵解鎖 613／613、火炬 druid 技能、製作裝備合法、寫入後遊戲採用、線上模式唯讀）8／8；S08 自動淬鍊＋本地淬鍊面板（舊設定遷移、必定成功落在指定屬性、真實 `/forge` 0 次、關閉後請求送往官方）8／8；S10 線上模式停用項（larzukMax／forgeMax 停用、infiniteRerolls 只改本局不寫 `save.ranks`）＋掛機＋效能頁 7／7。
+  - 有未過項（都不是這次重整造成的）：
+    - S04 死靈法師 8／9：**全新存檔第一幕開局約前 60 秒「怪物數量最大化」幾乎無效**（19→21 隻）。子代理稱遊戲導演在新手期把目標怪數壓在 8、批次量為 0，且不讀 `world.monsterDensity`／`spawnRate`，`autobot.js` 約 2213 行的後備複製怪邏輯因 `g.director` 恆存在而不會執行——**根因為子代理讀碼所述，主代理未覆核**。全精英、召喚頭目、時間暫停通過；分身因非恐懼階未驗證。
+    - S09 法師 5／6：畫面取樣無漏翻（只有 Esc 與版權聲明含英文）。**`__d2lang.translate("Extra Strong Aura Enchanted")`（詞綴以空白相接）回 `特別強壯靈氣強化`，沒有 U+00A0**；「 - 」分段形式正常。遊戲是否真的以空白相接形式傳入詞綴列未實證。
+    - S02 法師 5／6：1→49 級、升級畫面全自動處理、選卡正常、關閉經驗加成後還原。自動配點未驗證——90 秒內遊戲沒給未分配屬性點（腳本前提問題，不是 bug）。
+    - S05 聖騎士 12／13：自動穿裝 0→8 件、賣垃圾裝、買藥水全為生命藥水、恰西升級、輔助器直接寫存檔鍵 0 次。最後一輪沒有符合存倉條件的裝備（只存獨特／套裝／符文之語與相近的稀有裝；另一輪有存入 1 件）；收藏庫收納沒有掉落樣本，實際未驗證。
+    - S07 刺客 4／6：**全新存檔玩到 78 級、正常離場後存檔仍沒有 `heroes`**，所以防護頁的經驗值／重複技能／屬性點修正仍無法以全新存檔實機驗證（需用有進度的 D2S1 存檔副本）。另 `guard/save-check.js` 約 264 行屬性點檢查沒有 `fix`（沒有單項修正鈕；搬移前是否如此未覆核）。
+- **【2026-11-13 Claude 統籌第二輪（十個子代理）：本地淬鍊獨立併入自動淬鍊、`/game-update` 改良、防護頁審查修正、桌面版接防護頁；分支 `refactor/toolkit-roles`，2026-11-13 已合併至 main】**
+  - **本地淬鍊搬家**：開關從輔助器作弊面板移到「自動淬鍊」面板的「本地淬鍊」區塊，不再受 `cheat.enabled` 控制。設定鍵 `localStorage["d2forgeLocal.settings"]={enabled,sure}`（首次載入自動遷移舊的 `cheat.forgeLocal`／`forgeLocalSure` 並從輔助器設定刪除）；API `__d2forgeLocal.settings()`／`set(patch)`／`enabled()`／`available()`（線上模式 available、enabled 皆 false，面板顯示關閉＋停用＋「線上存檔不可用」）。`cheat.forgeMax`、`cheat.larzukMax` 仍在輔助器。注意：自動淬鍊面板只在遊戲暫停時顯示（`open()` 內的 tick 會在遊戲進行中立刻收起）。
+  - **`/game-update` 改良**：`.claude/skills/game-update/SKILL.md` 改寫（三塊定位重驗清單、偵測掃描、線上存檔停發布條件、子代理分工、Windows Electron 注意事項）。新工具 `verify/lib/detection-scan.cjs`＋基準 `verify/detection-baseline.json`（以 20261105.3 產生：/api 端點 17、儲存鍵 54、封印／雜湊前綴 7、原生 API 檢查 7、受限參數 40、上傳旗標 8、線上存檔線索 0）：`node verify/lib/detection-scan.cjs --build game-bundles/<版本> --diff`，exit 0 無差異／2 有差異／3 疑似線上存檔；`--update` 更新基準。已串進 `verify/verify.cjs --update` 與 `verify/auto.cjs`：有差異或沒掃描→不自動發布（人工確認後加 `--accept-detection`）；疑似線上存檔→立即停止開故障單。實機階段在 live-smoke 之後加跑 `verify/lib/live-roles.cjs`（執行 `toolkit-roles-live.cjs`），`live-smoke.cjs` 也檢查 `__d2guard` 存在。**限制**：掃描是靜態字串比對，官方若混淆字串會漏；只掃網頁 bundle，不含 `sw.js` 與桌面主程序。`auto.cjs` 整條流程未實跑（會真的發布）。
+  - **防護頁／修改器審查修正（Codex 審查 5 項，全部已修）**：切換存檔槽時舊存檔可能寫進另一槽（改以 `loadedMode` 綁定＋序號排除晚到結果）；識別碼表職業鍵未跳脫（XSS）；素材載入失敗時倉庫重排可能寫出重疊物品（改標未驗證、停用重排）；寫入前重新查詢存檔模式；`save-check.js` 載入失敗顯示錯誤與重試鈕。**存檔模式判斷規則**：後端沒有 `saveMode` 能力（舊桌面啟動器、回「不支援的操作」）→視為單機可寫；回 `online`→不寫；有此能力但逾時／出錯→不寫並提示重試。
+  - **桌面啟動器**：`editor/{main,preload,core,remote}.js` 新增防護頁導覽（應用程式選單＋修改器頁內按鈕）與 `guardStatus`／`saveMode`／`setSaveMode`／`close`／`openGuard`。**需重新打包發布桌面版才生效；桌面版未實際啟動驗證**（只有 `editor/tests/guard-desktop.cjs` 單元測試）。
+  - **驗證（主代理親自執行）**：`node verify/verify.cjs --quick` 21／21；`node verify/tests/detection-scan.cjs`、`node editor/tests/guard-desktop.cjs` 通過；偵測掃描對 20261105.3 無差異。**官方網址實機**：`toolkit-roles-live.cjs` 9／9（已改測自動淬鍊面板的線上停用）；新腳本 `guard-fix-live.cjs` 12／12（製造超額金幣→防護頁列出→線上模式修正鈕停用→一鍵修正寫回→重讀確認修正且封印 sealed→390×844 無水平捲動、按鈕 44px）；`forge-local-live.cjs` A～D 全過（腳本已更新：改用新 API、注入實體測試精華；含重新整理後淬鍊結果保留、真實 `/forge` 請求 0——`restore()` 不寫存檔鍵的新做法實證可行）；`live-smoke`、`no-upload-live`、`cheat-restore-live` 通過。
+  - **既有問題釐清**：`forge-local-live.cjs` 在提交 HEAD 就會失敗（11/11 精華改成虛擬精華後腳本前提過時），不是這次的退步；已修腳本。
+  - **未驗證／未做**：`autoforge-live.cjs`（需 `H_ITEM` 環境變數，未跑）、`quest-mode-10x-live.cjs`（只移除兩個廢棄欄位，未跑）；新存檔沒有 `heroes`，防護頁的經驗值／重複技能／屬性點修正在實機只看到「未驗證」分支；實體手機未測；兩頁「檢查模組載入失敗→重試」未做故障注入；真實線上存檔仍不存在、無法實測。
+  - **子代理備註**：Codex 透過路徑別名 `C:\Users\nojac\codex-ws\<id>` 工作，多個 Codex 任務同時跑時，先結束的會把別名移除，後結束的會回報「工作目錄消失」並可能留下卡住的 electron 行程（專案本體不受影響；結束後檢查並清理）。AGY 任務若 20 分鐘無檔案產出通常是卡在等背景工作，取消重派。
+- **【2026-11-13 Claude 統籌（AGY／Codex 子代理實作）：工具包三塊定位重整——輔助器只改記憶體、修改器只改單機存檔、存檔檢查＋反偵測獨立成 `guard/`；分支 `refactor/toolkit-roles`，2026-11-13 已合併至 main】**
+  - 定位與規則見上方「專案概況 → 三塊定位」。
+  - 改了什麼：
+    - 新增 `guard/guard.js`（由 `d2edit.js` 搬出：上傳封鎖、`leaderboard.off` 鎖定、佇列清除、封印、寫入後防覆寫；新增 `saveMode`／`setSaveMode`／`canWriteSave`／`detectors`／`status()`）、`guard/save-check.js`（由 `modifier/editor.html` 抽出的檢查純邏輯：`attributeChecks`、`flagChecks`、`xpCap`、`detect`、診斷欄位表與解析等）、`guard/guard.html`（存檔檢查、防護狀態、遊戲診斷三區；線上模式只檢查不寫入）。
+    - `d2edit.js`：最先載入防護模組（重試 3 次，失敗即不啟動）；`backend` 新增 `guardStatus()`／`saveMode()`／`setSaveMode()`；`openEditor(page)` 可開修改器或防護頁；選單新增 `{ id:"guard", label:"存檔檢查與防護", order:35 }`。
+    - `modifier/editor.html`：移除「存檔檢查」分頁內容（改為指向新位置的說明）；寫入前檢查改 import `../guard/save-check.js`；線上模式顯示唯讀橫幅並停用寫入。
+    - `helper/forge-local.js`：`restore()` 不再簽章、不再寫遊戲存檔鍵、不再用 `__d2editBackend`，只改記憶體後呼叫 `g.moved(item)` 讓遊戲自己存；線上模式 `enabled()` 為 false、鍛造請求一律交給真伺服器。`helper/autobot.js`：新增 `saveMode()`／`onlineSave()`（匯出到 `__d2autobot`）與 `ONLINE_DISABLED_CHEATS`。`helper/selfcheck.js`：存檔提示改指「存檔檢查與防護」，沒有 backend 時略過。
+    - 建置／驗證／發布工具納入 `guard/`：`tools/build-web.js`、`tools/tests/build-web.cjs`、`verify/suite.cjs`（新增 `guard`、`save-check`、`memory-only` 三項）、`verify/lib/{runner,fingerprint,adapt,repair}.cjs`、`verify/publish.cjs`（`RELEASE_PATHS`、版本戳記）、`editor/remote.js`（匯出 `GUARD_PAGE`，桌面啟動器尚未使用）。
+    - 文件：`site/index.html`、`site/install.template.html`、`modifier/editor.html` 的 2026-11-13 日誌與功能介紹已依新定位改寫（尚未發布）。
+  - 驗證（主代理親自執行）：`node verify/verify.cjs --quick` 21／21；`node verify/live-smoke.cjs` 通過（20261105.3，amazon）。**官方網址 `/play/` 實機**（隔離 Electron、全新存檔、載入本機工具包）：新腳本 `tests/live-harness/toolkit-roles-live.cjs` 9／9——防護載入與選單三項、進場、`leaderboard.off` 不可改不可刪＋POST 被擋＋佇列攔截、無敵生效且 10 秒內沒有任何「輔助器直接呼叫」的遊戲存檔鍵寫入、手動切線上模式後（修改器寫入被拒且存檔內容不變、本地淬鍊設定保留但不生效且面板顯示關閉停用、無敵仍生效、上傳仍被擋）、切回單機、防護頁開啟且頁內後端可用（存檔讀入、封印 sealed）並可關閉、修改器單機原樣寫回封印 sealed。既有實機回歸 `no-upload-live.cjs`、`cheat-restore-live.cjs` 也通過。
+  - 實機抓到並已修的 bug：`guard/guard.html` 在網頁版 iframe 內 `window.api` 指回自己造成後端呼叫無限遞迴（所有後端呼叫失敗、關閉鈕無效）；離線夾具有假 `window.api` 所以測不到。Codex 審查另指出並已修：`backend.save` 簽章期間切到線上仍會寫入（簽完再檢查一次）、線上模式下無法解析的鍛造請求仍被回假 400（改為一律放行）。
+  - **未驗證／未做**：
+    - 線上存檔本身不存在，無法實測真實線上存檔下的任何行為；線上模式只驗證了手動切換後工具包自己的限制。
+    - `restore()` 改用 `g.moved(item)` 後，本地淬鍊帳本還原在真實遊戲中的落盤時機未實機驗證（`forge-local-live.cjs` 未重跑）。
+    - 防護頁的「一鍵修正」「重新產生識別碼」寫回、手機瀏覽器排版、硬核存檔未實機點擊（只有 Electron 離線夾具）；`larzukMax`／`forgeMax`／`infiniteRerolls` 的線上停用只有模擬測試（`helper/tests/autobot.cjs` 232 項），實機只點了 `forgeLocal`。
+    - 桌面啟動器 `editor/` 沒有接防護頁（`GUARD_PAGE` 只匯出）、也沒有 `guardStatus` 等後端方法；桌面版目前只有修改器。
+    - 已知限制（搬移前就有）：舊版工具包在同一頁寫過存檔後不重新整理就熱重載新版，舊版留下的防覆寫包裝仍會擋新版寫入；寫入後本來就會重新載入頁面，實務上碰不到。
+    - 子代理備註：Codex CLI 的全域設定經本機 Ollama（`127.0.0.1:11434`）轉送，Ollama 沒開時 Codex 會卡在「waiting for network」不報錯；派工前先確認 Ollama 在執行。
+- **【2026-11-13 Claude：把偵測追查成果用到修改器「存檔檢查」，2026-11-13 已合併至 main】**
   - 改了什麼：`modifier/editor.html` 的 `detect()` 新增 `flagChecks(s, mode)`（置於 `attributeChecks` 之後）三項檢查，來源是官方上傳 `flags` 與載入流程的反編譯結果（見下方「官方 MOD／修改偵測」各條）：(1) 經驗值須在 0～`xpCap(等級)` 之間，`xpCap(e)=round((5+4(e−1)^1.35)×1.1^max(0,e−25)×1.1^max(0,e−89))`（上傳 `level` 旗標；修正鍵：設為該等級上限）；(2) 技能欄不可有重複技能（上傳 `skills` 旗標；修正鍵：移除重複）；(3) 存檔模式與儲存槽相符——硬核槽須有 `mode:"hc"`、一般槽不得有 `mode`（遊戲載入時 `Ht` 判定為被編輯；修正鍵：補上／移除標記）。存檔沒有任何角色進度（例如全新存檔，進度在 `underway`、沒有 `heroes`）時，(1)(2) 顯示「未驗證」而不是通過。同時更正「遊戲診斷」`page` 欄位說明（只放進診斷文字、玩家按「回報」才送出，工具包會替換 `Storage.setItem` 所以通常會列出）。
   - 更新日誌：`modifier/editor.html` 與 `site/index.html` 都加了 2026-11-13「修改器」條目（尚未發布）。
   - 驗證：`modifier/tests/flag-checks-ui.cjs`（新增，離線夾具）通過，含公式與官方快照 `pack` 模組原始碼逐級（1～99）核對、未驗證分支、超標與修正、重複技能、模式不符；`modifier/tests/save-faults-ui.cjs`、`craft-diagnostic-ui.cjs` 通過；`node verify/verify.cjs --quick` 18／18 通過。**實機（官方 `/play/`、全新存檔、隔離 Electron）**：確認全新存檔進行中 `g.save` 沒有 `heroes`（進度在 `underway`）——因此加入「未驗證」分支。**真實存檔資料**：用 `backups/quest-run-20261111/inst-01/seed.json`（D2S1 副本，4 個角色狀態、等級 99）離線載入修改器頁執行 `flagChecks`：三項皆通過，且 99 級 `xp=5865600` 恰等於公式上限，證實公式與遊戲資料一致，故 99 級也納入檢查。

@@ -5,6 +5,19 @@ const HOST = new URL(".", import.meta.url).href;
 // 書籤每次帶不同的 v，這裡載入的其他檔案也帶同一個 v，避免手機瀏覽器用舊的快取
 const VER = new URL(import.meta.url).searchParams.get("v") || String(Date.now());
 const at = (f) => HOST + f + (f.includes("?") ? "&" : "?") + "v=" + VER;
+// 防護模組須在所有其他模組之前載入並生效（封鎖排行榜上傳、鎖定 leaderboard.off、清除上傳佇列）
+// 防護模組載不到時重試 3 次；仍失敗就整個工具包不啟動（不讓輔助器、修改器在沒有上傳封鎖的情況下運作）。
+const guardP = (async () => {
+  let last;
+  for (let i = 0; i < 3; i++) {
+    try { return await (i ? import(at("guard/guard.js") + "&r=" + i) : import(at("guard/guard.js"))); }
+    catch (e) { last = e; if (i < 2) await new Promise((ok) => setTimeout(ok, 600 * (i + 1))); }
+  }
+  console.error("[D2 工具包] 防護模組載入失敗，工具包未啟動", last);
+  try { alert("D2 工具包：防護模組載入失敗，工具包未啟動。請確認網路後重新點書籤。"); } catch {}
+  throw last;
+})();
+const { MODES, mode, sealText, sealState, saveMode, setSaveMode, canWriteSave, protectWrite, clearWriteProtect, status: guardBaseStatus } = await guardP;
 // 依使用者 iPhone 截圖（2026-11-08）：同一次載入中 import() 腳本都成功，但 fetch() 字典、遊戲資料、修改器頁面、特徵碼全部「Load failed」（網路層錯誤）。
 // 工具網站的檔案改用這裡讀取：失敗時重試 3 次（第 2 次起略過快取），JSON 最後再用 import(…, { with: { type: "json" } }) 備援。
 async function hostFetch(url, as = "json") {
@@ -22,53 +35,6 @@ async function hostFetch(url, as = "json") {
   throw last;
 }
 window.__d2hostFetch = hostFetch;
-const MODES = {
-  softcore: { key: "d2-survivors/save/v1", seal: "d2s/save-seal/1:Rakanishu-Bishibosh-Coldcrow-Griswold-Pindleskin", traces: ["d2-survivors/save/before-import"] },
-  hardcore: { key: "d2-survivors/hc/v1", seal: "d2s/save-seal/hc/1:Blood-Raven-Treehead-Woodfist-Coldworm-Andariel", traces: ["d2-survivors/hc/before-import"] },
-};
-const mode = (m) => MODES[m === "hardcore" ? "hardcore" : "softcore"];
-// 工具包定位為單機爽玩：載入後強制關閉排行榜上傳，玩家無法再打開。
-// 1. 擋下所有送往 /api/leaderboard 的非 GET 請求（仍可瀏覽排行榜；僅放行 /api/leaderboard/forge 鍛造請求）。
-// 2. 遊戲記憶體中的存檔 leaderboard.off 鎖成不可改、不可刪的 true；遊戲選項的「上傳」開關按下時會失敗、維持關閉。
-(() => {
-  if (window.__d2noUpload) return;
-  window.__d2noUpload = true;
-  // 鍛造請求的路徑也是 /api/leaderboard/forge（遊戲的 wi 常數即 /api/leaderboard），必須放行，否則淬鍊會「No reply」。
-  const isUpload = (url, method) => /\/api\/leaderboard/.test(String(url)) && !/\/api\/leaderboard\/forge(\?|$)/.test(String(url)) && String(method || "GET").toUpperCase() !== "GET";
-  const blocked = () => console.info("[D2 工具包] 單機模式：已擋下排行榜上傳");
-  const origFetch = window.fetch;
-  window.fetch = function (input, init) {
-    const url = input instanceof Request ? input.url : input, method = init?.method ?? (input instanceof Request ? input.method : "GET");
-    if (isUpload(url, method)) { blocked(); return Promise.reject(new TypeError("D2 工具包單機模式：排行榜上傳已關閉")); }
-    return origFetch.apply(this, arguments);
-  };
-  const origBeacon = navigator.sendBeacon?.bind(navigator);
-  if (origBeacon) navigator.sendBeacon = (url, data) => (isUpload(url, "POST") ? (blocked(), false) : origBeacon(url, data));
-  const xo = XMLHttpRequest.prototype.open, xs = XMLHttpRequest.prototype.send, flag = Symbol("d2noUpload");
-  XMLHttpRequest.prototype.open = function (method, url) { this[flag] = isUpload(url, method); return xo.apply(this, arguments); };
-  XMLHttpRequest.prototype.send = function () { if (this[flag]) { blocked(); this.abort(); return; } return xs.apply(this, arguments); };
-  const lock = (save) => {
-    if (!save || typeof save !== "object") return;
-    let lb = save.leaderboard;
-    if (!lb || typeof lb !== "object") lb = save.leaderboard = {};
-    const d = Object.getOwnPropertyDescriptor(lb, "off");
-    if (d && d.value === true && !d.writable && !d.configurable) return;
-    if (d && !d.configurable) { save.leaderboard = lb = { ...lb }; }
-    else delete lb.off;
-    Object.defineProperty(lb, "off", { value: true, enumerable: true, writable: false, configurable: false });
-  };
-  // 3. 刪除遊戲正在等待上傳的排行榜紀錄（佇列鍵見遊戲 saveTransfer：d2s:leaderboard-queue），之後也不再寫入。
-  const QUEUE = "d2s:leaderboard-queue";
-  try { localStorage.removeItem(QUEUE); } catch {}
-  const qSet = Storage.prototype.setItem;
-  Storage.prototype.setItem = function (k, v) {
-    if (this === localStorage && k === QUEUE) { try { localStorage.removeItem(QUEUE); } catch {} return; }
-    return qSet.call(this, k, v);
-  };
-  const tick = () => { try { lock(window.__d2autobot?.game?.save); } catch {} try { if (localStorage.getItem(QUEUE) !== null) localStorage.removeItem(QUEUE); } catch {} };
-  tick(); setInterval(tick, 300);
-  window.__d2lockLeaderboard = lock;
-})();
 // 獨立旗標讓舊版排行榜攔截器存在時，熱重載仍可接上本地淬鍊。
 if (!window.__d2forgeFetchHook) {
   window.__d2forgeFetchHook = true;
@@ -77,23 +43,6 @@ if (!window.__d2forgeFetchHook) {
     const intercepted = window.__d2forgeLocal?.fetchHook?.(input, init, previousFetch.bind(this));
     return intercepted || previousFetch.apply(this, arguments);
   };
-}
-
-/* ---------- 簽章（與遊戲相同：HMAC-SHA256） ---------- */
-async function hmac(key, text) {
-  const enc = new TextEncoder();
-  const k = await crypto.subtle.importKey("raw", enc.encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return [...new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-const sealKey = (save) => (save.mode === "hc" ? MODES.hardcore.seal : MODES.softcore.seal);
-async function sealText(save) {
-  const body = JSON.stringify({ ...save, seal: undefined });
-  const seal = await hmac(sealKey(save), body);
-  return body === "{}" ? `{"seal":"${seal}"}` : `${body.slice(0, -1)},"seal":"${seal}"}`;
-}
-async function sealState(save) {
-  if (save.seal === undefined) return "none";
-  return (await hmac(sealKey(save), JSON.stringify({ ...save, seal: undefined }))) === save.seal ? "sealed" : "broken";
 }
 
 /* ---------- 遊戲資料網址 ---------- */
@@ -225,7 +174,7 @@ const engine = () => (enginePromise ??= (engineStartedAt = performance.now(), st
 /* ---------- 診斷 ---------- */
 // 上次寫入的紀錄存在遊戲頁面的 sessionStorage（同一個分頁重新載入後還在），用來比對遊戲有沒有採用
 const LAST_WRITE = "d2edit:lastWrite";
-let written = false, lastText = null, keepHooked = false;
+let written = false;
 function summarize(text) {
   try {
     const s = JSON.parse(text);
@@ -251,32 +200,38 @@ const backend = {
     return { save, source: "localStorage", seal: await sealState(save) };
   },
   async save(m, save) {
+    if (!canWriteSave()) throw new Error("目前為線上存檔模式：修改器只修改單機存檔，不會寫入。");
     if (typeof save !== "object" || !save || typeof save.version !== "number") throw new Error("存檔格式不正確。");
     save = { ...save, leaderboard: { ...save.leaderboard, off: true } }; // 單機模式：修改器寫入的存檔一律關閉排行榜上傳
     const text = await sealText(save);
+    // 簽章是非同步的：簽完再確認一次，避免這段時間內切到線上模式仍寫入。
+    if (!canWriteSave()) throw new Error("目前為線上存檔模式：修改器只修改單機存檔，不會寫入。");
     // 同一頁第二次寫入時，上一次的防護還在；先清掉，讓修改器自己的這次寫入通過（否則會被擋下、顯示讀回不一致）。
-    const prevGuard = lastText;
-    lastText = null;
+    const prevGuard = clearWriteProtect();
     try { localStorage.setItem(mode(m).key, text); }
-    catch (e) { lastText = prevGuard; throw e; } // 寫入失敗時保留上一次成功寫入的防護，避免遊戲以舊記憶體覆寫
+    catch (e) { if (prevGuard) protectWrite(prevGuard.key, prevGuard.text); throw e; } // 寫入失敗時保留上一次成功寫入的防護，避免遊戲以舊記憶體覆寫
     written = true;
     // 遊戲在關卡中會於 pagehide／切到背景時用記憶體裡的舊存檔覆寫（有多個監聽，順序不定）。
     // 寫入後到頁面重新載入前，擋掉遊戲對同一存檔鍵的其他寫入；修改器開著時遊戲無法操作，關閉即重新載入，不會吃掉遊戲進度。
-    lastText = { key: mode(m).key, text };
-    if (!keepHooked) {
-      keepHooked = true;
-      const setItem = Storage.prototype.setItem;
-      Storage.prototype.setItem = function (k, v) {
-        if (this === localStorage && lastText && k === lastText.key && v !== lastText.text) return;
-        return setItem.call(this, k, v);
-      };
-    }
+    protectWrite(mode(m).key, text);
     const readback = localStorage.getItem(mode(m).key) === text;
     try { sessionStorage.setItem(LAST_WRITE, JSON.stringify({ time: new Date().toISOString(), key: mode(m).key, bytes: text.length, readback, summary: summarize(text) })); } catch {}
     if (!readback) throw new Error("寫入後讀回的內容不一致，存檔可能沒有寫進去。");
     return { ok: true, bytes: text.length, reload: true };
   },
   sealText,
+  async guardStatus() {
+    const base = (window.__d2guard?.status ?? guardBaseStatus)();
+    const seals = { softcore: null, hardcore: null };
+    for (const [name, m] of Object.entries(MODES)) {
+      const t = localStorage.getItem(m.key);
+      if (t == null) { seals[name] = null; continue; }
+      try { seals[name] = await sealState(JSON.parse(t)); } catch { seals[name] = "broken"; }
+    }
+    return { ...base, seals };
+  },
+  saveMode() { return saveMode(); },
+  setSaveMode(v) { return setSaveMode(v); },
   async assets() {
     return (backend._assetsP ??= (async () => {
       const dir = new URL("/d2", location.origin).href, man = await manifest();
@@ -381,17 +336,19 @@ document.getElementById("d2autoforge-afk")?.remove(); window.__d2afk = false; //
 window.__d2editStopWatch?.();
 window.__d2editClose = (quiet) => { if (frame) { frame.remove(); frame = null; window.removeEventListener("message", onMessage); } if (!quiet && written) location.reload(); };
 window.__d2editIsOpen = () => !!frame;
-const editorUrl = () => at("modifier/editor.html") + "&origin=" + encodeURIComponent(location.origin) + "&mode=" + (localStorage.getItem("d2-survivors/mode/v1") === "hardcore" ? "hardcore" : "softcore");
-function openEditor() {
+const pageUrl = (page) => at(page) + "&origin=" + encodeURIComponent(location.origin) + "&mode=" + (localStorage.getItem("d2-survivors/mode/v1") === "hardcore" ? "hardcore" : "softcore");
+const editorUrl = () => pageUrl("modifier/editor.html");
+const guardUrl = () => pageUrl("guard/guard.html");
+function openEditor(page = "modifier/editor.html") {
   if (frame) return;
   frame = document.createElement("iframe");
-  frame.src = editorUrl();
+  frame.src = pageUrl(page);
   frame.style.cssText = "position:fixed;inset:0;width:100vw;width:100dvw;height:100vh;height:100dvh;border:0;z-index:2147483647;background:#14110d";
   window.addEventListener("message", onMessage);
   document.body.appendChild(frame);
 }
-// 點書籤後不直接開啟：留在遊戲中，按暫停時畫面左上角才出現「修改器」按鈕
-// 工具包單一按鈕：把「輔助器」「語言」「修改器」收進同一個下拉選單。
+// 點書籤後不直接開啟：留在遊戲中，按暫停時畫面左上角才出現「工具包」按鈕
+// 工具包單一按鈕：把「輔助器」「語言」「修改器」「存檔檢查與防護」收進同一個下拉選單。
 // 輔助器與語言仍由各自模組建立與處理，這裡只隱藏它們原本的浮動按鈕，點選單項目時代為觸發。
 const toolkitStyle = document.getElementById("d2toolkit-style") || document.head.appendChild(Object.assign(document.createElement("style"), { id: "d2toolkit-style" }));
 toolkitStyle.textContent = "#d2autobot-launcher,#d2lang-btn{display:none!important}";
@@ -417,7 +374,8 @@ window.__d2toolkit = { register: registerToolkitFeature, features: () => [...too
 registerToolkitFeature({ id: "autobot", label: "輔助器", order: 10, open: () => document.getElementById("d2autobot-launcher")?.click() });
 registerToolkitFeature({ id: "autoforge", label: "自動淬鍊", order: 15, open: () => { if (!window.__d2autoforgeUI?.open()) alert("請先進入遊戲（選好職業）再開啟自動淬鍊"); } });
 registerToolkitFeature({ id: "lang", label: "中文化", order: 20, open: () => document.getElementById("d2lang-btn")?.click() });
-registerToolkitFeature({ id: "editor", label: "修改器", order: 30, open: () => openEditor() });
+registerToolkitFeature({ id: "editor", label: "修改器", order: 30, open: () => openEditor("modifier/editor.html") });
+registerToolkitFeature({ id: "guard", label: "存檔檢查與防護", order: 35, open: () => openEditor("guard/guard.html") });
 // 效能頁面：全螢幕顯示即時指標（只讀取，不修改遊戲與存檔）。
 registerToolkitFeature({ id: "perf", label: "效能", order: 40, open: () => openPerfPage() });
 // 優化開關（效能頁）：只保留「掛機時略過主畫面繪製」。
@@ -676,6 +634,7 @@ window.__d2changelogPromise ??= fetch("/changelog.json", { cache: "no-cache" }).
   const loadBot = () => (botP ??= import(at("helper/autobot.js")));
   const loadSelfCheck = () => (selfCheckP ??= import(at("helper/selfcheck.js")));
   const steps = [
+    ["防護模組", () => guardP],
     ["繁中字典", loadZhDict],
     ["遊戲資料", loadGameData],
     ["中文化模組", loadLang],
@@ -711,7 +670,7 @@ window.__d2changelogPromise ??= fetch("/changelog.json", { cache: "no-cache" }).
   const problems = [...warn.map((n) => ({ level: "warn", area: n, msg: "載入失敗，相關功能可能無法使用" })), ...issues];
   text.textContent = problems.length
     ? ("載入完成，自檢發現以下問題（不影響繼續遊玩，點一下關閉）：")
-    : ("載入完成，自檢通過，按暫停後左上角開啟修改器");
+    : ("載入完成，自檢通過，按暫停後左上角開啟工具包");
   const dismiss = () => { box.remove(); if (window.__d2editLoading === box) window.__d2editLoading = null; };
   if (problems.length) {
     const list = document.createElement("div");

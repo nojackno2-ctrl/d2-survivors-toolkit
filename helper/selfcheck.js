@@ -83,9 +83,11 @@ export async function runSelfCheck(ctx) {
       if (!data || typeof data !== "object" || !Object.keys(data).length) add("warn", "遊戲資料", "修改器遊戲資料檔內容為空");
     }),
 
-    // 3 & 4. 物品引擎與當前存檔（存檔讀取與引擎啟動並行，讀完後再用引擎的 saveFaults 檢查）
+    // 3 & 4. 物品引擎與當前存檔（存檔讀取與引擎啟動並行，讀完後再用引擎的 saveFaults 檢查；ctx.backend 不存在時略過存檔檢查）
     (async () => {
-      const savesP = Promise.all(["softcore", "hardcore"].map((m) => Promise.resolve().then(() => ctx.backend.load(m)).then((loaded) => [m, loaded], () => [m, null])));
+      const savesP = ctx.backend?.load
+        ? Promise.all(["softcore", "hardcore"].map((m) => Promise.resolve().then(() => ctx.backend.load(m)).then((loaded) => [m, loaded], () => [m, null])))
+        : null;
       await guard("物品引擎", async () => {
         try { engine = await ctx.engine(); }
         catch (e) {
@@ -100,13 +102,14 @@ export async function runSelfCheck(ctx) {
         const info = ctx.engineInfo || {};
         if (info.itemstats && info.itemstats !== 200) add("warn", "物品引擎", "物品資料讀取狀態 " + info.itemstats);
       });
+      if (!savesP) return;
       await guard("存檔", async () => {
         for (const [m, loaded] of await savesP) {
           if (!loaded) continue;
-          if (loaded.seal === "broken") add("warn", "存檔", `${m === "hardcore" ? "硬核" : "一般"}模式存檔簽章不符，遊戲可能拒絕讀取`);
+          if (loaded.seal === "broken") add("warn", "存檔", `${m === "hardcore" ? "硬核" : "一般"}模式存檔簽章不符，遊戲可能拒絕讀取；可到工具包選單的「存檔檢查與防護」處理`);
           if (engine) {
             const faults = engine.saveFaults?.(JSON.parse(JSON.stringify(loaded.save)));
-            if (Array.isArray(faults) && faults.length) add("warn", "存檔", `${m === "hardcore" ? "硬核" : "一般"}模式存檔有 ${faults.length} 項遊戲判定問題（例：${String(faults[0]).slice(0, 60)}）；可到修改器「存檔檢查」處理`);
+            if (Array.isArray(faults) && faults.length) add("warn", "存檔", `${m === "hardcore" ? "硬核" : "一般"}模式存檔有 ${faults.length} 項遊戲判定問題（例：${String(faults[0]).slice(0, 60)}）；可到工具包選單的「存檔檢查與防護」處理`);
           }
         }
       });

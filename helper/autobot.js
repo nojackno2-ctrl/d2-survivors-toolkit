@@ -40,8 +40,6 @@
       monsterDensity10x: false,
       allElites: false,
       forgeMax: false,
-      forgeLocal: false,
-      forgeLocalSure: false,
       larzukMax: false,
       pauseStageTime: false,
       summonAllBosses: false,
@@ -66,9 +64,18 @@
   const terrorMode = () => settings.progressEnabled ? settings.terror.mode : "off";
   // 各分頁只受自己的總開關控制；自動戰鬥不會隱含開啟戰鬥輔助。
   const assistOn = () => settings.enabled;
+  // 存檔模式判斷：透過防護模組 window.__d2guard 取得，尚未載入或例外時容錯視為單機模式（"local"）。
+  const saveMode = () => { try { return window.__d2guard?.saveMode?.() === "online" ? "online" : "local"; } catch { return "local"; } };
+  const onlineSave = () => saveMode() === "online";
+  // 線上存檔模式下停用「會把遊戲未產生的資料寫進存檔或假造伺服器回應」的四項作弊（開關顯示關閉＋停用，使用者原本的設定值保留）。
+  const ONLINE_DISABLED_CHEATS = new Set(["cheat.forgeMax", "cheat.larzukMax"]);
   try {
     const stored = JSON.parse(localStorage.getItem(KEY) || "{}");
     settings = merge(defaults, stored);
+    if (localStorage.getItem("d2forgeLocal.settings") === null && ("forgeLocal" in (stored.cheat || {}) || "forgeLocalSure" in (stored.cheat || {}))) {
+      localStorage.setItem("d2forgeLocal.settings", JSON.stringify({ enabled: stored.cheat.forgeLocal === true, sure: stored.cheat.forgeLocalSure === true }));
+    }
+    delete settings.cheat.forgeLocal; delete settings.cheat.forgeLocalSure;
     // 版本 3 起預設撿取所有品質；舊設定只補開普通與魔法，不覆蓋其他選擇。
     if ((stored.version || 0) < 3) { settings.loot.qualityThreshold.normal = true; settings.loot.qualityThreshold.magic = true; }
     // 版本 5：死亡保護改為預設開啟、離場後自動繼續（舊版預設關閉，並非使用者選的）。
@@ -1858,7 +1865,7 @@
   // 第一次寫入前記下原值（含是否為自有屬性），每次寫入記下寫入值。還原時只還原「目前值仍等於自己寫入值」的欄位，
   // 遊戲後來自行改過的值不蓋掉。玩家或導演物件更換前先還原舊紀錄。
   const cheatRecs = new Map();
-  const CLAMP_PROPS = new Set(["owed", "waveDue"]);
+  let densityNextAt = 0;
   function cheatField(key, owner, obj, prop, value) {
     let rec = cheatRecs.get(key);
     if (rec && rec.owner !== owner) { restoreCheat(key); rec = null; }
@@ -1873,8 +1880,6 @@
     const rec = cheatRecs.get(key);
     if (!rec) return;
     for (const f of rec.fields) {
-      // 怪物生成待補數（owed／waveDue）會被遊戲逐步消耗而不再等於寫入值；關閉時若仍高於原值就降回原值，否則會繼續補出大量怪物（實機：450 消耗到 435 後殘留）。
-      if (CLAMP_PROPS.has(f.prop) && typeof f.obj[f.prop] === "number" && typeof f.base === "number" && f.obj[f.prop] > f.base) { f.obj[f.prop] = f.base; continue; }
       if (f.obj[f.prop] !== f.written) continue;
       if (f.own) f.obj[f.prop] = f.base; else delete f.obj[f.prop];
     }
@@ -2052,7 +2057,7 @@
   // 同時包住 g.forgeActions 讓鍛造面板的精華數量顯示 99。暫時堆疊的 id 以 "vess" 開頭，萬一中途離開殘留，下一輪會清掉。
   const PHYSICAL_FORGE_ESSENCE = false; // 備援：true＝改回寫入實體精華到個人倉庫
   const FORGE_ESSENCE = "Burning Essence of Terror";
-  const virtualEssenceOn = () => !!(settings.cheat?.enabled && settings.cheat.forgeMax && !PHYSICAL_FORGE_ESSENCE);
+  const virtualEssenceOn = () => !onlineSave() && !!(settings.cheat?.enabled && settings.cheat.forgeMax && !PHYSICAL_FORGE_ESSENCE);
   const virtualEss = { patched: new WeakSet(), active: 0, stack: null };
   function removeVirtualStacks(g) {
     const lists = [...Object.values(g.save?.inventoryByClass || {}), ...Object.values(g.save?.stashTabs || {})];
@@ -2080,13 +2085,14 @@
   }
   function applyCheats(g) {
     if (!g || !settings.cheat?.enabled) { cleanupVirtualEssence(g); restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); return; }
+    const isOnline = onlineSave();
     // 燃燒的恐懼精華：預設走「虛擬精華」（不產生實體物品，見 installVirtualForgeEssence）；實體寫入保留為備援，把 PHYSICAL_FORGE_ESSENCE 改 true 即啟用。
-    // 拉蘇克精華仍為實體物品（遊戲內沒有找到可攔截的消耗點）。
+    // 拉蘇克精華仍為實體物品（遊戲內沒有找到可攔截的消耗點）。線上存檔模式下兩項皆停用，不注入虛擬或實體精華。
     cleanupVirtualEssence(g);
-    if (settings.cheat.forgeMax && !PHYSICAL_FORGE_ESSENCE) installVirtualForgeEssence(g);
+    if (!isOnline && settings.cheat.forgeMax && !PHYSICAL_FORGE_ESSENCE) installVirtualForgeEssence(g);
     // 補充精華到目前角色的個人倉庫；關閉後保留已寫入的物品。遊戲鍛造會合併計算背包與倉庫的精華。
     // 遊戲的精華格式：type 為 "essence"、base 為名稱，數量存在 count（單疊上限 99）。
-    const essenceCheats = [["forgeMax", "Burning Essence of Terror"], ["larzukMax", "Larzuk's Essence"]];
+    const essenceCheats = isOnline ? [] : [["forgeMax", "Burning Essence of Terror"], ["larzukMax", "Larzuk's Essence"]];
     for (const [key, name] of essenceCheats) {
       if (!settings.cheat[key]) continue;
       if (key === "forgeMax" && !PHYSICAL_FORGE_ESSENCE) continue;
@@ -2188,44 +2194,25 @@
     }
 
     // 5. 怪物數量最大化
-    // 導演的生成計數器（batchTimer／owed／waveDue）會被遊戲每幀自行消耗，還原時只在仍等於本模組寫入值時才還原；world 的密度欄位則完整還原。
-    if (settings.cheat.maxMonsterDensity || settings.cheat.monsterDensity10x) {
-      if (g.director && typeof g.director === "object") {
-        const dir = g.director;
-        cheatField("maxMonsterDensityDirector", dir, dir, "batchTimer", 0);
-        cheatField("maxMonsterDensityDirector", dir, dir, "owed", Math.max(dir.owed || 0, 450));
-        if (dir.waves && !dir.waves.done) {
-          cheatField("maxMonsterDensityDirector", dir, dir, "waveDue", Math.max(dir.waveDue || 0, 450));
-        }
-      }
-      if (g.world) {
-        cheatField("maxMonsterDensity", g.world, g.world, "monsterDensity", 999);
-        cheatField("maxMonsterDensity", g.world, g.world, "spawnRate", 999);
-      }
-      if (!g.director && Array.isArray(g.world?.enemies) && g.world.enemies.length > 0 && g.world.enemies.length < 450) {
-        if (!g.world._cheatClonedCount) g.world._cheatClonedCount = 0;
-        if (g.world.enemies.length - g.world._cheatClonedCount < 100) {
-          const baseEnemies = g.world.enemies.filter(e => e && !e._cheatClone && !e.sprite && e.rank !== "breakable" && (e.life || 0) > 0);
-          const copiesToAdd = [];
-          for (const orig of baseEnemies) {
-            for (let c = 0; c < 9 && g.world.enemies.length + copiesToAdd.length < 450; c++) {
-              const clone = Object.assign(Object.create(Object.getPrototypeOf(orig)), orig);
-              clone._cheatClone = true;
-              clone.x = (orig.x || 0) + (Math.random() - 0.5) * 80;
-              clone.y = (orig.y || 0) + (Math.random() - 0.5) * 80;
-              copiesToAdd.push(clone);
-            }
-          }
-          if (copiesToAdd.length > 0) {
-            g.world._cheatClonedCount = (g.world._cheatClonedCount || 0) + copiesToAdd.length;
-            g.world.enemies.push(...copiesToAdd);
+    // 使用原版生成器，避免改寫關卡時間或導演計數器；每半秒最多一批，限制場上存活怪數。
+    if ((settings.cheat.maxMonsterDensity || settings.cheat.monsterDensity10x) && g.state === "playing") {
+      const w = g.world, dir = g.director, now = performance.now();
+      if (w?.player && Array.isArray(w.enemies) && typeof dir?.spawnPack === "function" && !dir.cleared && !w.training && now >= densityNextAt) {
+        densityNextAt = now + 500;
+        const living = w.enemies.filter(e => e && !e.dead && !e.retiring && e.rank !== "breakable" && e.life > 0);
+        const sample = living.find(e => (e.rank === "normal" || e.rank === "champion") && typeof e.kind === "string");
+        if (sample && living.length < 80) {
+          const fields = ["ranged", "rangedCap", "debt", "artHeld", "rangedHeld"];
+          const before = fields.map(key => [key, Object.getOwnPropertyDescriptor(dir, key)]);
+          const artWait = dir.artWait instanceof Map ? [...dir.artWait] : null;
+          try { dir.rangedCap = Infinity; dir.spawnPack(w, sample.kind, Math.min(4, 80 - living.length)); }
+          finally {
+            for (const [key, descriptor] of before) { if (descriptor) Object.defineProperty(dir, key, descriptor); else delete dir[key]; }
+            if (artWait) { dir.artWait.clear(); for (const [key, value] of artWait) dir.artWait.set(key, value); }
           }
         }
       }
-    } else {
-      restoreCheat("maxMonsterDensity");
-      restoreCheat("maxMonsterDensityDirector");
-    }
+    } else densityNextAt = 0;
 
     // 6. 一般怪物全部變成精英以上等級：直接改寫現有怪物的等級與倍率，沒有全域設定可還原；關閉後已生成的怪維持精英等級（不還原），只是之後不再套用。
     if (settings.cheat.allElites) {
@@ -2254,7 +2241,8 @@
         g.build.skips = 99;
         g.build.banishes = 99;
       }
-      if (g.save?.ranks) {
+      // 線上存檔模式下只保留執行期 g.build（本局有效），不改寫 g.save.ranks。
+      if (!isOnline && g.save?.ranks) {
         g.save.ranks.rerolls = Math.max(g.save.ranks.rerolls || 0, 999);
       }
       if (g.state === "levelUp") {
@@ -2496,14 +2484,14 @@
   function showTab(name) { for (const [k, el] of Object.entries(panes)) el.hidden = k !== name; for (const b of root.querySelectorAll("[data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === name)); }
   for (const b of root.querySelectorAll("[data-tab]")) b.onclick = () => showTab(b.dataset.tab);
   function field(path, label, choices) {
-    const row = document.createElement("label"), text = document.createElement("span"); text.textContent = label;
+    const row = document.createElement("label"), text = document.createElement("span"); text.textContent = label; text.dataset.baseLabel = label;
     const toggle = !choices && typeof get(path) === "boolean";
     const input = document.createElement(toggle ? "button" : choices ? "select" : "input");
     input.dataset.setting = path; input.id = "setting-" + path.replaceAll(".", "-"); text.id = input.id + "-label";
     input.setAttribute("aria-labelledby", text.id); row.htmlFor = input.id;
     if (toggle) {
       input.type = "button"; input.className = "toggle"; input.setAttribute("role", "switch");
-      input.addEventListener("click", () => { put(path, !get(path)); release(); save(true); });
+      input.addEventListener("click", () => { if (onlineSave() && ONLINE_DISABLED_CHEATS.has(path)) return; put(path, !get(path)); release(); save(true); });
     } else {
       if (choices) for (const [value, label] of choices) { const option = document.createElement("option"); option.value = value; option.textContent = label; input.append(option); }
       else { input.type = "number"; const [min, max] = bounds[path]; input.min = min; input.max = max; input.step = path.endsWith("Sec") || path.endsWith("Factor") ? "0.1" : "1"; }
@@ -2543,8 +2531,6 @@
   field("cheat.allElites", "一般怪物全部變成精英以上等級（全圖小怪升階為金/藍怪）");
   group("流程與掉落修改");
   field("cheat.forgeMax", "燃燒的恐懼精華數量 99（虛擬精華，不放實體物品，淬鍊時自動補足）");
-  field("cheat.forgeLocal", "淬鍊與地獄熔爐本地化（不連伺服器，本機直接算出結果，不受限流；機率同原版）");
-  field("cheat.forgeLocalSure", "本地淬鍊必定成功、地獄熔爐必定倍增（需開啟本地化；自動淬鍊只會淬到你設定的目標屬性）");
   field("cheat.larzukMax", "拉蘇克精華數量 99（放入個人倉庫，可用來增加物品鑲孔）");
   field("cheat.pauseStageTime", "關卡時間暫停（本關計時不前進，可一直戰鬥刷怪）");
   field("cheat.summonAllBosses", "關卡內持續召喚頭目（輪流召喚鑰匙頭目、各幕首領與 Uber 首領 Lilith、Duriel、Izual；Uber 首領掉器官，恐懼階中鑰匙可掉落）");
@@ -2564,10 +2550,21 @@
   }
   function refreshControls() {
     applyModeVisibility();
+    const isOnline = onlineSave();
     for (const [path, input] of controls) {
+      const labelEl = root.getElementById(input.id + "-label");
+      const baseLabel = labelEl?.dataset.baseLabel || "";
       if (input.getAttribute("role") === "switch") {
-        input.setAttribute("aria-checked", String(get(path)));
-        input.textContent = get(path) ? "開啟" : "關閉";
+        const disabledInOnline = isOnline && ONLINE_DISABLED_CHEATS.has(path);
+        const on = !disabledInOnline && !!get(path);
+        input.disabled = disabledInOnline;
+        input.setAttribute("aria-disabled", String(disabledInOnline));
+        input.setAttribute("aria-checked", String(on));
+        input.textContent = on ? "開啟" : "關閉";
+        if (labelEl) {
+          const nextLabel = disabledInOnline ? baseLabel + "（線上存檔不可用）" : isOnline && path === "cheat.infiniteRerolls" ? baseLabel + "（本局有效）" : baseLabel;
+          if (labelEl.textContent !== nextLabel) labelEl.textContent = nextLabel;
+        }
       } else {
         input.value = String(get(path));
       }
@@ -2594,6 +2591,7 @@
   window.addEventListener("pointerdown", manual, { capture: true, signal: abort.signal }); window.addEventListener("blur", release, { signal: abort.signal }); document.addEventListener("visibilitychange", release, { signal: abort.signal });
   const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
   const setDisplay = (el, show) => { const v = show ? "block" : "none"; if (el.style.display !== v) el.style.display = v; };
+  let lastSaveMode = saveMode();
   const timer = setInterval(() => {
     if (!alive) return;
     checkRetreat(performance.now());
@@ -2611,6 +2609,8 @@
     setText(statusLine, ((settings.progressEnabled ? "【" + modeLabel() + "】" : "") + lastAction));
     if (!menuOpen || editorOpen) panel.hidden = true;
     if (!game) guarded(null, performance.now());
+    const curSaveMode = saveMode();
+    if (curSaveMode !== lastSaveMode) { lastSaveMode = curSaveMode; refreshControls(); }
     if (panel.hidden) return;
     const s = readState(game);
     setText(status, (["戰鬥輔助：" + (settings.enabled ? "啟用" : "關閉") + "／自動戰鬥：" + (settings.progressEnabled ? "啟用（" + modeLabel() + "）" : "關閉"), game ? questLine(game) : "", game ? "掛鉤：原版 Game／" + game.state : hookNote, s.hp ? `生命：${Math.ceil(s.hp.now)}／${Math.ceil(s.hp.max)}` : "生命：無法讀取", s.mp ? `魔力：${Math.ceil(s.mp.now)}／${Math.ceil(s.mp.max)}` : "魔力：未啟用或無法讀取", game?.kit?.id ? "職業：" + ({ amazon: "亞馬遜", assassin: "刺客", barbarian: "野蠻人", druid: "德魯伊", necromancer: "死靈法師", paladin: "聖騎士", sorceress: "法師" }[game.kit.id] || game.kit.id) + "（" + (isMelee() ? "近戰" : "遠程") + "）" : "", game?.world?.terror ? "恐怖層數：" + game.world.terror.tier : "", "最近動作：" + lastAction, storageNote].filter(Boolean).join("\n")));
@@ -2619,6 +2619,8 @@
     destroy() { if (!alive) return; alive = false; virtualEss.restore?.(); cleanupVirtualEssence(game); restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); setPickupRadius(pickupOwner, false); release(); abort.abort(); clearInterval(timer); for (const restore of restores.reverse()) restore(); launcher.remove(); stopButton.remove(); statusLine.remove(); host.remove(); if (window.__d2autobot === api) delete window.__d2autobot; }, stop,
     diagnostics: () => ({ hellClears, h4: (() => { try { return h4Info(game); } catch { return null; } })(), hookUrl, hookNote, connected: !!game, state: game?.state ?? null, lastAction, storageNote, quests: (() => { try { const q = questSnapshot(game); return { line: questLine(game), done: q.done, total: q.total, pending: q.pending, cain: q.cain }; } catch { return null; } })(), gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() }),
     get game() { return game; },
+    saveMode,
+    onlineSave,
     virtualEssence: virtualEssenceOn,
     get settings() { return settings; },
     // 測試用（唯讀）：離線／實機評估自動配裝時直接呼叫評分與挑選函式。

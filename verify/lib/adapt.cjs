@@ -41,7 +41,14 @@ function analyze(build, snapshotRoot) {
 
 // 根目錄是唯一來源（editor/ 已不再有副本），版本常數與檔名只改根目錄。
 const NAME_FILES = () => [path.join(P.root, "helper", "autobot.js"), path.join(P.root, "helper", "tests", "autobot.cjs")].filter((f) => fs.existsSync(f));
-const BUILD_FILES = () => [path.join(P.root, "helper", "autobot.js"), path.join(P.root, "helper", "selfcheck.js"), path.join(P.root, "modifier", "editor.html")].filter((f) => fs.existsSync(f));
+const BUILD_FILES = () => [
+  path.join(P.root, "helper", "autobot.js"),
+  path.join(P.root, "helper", "selfcheck.js"),
+  path.join(P.root, "modifier", "editor.html"),
+  path.join(P.root, "guard", "guard.js"),
+  path.join(P.root, "guard", "guard.html"),
+  path.join(P.root, "guard", "save-check.js"),
+].filter((f) => fs.existsSync(f));
 
 // 把檔案內寫死的 itemArt-／saveTransfer- 檔名換成新版；回傳實際改了哪些檔（先備份）。
 function applyNames(roles, backupDir) {
