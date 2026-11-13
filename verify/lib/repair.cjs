@@ -7,9 +7,26 @@ const adapt = require("./adapt.cjs");
 const MODEL = process.env.VERIFY_MODEL || "laguna-xs-2.1:latest";
 const HOST = "http://127.0.0.1:11434";
 // 絕不碰測試檔、遊戲快照、存檔、驗證腳本本身（避免「改測試讓它通過」）。
-const EDITABLE = new Set(["autobot.js", "d2edit.js", "patch.js", "engine-page.js", "engine.js", "webapi.js", "core.js", "lang.js", "main.js", "signatures.json"]);
+const EDITABLE = new Set([
+  "autobot.js", "d2edit.js", "patch.js", "engine-page.js", "engine.js",
+  "webapi.js", "core.js", "lang.js", "main.js", "signatures.json",
+  "guard.js", "save-check.js",
+]);
 // 檔名 → 根目錄的唯一來源位置（editor/ 只剩啟動器檔案）。修補時一律改這裡的檔案。
-const WHERE = { "autobot.js": ["helper", "autobot.js"], "d2edit.js": ["d2edit.js"], "patch.js": ["modifier", "patch.mjs"], "engine-page.js": ["modifier", "engine-page.js"], "engine.js": ["editor", "engine.js"], "webapi.js": ["modifier", "webapi.js"], "core.js": ["editor", "core.js"], "lang.js": ["lang", "lang.js"], "main.js": ["editor", "main.js"], "signatures.json": ["modifier", "signatures.json"] };
+const WHERE = {
+  "autobot.js": ["helper", "autobot.js"],
+  "d2edit.js": ["d2edit.js"],
+  "patch.js": ["modifier", "patch.mjs"],
+  "engine-page.js": ["modifier", "engine-page.js"],
+  "engine.js": ["editor", "engine.js"],
+  "webapi.js": ["modifier", "webapi.js"],
+  "core.js": ["editor", "core.js"],
+  "lang.js": ["lang", "lang.js"],
+  "main.js": ["editor", "main.js"],
+  "signatures.json": ["modifier", "signatures.json"],
+  "guard.js": ["guard", "guard.js"],
+  "save-check.js": ["guard", "save-check.js"],
+};
 const where = (name) => path.join(P.root, ...WHERE[name]);
 
 async function ensureServer() {

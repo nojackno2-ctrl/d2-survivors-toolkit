@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, Menu } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const core = require("./core");
@@ -66,23 +66,42 @@ ipcMain.handle("importSave", wrap(async () => {
   checkSave(save);
   return { save, path: r.filePaths[0] };
 }));
+ipcMain.handle("guardStatus", wrap(() => core.guardStatus()));
+ipcMain.handle("saveMode", wrap(() => core.saveMode()));
+ipcMain.handle("setSaveMode", wrap(() => core.setSaveMode()));
+ipcMain.handle("close", wrap(() => {
+  void loadPage(remote.PAGE);
+  return { ok: true };
+}));
+ipcMain.handle("openGuard", wrap((m) => {
+  void loadPage(remote.GUARD_PAGE, m ? { mode: mode(m) } : undefined);
+  return { ok: true };
+}));
 
 const isWeb = (url) => /^https?:/i.test(url);
-function openOffline(err) {
-  const page = remote.PAGE.replace(/"/g, "&quot;");
+function openOffline(err, target = remote.PAGE) {
+  const page = target.replace(/"/g, "&quot;");
   const html = `<!doctype html><meta charset="utf-8"><body style="background:#14110d;color:#e8dcc0;font-family:sans-serif;padding:24px">
 <h2>無法載入工具包</h2><p>${en() ? "Cannot load the toolkit from GitHub." : "無法從 GitHub 載入工具包，請檢查網路後重試。"}</p>
 <p style="color:#9d8f73">${String(err.message).replace(/</g, "&lt;")}</p><p><a style="color:#e8c46a" href="${page}">重新載入 / Retry</a></p></body>`;
   return win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
 }
+function loadPage(target = remote.PAGE, opts) {
+  const base = target === "guard" || target === remote.GUARD_PAGE ? remote.GUARD_PAGE : remote.PAGE;
+  return win.loadURL(remote.pageUrl(base, opts)).catch((err) => openOffline(err, base));
+}
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: en() ? "Save Editor" : "存檔修改器", click: () => loadPage(remote.PAGE) },
+    { label: en() ? "Save Check & Guard" : "存檔檢查與防護", click: () => loadPage(remote.GUARD_PAGE) },
+  ]));
   win = new BrowserWindow({
     width: 1240,
     height: 880,
     title: en() ? "D2 Survivors Toolkit" : "D2倖存者工具包",
     backgroundColor: "#14110d",
-    autoHideMenuBar: true,
+    autoHideMenuBar: false,
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   // 頁面只能停留在工具包網站；其他連結交給系統瀏覽器
@@ -96,6 +115,6 @@ app.whenReady().then(() => {
     return { action: "deny" };
   });
   // ?v= 避開 Pages 約 10 分鐘的快取，避免舊的修改器頁面搭配新的引擎檔
-  win.loadURL(remote.PAGE + "?v=" + Date.now()).catch(openOffline);
+  loadPage(remote.PAGE);
 });
 app.on("window-all-closed", () => app.quit());

@@ -4,6 +4,7 @@
 //   node verify/auto.cjs              有新版才跑；通過即自動發布（網頁版，不打包 exe）
 //   node verify/auto.cjs --force      版本沒變也重跑
 //   node verify/auto.cjs --no-publish 只驗證不發布
+//   node verify/auto.cjs --accept-detection 接受官方偵測掃描差異並允許自動發布
 // 安全閘：任一步失敗就停（不發布，留故障單）；啟動時工作目錄已有未提交修改（他人進行中的工作）也不發布。
 const fs = require("node:fs"), path = require("node:path"), { spawnSync } = require("node:child_process");
 const { P, readJson, writeJson, state } = require("./lib/util.cjs");
@@ -58,7 +59,25 @@ async function main() {
     const dirty = git("status", "--porcelain", "--untracked-files=no").split(/\r?\n/).filter(Boolean);
     result.dirtyAtStart = dirty;
 
-    const v = node("verify.cjs", ["--update", ...(has("force") || verified === latest.build ? ["--force"] : [])]);
+    const v = node("verify.cjs", [
+      "--update",
+      ...(has("force") || verified === latest.build ? ["--force"] : []),
+      ...(has("accept-detection") ? ["--accept-detection"] : []),
+    ]);
+    const latestReport = readJson(path.join(P.reports, "latest.json"), null);
+    if (latestReport?.detection) result.detection = latestReport.detection;
+    if (result.detection?.onlineSaveSuspected) {
+      step("官方偵測掃描（detection-scan）", false, "疑似線上存檔：遊戲可能推出線上存檔，需使用者決定！");
+      throw new Error("【阻擋】遊戲可能推出線上存檔，需使用者決定！已立即停止更新流程。");
+    }
+    const det = result.detection;
+    const detDesc = !det || det.status === "skipped"
+      ? (det?.summary || "工具未就緒，已略過")
+      : det.changed
+        ? (det.accepted || has("accept-detection") ? `發現差異（已人工確認）：\n${det.summary}` : `發現差異（需人工確認，不自動發布）：\n${det.summary}`)
+        : "無差異";
+    step("官方偵測掃描（detection-scan）", !det?.onlineSaveSuspected, detDesc);
+
     step("下載快照、自動適配與回歸測試（verify --update）", v.ok, v.out);
     if (!v.ok) throw new Error("回歸測試失敗，見 verify/reports/ticket.json");
     if (state().lastVerified?.build !== latest.build) throw new Error("驗證未記錄新版（可能未選到測試），請人工檢查 verify/reports/latest.json");
@@ -67,10 +86,20 @@ async function main() {
     step("官方網址實機煙霧測試（live-smoke）", s.ok, s.out);
     if (!s.ok) throw new Error("實機煙霧測試失敗，見 verify/reports/live.json");
 
+    const roles = node(path.join("lib", "live-roles.cjs"), ["--timeout", "300"], 360000);
+    step("實機角色與防護驗證（toolkit-roles-live）", roles.ok, roles.out);
+    if (!roles.ok) throw new Error("實機角色與防護驗證失敗，見 verify/reports/live-roles.json");
+
     result.newContent = newContentReport(latest.build);
     step("整理新內容清單（reports/new-content.md）", true, JSON.stringify(result.newContent));
 
     if (has("no-publish")) { result.ok = true; result.published = false; return; }
+    if (result.detection?.changed && !result.detection?.accepted && !has("accept-detection")) {
+      result.ok = true; result.published = false;
+      result.note = "偵測掃描發現差異，需人工確認後方可發布（可指定 --accept-detection 旗標略過阻擋）";
+      console.log(result.note);
+      return;
+    }
     const branch = git("rev-parse", "--abbrev-ref", "HEAD");
     if (branch !== "main") { result.ok = true; result.published = false; result.note = `目前在分支 ${branch}，只在 main 自動發布`; console.log(result.note); return; }
     if (dirty.length) { result.ok = true; result.published = false; result.note = "啟動時工作目錄有未提交修改，為保護進行中的工作未自動發布：" + dirty.join("、"); console.log(result.note); return; }
@@ -84,7 +113,7 @@ async function main() {
     if (result.build && (result.steps.length || result.error)) {
       writeJson(path.join(P.reports, "auto.json"), result);
       const n = result.newContent;
-      const line = `- ${stamp()} 遊戲 ${result.build}：${result.ok ? (result.published ? "已自動相容並發布" : "相容驗證通過，未發布" + (result.note ? "（工作目錄有未提交修改）" : "")) : "失敗：" + result.error}${n ? `；新內容 ${n.pending} 條、新增未翻譯 ${n.untranslated} 項` : ""}`;
+      const line = `- ${stamp()} 遊戲 ${result.build}：${result.ok ? (result.published ? "已自動相容並發布" : "相容驗證通過，未發布" + (result.note ? "（" + result.note + "）" : "")) : "失敗：" + result.error}${n ? `；新內容 ${n.pending} 條、新增未翻譯 ${n.untranslated} 項` : ""}`;
       fs.appendFileSync(LOG, (fs.existsSync(LOG) ? "" : "# 自動更新紀錄\n\n") + line + "\n");
       console.log(line);
       notify(result.ok ? "D2 工具包：已相容新版" : "D2 工具包：自動更新失敗", line.slice(2, 200));

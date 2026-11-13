@@ -1,0 +1,412 @@
+{
+  "build": "20261105.3",
+  "generatedAt": "2026-11-13T02:15:37.322Z",
+  "apiPaths": [
+    "/api/leaderboard",
+    "/api/leaderboard/boards/${e}",
+    "/api/leaderboard/checks",
+    "/api/leaderboard/deaths",
+    "/api/leaderboard/forge",
+    "/api/leaderboard/hc/act",
+    "/api/leaderboard/hc/checkin",
+    "/api/leaderboard/hc/checkout",
+    "/api/leaderboard/hc/deaths",
+    "/api/leaderboard/hc/heroes",
+    "/api/leaderboard/hc/ladder",
+    "/api/leaderboard/hc/runs",
+    "/api/leaderboard/players",
+    "/api/leaderboard/runs",
+    "/api/leaderboard/runs/${e}",
+    "/api/leaderboard/tiers",
+    "/api/report"
+  ],
+  "storageKeys": [
+    "d2-survivors/audio/v1",
+    "d2-survivors/audio/v2",
+    "d2-survivors/class/v1",
+    "d2-survivors/hc/before-fresh-start",
+    "d2-survivors/hc/before-import",
+    "d2-survivors/hc/class/v1",
+    "d2-survivors/hc/graves",
+    "d2-survivors/hc/save-copies",
+    "d2-survivors/hc/v1",
+    "d2-survivors/hc/v1/",
+    "d2-survivors/mode/v1",
+    "d2-survivors/play",
+    "d2-survivors/save-copies",
+    "d2-survivors/save/before-fresh-start",
+    "d2-survivors/save/before-import",
+    "d2-survivors/save/v1",
+    "d2-survivors/save/v1/",
+    "d2-survivors/whats-new/seen",
+    "d2s:act${n.act+1}",
+    "d2s:auto-stats",
+    "d2s:automap",
+    "d2s:camp",
+    "d2s:camp-after-reload",
+    "d2s:campfire",
+    "d2s:continue-after-reload",
+    "d2s:cows",
+    "d2s:display-looped",
+    "d2s:files",
+    "d2s:keys",
+    "d2s:lang",
+    "d2s:leaderboard-checks",
+    "d2s:leaderboard-dev",
+    "d2s:leaderboard-held",
+    "d2s:leaderboard-queue",
+    "d2s:leaderboard-wait",
+    "d2s:menu",
+    "d2s:own-files-reloaded",
+    "d2s:own-files-told",
+    "d2s:pad",
+    "d2s:play",
+    "d2s:report-queue",
+    "d2s:run",
+    "d2s:saves-exported",
+    "d2s:saves-exported-steps",
+    "d2s:session-trail",
+    "d2s:show-damage",
+    "d2s:show-items",
+    "d2s:skill-effects",
+    "d2s:stale-items",
+    "d2s:stat-ranges",
+    "d2s:title",
+    "d2s:tristram",
+    "d2s:wasdNote",
+    "d2s:weather"
+  ],
+  "sealKeys": [
+    "d2s-climb/1|",
+    "d2s-leaderboard-hero:",
+    "d2s-leaderboard:",
+    "d2s-life/1|",
+    "d2s/late-checks/1:Bloodwitch-Fangskin-Witchmaker-Stormtree-Hephasto",
+    "d2s/save-seal/1:Rakanishu-Bishibosh-Coldcrow-Griswold-Pindleskin",
+    "d2s/save-seal/hc/1:Blood-Raven-Treehead-Woodfist-Coldworm-Andariel"
+  ],
+  "nativeChecks": [
+    "Storage.setItem",
+    "WeakMap.get",
+    "addEventListener",
+    "devicePixelRatio",
+    "drawImage",
+    "putImageData",
+    "requestAnimationFrame"
+  ],
+  "restrictedParams": [
+    "act",
+    "affixes",
+    "autosell",
+    "carry",
+    "chase",
+    "checkpoints",
+    "class",
+    "clone",
+    "counts",
+    "cow",
+    "difficulty",
+    "farm",
+    "first",
+    "god",
+    "hireall",
+    "inifuss",
+    "keys",
+    "mana",
+    "manacost",
+    "manakit",
+    "manaregen",
+    "manathrottle",
+    "merc",
+    "mercgear",
+    "mercpicks",
+    "mercranks",
+    "mf",
+    "modpoints",
+    "power",
+    "probe",
+    "replay",
+    "shard",
+    "shards",
+    "slots",
+    "smoke",
+    "speed",
+    "t",
+    "terror",
+    "thief",
+    "uber"
+  ],
+  "uploadFields": [
+    "debug",
+    "edited",
+    "imported",
+    "offRecord",
+    "rechecked",
+    "restored",
+    "tainted",
+    "unranked"
+  ],
+  "notes": [
+    "debug",
+    "edited",
+    "imported",
+    "offRecord",
+    "rechecked",
+    "restored",
+    "tainted",
+    "unranked"
+  ],
+  "onlineSaveHints": [],
+  "files": [
+    {
+      "file": "assets/BitmapFont-9vFB1qJ-.js",
+      "size": 33360,
+      "sha256": "67691aa59374"
+    },
+    {
+      "file": "assets/BitmapFont-BqjOtJ7t.js",
+      "size": 54,
+      "sha256": "a009754df2ed"
+    },
+    {
+      "file": "assets/browserAll-DAVNiqYI.js",
+      "size": 43523,
+      "sha256": "7e772b7f1eea"
+    },
+    {
+      "file": "assets/Cache-D0EC7riK.js",
+      "size": 1100,
+      "sha256": "dbabb6e1f43e"
+    },
+    {
+      "file": "assets/CanvasPool-CTz6W2rm.js",
+      "size": 71187,
+      "sha256": "0dbc5a71c65d"
+    },
+    {
+      "file": "assets/CanvasRenderer-CcIX4wQS.js",
+      "size": 27097,
+      "sha256": "a80a684aaa8a"
+    },
+    {
+      "file": "assets/CanvasRenderer-DEDthYdj.js",
+      "size": 62,
+      "sha256": "2a538c86ecf9"
+    },
+    {
+      "file": "assets/canvasUtils-B5KrsTsU.js",
+      "size": 6011,
+      "sha256": "572546d1625d"
+    },
+    {
+      "file": "assets/chains-CCI1uqG2.js",
+      "size": 530,
+      "sha256": "3787668d882a"
+    },
+    {
+      "file": "assets/choice-Dmq6GBHW.js",
+      "size": 432,
+      "sha256": "daf7fd76323c"
+    },
+    {
+      "file": "assets/d2url-D2-R-aUr.js",
+      "size": 728,
+      "sha256": "3ac7884e83dd"
+    },
+    {
+      "file": "assets/defaultFilter.vert-BgFRsrWN.js",
+      "size": 24425,
+      "sha256": "d928637a3b53"
+    },
+    {
+      "file": "assets/dom-Cj3AqyVD.js",
+      "size": 974,
+      "sha256": "9d14fee979c9"
+    },
+    {
+      "file": "assets/Filter-S41svb1h.js",
+      "size": 41958,
+      "sha256": "58654ec10be6"
+    },
+    {
+      "file": "assets/Game-DPAk-Rvc.js",
+      "size": 425209,
+      "sha256": "b765bef5963d"
+    },
+    {
+      "file": "assets/game-DQod_2Te.js",
+      "size": 18142,
+      "sha256": "45d514d6bfbb"
+    },
+    {
+      "file": "assets/GCManagedHash-Bzd2gb8m.js",
+      "size": 19354,
+      "sha256": "13b576b994ae"
+    },
+    {
+      "file": "assets/getTexelRangeRects-BPmSyZoz.js",
+      "size": 11358,
+      "sha256": "c4aeec97014b"
+    },
+    {
+      "file": "assets/getTextureBatchBindGroup-BOmbyaNZ.js",
+      "size": 344,
+      "sha256": "06c699beb10c"
+    },
+    {
+      "file": "assets/GraphicsContext-DxJOD84P.js",
+      "size": 61680,
+      "sha256": "f0de011d94ab"
+    },
+    {
+      "file": "assets/init-DgqmsVnD.js",
+      "size": 14626,
+      "sha256": "559667953353"
+    },
+    {
+      "file": "assets/itemArt-BPHOVK4V.js",
+      "size": 984004,
+      "sha256": "46a3e0d60658"
+    },
+    {
+      "file": "assets/ko-B8ZDF7i7.js",
+      "size": 1015438,
+      "sha256": "26baa72acf4c"
+    },
+    {
+      "file": "assets/lang-DYLSqVI3.js",
+      "size": 2136,
+      "sha256": "c6127ab33079"
+    },
+    {
+      "file": "assets/moved-COKqX8rC.js",
+      "size": 2859,
+      "sha256": "567902b5c79e"
+    },
+    {
+      "file": "assets/pack-_pWog-fz.js",
+      "size": 34893,
+      "sha256": "e75b05998e24"
+    },
+    {
+      "file": "assets/plain-piMHWqUW.js",
+      "size": 3451,
+      "sha256": "4ff95b334bb5"
+    },
+    {
+      "file": "assets/preload-helper-CRzLMJPS.js",
+      "size": 1534,
+      "sha256": "bcc465e3e61d"
+    },
+    {
+      "file": "assets/previewStorage-P2Xu9kJm.js",
+      "size": 670,
+      "sha256": "418c206484b8"
+    },
+    {
+      "file": "assets/record-DrVu4-5r.js",
+      "size": 12818,
+      "sha256": "e70aa5522822"
+    },
+    {
+      "file": "assets/RenderTargetSystem-BH3KfuEA.js",
+      "size": 58815,
+      "sha256": "2ff361f68a63"
+    },
+    {
+      "file": "assets/report-CrYJ-Jms.js",
+      "size": 2402,
+      "sha256": "ecb0ac7bf7c8"
+    },
+    {
+      "file": "assets/report-qBYpdFlM.js",
+      "size": 133723,
+      "sha256": "d2630c61e5b8"
+    },
+    {
+      "file": "assets/saveTransfer-BTsCILil.js",
+      "size": 367522,
+      "sha256": "aae94e095166"
+    },
+    {
+      "file": "assets/screens-CiqkX-O5.js",
+      "size": 56542,
+      "sha256": "97e51e3c40fc"
+    },
+    {
+      "file": "assets/site-B7d7CF4u.js",
+      "size": 1271,
+      "sha256": "28d48169d333"
+    },
+    {
+      "file": "assets/surface-CicdxE2Q.js",
+      "size": 14007,
+      "sha256": "526ac4221194"
+    },
+    {
+      "file": "assets/translate-DtcjbHwp.js",
+      "size": 3447,
+      "sha256": "c2c58803a5d7"
+    },
+    {
+      "file": "assets/ui-C7B1Ywhs.js",
+      "size": 59065,
+      "sha256": "ceec68426f38"
+    },
+    {
+      "file": "assets/uniquesTab-C3Wez90c.js",
+      "size": 5611,
+      "sha256": "4e176b9b95d0"
+    },
+    {
+      "file": "assets/WebGLRenderer-BqF49RUY.js",
+      "size": 60,
+      "sha256": "40638e70d54a"
+    },
+    {
+      "file": "assets/WebGLRenderer-C0JkMGpO.js",
+      "size": 72834,
+      "sha256": "057a029766a6"
+    },
+    {
+      "file": "assets/WebGPURenderer-BEWLab2H.js",
+      "size": 62,
+      "sha256": "c3450f017dab"
+    },
+    {
+      "file": "assets/WebGPURenderer-BLPjHDxc.js",
+      "size": 55179,
+      "sha256": "80de219e5734"
+    },
+    {
+      "file": "assets/webworkerAll-DjrneVqi.js",
+      "size": 68,
+      "sha256": "aa6456465c0d"
+    },
+    {
+      "file": "assets/whatsNew-B0EnB46m.js",
+      "size": 1699,
+      "sha256": "043a5070905e"
+    },
+    {
+      "file": "changelog.json",
+      "size": 227948,
+      "sha256": "4b59d33e25ae"
+    },
+    {
+      "file": "index.json",
+      "size": 7577,
+      "sha256": "9fdc0cbe916a"
+    },
+    {
+      "file": "itemstats-e5c2201b48.json",
+      "size": 1156480,
+      "sha256": "b8ab26f572b0"
+    },
+    {
+      "file": "play.html",
+      "size": 29166,
+      "sha256": "a8090abc0d16"
+    }
+  ]
+}

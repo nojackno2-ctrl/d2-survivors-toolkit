@@ -62,12 +62,13 @@ app.whenReady().then(async () => {
       toggle("cheat.forgeMax", true); toggle("cheat.enabled", true); await sleep(2000);
       // H_LOCAL=1：本地化＋必定成功（總開關保持開啟），其餘屬性設為 X，驗證只淬到指定屬性
       const local = ${JSON.stringify(process.env.H_LOCAL || "")} === "1";
-      if (local) { toggle("cheat.forgeMax", false); toggle("cheat.forgeLocal", true); toggle("cheat.forgeLocalSure", true); } else toggle("cheat.enabled", false);
+      if (local) { toggle("cheat.forgeMax", false); window.__d2forgeLocal.set({ enabled: true, sure: true }); } else toggle("cheat.enabled", false);
       await sleep(1000);
       const items = [JSON.parse(${JSON.stringify(process.env.H_ITEM_JSON || "null")}), JSON.parse(${JSON.stringify(process.env.H_ITEM2_JSON || "null")})].filter(Boolean);
       if (!items.length) throw new Error("缺少 H_ITEM");
       g.save.inventoryByClass = g.save.inventoryByClass || {};
       g.save.inventoryByClass[cls] = g.save.inventoryByClass[cls] || [];
+      g.save.inventoryByClass[cls].push({ id: "test_essence_" + Date.now(), type: "essence", base: essenceName, name: essenceName, count: 99 });
       for (const it of items) g.save.inventoryByClass[cls].push(it);
       const slots = items.map((it, k) => {
         const lines = window.__d2autoforgeUI.lines(it.id);

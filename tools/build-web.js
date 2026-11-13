@@ -12,7 +12,23 @@ if (!host || !/^https?:\/\/.+\/$/.test(host)) {
   process.exit(1);
 }
 // 先確認來源齊全，避免寫到一半才發現缺檔
-const SOURCES = ["d2edit.js", "modifier/editor.html", "site/install.template.html", "editor/package.json", "helper/autobot.js", "helper/forge-local.js", "helper/autoforge.js", "helper/autoforge-ui.js", "helper/stash-sort.js", "helper/selfcheck.js", "lang/zh-TW.json", "modifier/signatures.json"];
+const SOURCES = [
+  "d2edit.js",
+  "guard/guard.js",
+  "guard/guard.html",
+  "guard/save-check.js",
+  "modifier/editor.html",
+  "site/install.template.html",
+  "editor/package.json",
+  "helper/autobot.js",
+  "helper/forge-local.js",
+  "helper/autoforge.js",
+  "helper/autoforge-ui.js",
+  "helper/stash-sort.js",
+  "helper/selfcheck.js",
+  "lang/zh-TW.json",
+  "modifier/signatures.json",
+];
 for (const f of SOURCES) {
   if (!fs.existsSync(path.join(root, f)) || !fs.statSync(path.join(root, f)).isFile()) throw new Error("缺少建置來源：" + f);
 }

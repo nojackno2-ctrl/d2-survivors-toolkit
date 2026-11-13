@@ -52,6 +52,7 @@ if (has("desktop") && next === pkg.version) { console.error("桌面版發布需�
 const RELEASE_PATHS = new Set([
   "AI_HANDOFF.md", "README.md", "d2edit.js", "index.html", "version.json", ".nojekyll",
   "helper/autobot.js", "helper/selfcheck.js", "helper/tests/autobot.cjs", "helper/tests/selfcheck.cjs",
+  "guard/guard.js", "guard/guard.html", "guard/save-check.js",
   "lang/lang.js", "lang/d2rfont.js", "lang/zh-TW.json", "lang/tests/test_lang.cjs",
   "modifier/editor.html", "modifier/gamedata.json", "modifier/patch.mjs", "modifier/signatures.json", "modifier/webapi.js", "modifier/zh.js", "modifier/engine-page.js",
   "modifier/tests/weapon-sets.cjs", "modifier/tests/weapon-sets-ui.cjs", "modifier/tests/version-gate-web.cjs",
@@ -82,9 +83,12 @@ if (!has("auto")) {
 const bump = () => {
   if (next === pkg.version) return;
   pkg.version = next; fs.writeFileSync(pkgFile, JSON.stringify(pkg, null, 2) + "\n");
-  for (const f of ["modifier/editor.html"]) {
-    const p = path.join(P.root, f), s = fs.readFileSync(p, "utf8");
-    fs.writeFileSync(p, s.replace(/(const TOOLKIT_VERSION = ")[^"]*(")/, `$1${next}$2`));
+  for (const f of ["modifier/editor.html", "guard/guard.html", "guard/guard.js"]) {
+    const p = path.join(P.root, f);
+    if (!fs.existsSync(p)) continue;
+    const s = fs.readFileSync(p, "utf8");
+    const replaced = s.replace(/(const TOOLKIT_VERSION = ")[^"]*(")/g, `$1${next}$2`);
+    if (replaced !== s) fs.writeFileSync(p, replaced);
   }
 };
 

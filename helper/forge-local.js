@@ -50,8 +50,24 @@
     else return reject("refused");
     return { status: 200, body: { ok: true, outcome, ...(line ? { line } : {}), forge: f } };
   }
-  const settings = () => root.__d2autobot?.settings?.cheat;
-  const enabled = () => !!(settings()?.enabled && settings()?.forgeLocal);
+  const SETTINGS = "d2forgeLocal.settings", LEGACY = "d2autobot:settings";
+  let config = { enabled: false, sure: false };
+  try {
+    const saved = root.localStorage.getItem(SETTINGS);
+    const old = JSON.parse(root.localStorage.getItem(LEGACY) || "{}");
+    const source = saved === null ? { enabled: old.cheat?.forgeLocal, sure: old.cheat?.forgeLocalSure } : JSON.parse(saved);
+    config = { enabled: source?.enabled === true, sure: source?.sure === true };
+    if (saved === null) root.localStorage.setItem(SETTINGS, JSON.stringify(config));
+    if (old.cheat && ("forgeLocal" in old.cheat || "forgeLocalSure" in old.cheat)) {
+      delete old.cheat.forgeLocal; delete old.cheat.forgeLocalSure;
+      root.localStorage.setItem(LEGACY, JSON.stringify(old));
+    }
+  } catch {}
+  const settings = () => ({ ...config });
+  const set = (patch) => { for (const key of ["enabled", "sure"]) if (typeof patch?.[key] === "boolean") config[key] = patch[key]; try { root.localStorage.setItem(SETTINGS, JSON.stringify(config)); } catch {} return settings(); };
+  const online = () => { try { if (root.__d2autobot?.onlineSave?.()) return true; } catch {} try { return root.__d2guard?.saveMode?.() === "online"; } catch { return false; } };
+  const available = () => !online();
+  const enabled = () => available() && config.enabled;
   function items(save) {
     const found = [], seen = new WeakSet();
     function visit(x) { if (!x || typeof x !== "object" || seen.has(x)) return; seen.add(x); if (x.id != null && (x.base || x.type) && (x.rarity || x.forge)) found.push(x); for (const v of Object.values(x)) visit(v); }
@@ -60,6 +76,7 @@
   }
   function handle(body) {
     try {
+      if (online()) return null;
       const act = body.act, item = body.item || {}, id = item.i, book = ledger();
       if ((act === "look" || act === "claim") && !enabled() && !Object.hasOwn(book, id)) return null;
       if (!["look", "claim"].includes(act) && !enabled()) return null;
@@ -72,24 +89,27 @@
       }
       if (!Array.isArray(lines)) lines = root.__d2autoforgeUI?.lines?.(id) || Object.keys(item.f?.t || {});
       const f = act === "look" && Object.hasOwn(book, id) ? book[id] : item.f;
-      const result = decide(act, f, lines, { sure: !!settings()?.forgeLocalSure, want: wantFn?.(id), magic: item.r === "m" || real?.rarity === "magic" });
+      const result = decide(act, f, lines, { sure: config.sure, want: wantFn?.(id), magic: item.r === "m" || real?.rarity === "magic" });
       if (result.status === 200) { stats.local[act]++; if (!["look", "claim"].includes(act)) remember(id, result.body.forge); }
       return result;
     } catch { return reject("refused"); }
   }
   async function restore() {
+    if (online()) return false;
     const g = root.__d2autobot?.game; if (!g?.save) return false;
-    const book = ledger(), all = items(g.save), found = new Set(); let changed = false;
-    for (const item of all) if (Object.hasOwn(book, item.id)) { found.add(String(item.id)); if (JSON.stringify(cleanForge(item.forge)) !== JSON.stringify(book[item.id])) { item.forge = copy(book[item.id]); changed = true; } }
+    const book = ledger(), all = items(g.save), found = new Set(); let changed = false, touched = null;
+    for (const item of all) if (Object.hasOwn(book, item.id)) { found.add(String(item.id)); if (JSON.stringify(cleanForge(item.forge)) !== JSON.stringify(book[item.id])) { item.forge = copy(book[item.id]); changed = true; touched = item; } }
     for (const id of Object.keys(book)) if (!found.has(id)) delete book[id];
     write(book);
-    if (changed) { const backend = root.__d2editBackend; if (!backend?.sealText) throw new Error("無法寫入存檔"); const text = await backend.sealText(g.save); root.localStorage.setItem(g.save.mode === "hc" ? "d2-survivors/hc/v1" : "d2-survivors/save/v1", text); }
+    // 只改記憶體中 g.save 物品的 forge 欄位，不自行簽章或寫入存檔鍵；有 g.moved 時交由遊戲方法落盤，否則由遊戲下次自動存檔帶出。
+    if (changed && touched && typeof g.moved === "function") { try { g.moved(touched); } catch {} }
     return changed;
   }
   function fetchHook(input, init, origFetch) {
     const url = typeof input === "string" || input instanceof URL ? String(input) : input?.url;
     const method = init?.method || input?.method || "GET";
     if (!/\/api\/leaderboard\/forge(?:\?|$)/.test(url || "") || String(method).toUpperCase() !== "POST") return null;
+    if (online()) { stats.passed++; return origFetch(input, init); } // 線上存檔：一律交給真伺服器，不假造任何回應（含無法解析的請求）
     return (async () => {
       let body; try { body = JSON.parse(init?.body != null ? String(init.body) : await input.clone().text()); } catch { body = null; }
       const result = body ? handle(body) : reject("refused");
@@ -99,7 +119,7 @@
       return response;
     })();
   }
-  const api = { version: 1, enabled, handle, decide, restore, ledger: () => copy(ledger()), stats, setWant(fn) { wantFn = typeof fn === "function" ? fn : null; }, fetchHook };
+  const api = { version: 1, settings, set, available, enabled, handle, decide, restore, ledger: () => copy(ledger()), stats, setWant(fn) { wantFn = typeof fn === "function" ? fn : null; }, fetchHook };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root && typeof window !== "undefined") { root.__d2forgeLocal = api; const start = Date.now(); const wait = setInterval(() => { if (root.__d2autobot?.game?.save) { clearInterval(wait); for (const ms of [0, 6000, 25000]) setTimeout(() => restore().catch(() => {}), ms); /* 工具包載入前送出的伺服器同步可能晚到，再還原兩次 */ } else if (Date.now() - start > 30000) clearInterval(wait); }, 250); }
 })(typeof window !== "undefined" ? window : globalThis);

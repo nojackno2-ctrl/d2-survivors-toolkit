@@ -27,11 +27,49 @@ function sealText(save) {
   return body === "{}" ? `{"seal":"${seal}"}` : `${body.slice(0, -1)},"seal":"${seal}"}`;
 }
 function sealState(save) {
+  if (!save || typeof save !== "object") return "broken";
   if (save.seal === undefined) return "none";
   const key = save.mode === "hc" ? MODES.hardcore.seal : MODES.softcore.seal;
   const h = crypto.createHmac("sha256", key).update(JSON.stringify({ ...save, seal: undefined })).digest("hex");
   return h === save.seal ? "sealed" : "broken";
 }
+function sealOf(raw) {
+  if (raw === null || raw === undefined) return null;
+  if (raw === "sealed" || raw === "broken" || raw === "none") return raw;
+  try {
+    const save = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!save || typeof save !== "object" || Array.isArray(save)) return "broken";
+    return sealState(save);
+  } catch {
+    return "broken";
+  }
+}
+function computeSeals(sources = {}) {
+  return {
+    softcore: sealOf(sources?.softcore ?? null),
+    hardcore: sealOf(sources?.hardcore ?? null),
+  };
+}
+function buildGuardStatus(sources = {}) {
+  const raw = sources && typeof sources === "object" && "seals" in sources ? sources.seals : sources;
+  return {
+    version: 1,
+    saveMode: "local",
+    saveModeSource: "default",
+    noUpload: true,
+    leaderboardOff: null,
+    queuePresent: false,
+    blockedUploads: 0,
+    replacedNatives: [],
+    d2zh: false,
+    webdriver: false,
+    restrictedParams: [],
+    seals: computeSeals(raw),
+    desktop: true,
+  };
+}
+const saveMode = () => "local";
+const setSaveMode = () => ({ error: "桌面版只處理本機存檔" });
 
 // Chromium localStorage 值：0x01 + latin1，或 0x00 + UTF-16LE
 const decodeLs = (v) => (v[0] === 1 ? v.subarray(1).toString("latin1") : v.subarray(1).toString("utf16le"));
@@ -191,9 +229,34 @@ function diag() {
   };
 }
 
+// 讀取本機一般／硬核存檔並組裝桌面版防護狀態（無檔為 null，無法開啟資料庫時不拋錯）
+async function guardStatusDb() {
+  const raw = { softcore: null, hardcore: null };
+  let db = null;
+  try {
+    db = await openDb();
+    for (const m of ["softcore", "hardcore"]) {
+      try {
+        raw[m] = decodeLs(await db.get(lsKey(MODES[m].key)));
+      } catch {}
+    }
+  } catch {} finally {
+    if (db) {
+      try { await db.close(); } catch {}
+    }
+  }
+  if (raw.softcore === null && fs.existsSync(SAVE_FILE)) {
+    try { raw.softcore = fs.readFileSync(SAVE_FILE, "utf8"); } catch {}
+  }
+  return buildGuardStatus(raw);
+}
+
 // 所有 localStorage 讀寫排隊執行：頁面啟動的讀取與使用者操作不能同時開啟資料庫（LevelDB 會鎖檔，後到的會失敗）
 let dbQueue = Promise.resolve();
 const queued = (fn) => (...args) => { const run = dbQueue.then(() => fn(...args)); dbQueue = run.catch(() => {}); return run; };
-const load = queued(loadDb), store = queued(storeDb), traces = queued(tracesDb);
+const load = queued(loadDb), store = queued(storeDb), traces = queued(tracesDb), guardStatus = queued(guardStatusDb);
 
-module.exports = { load, store, assets, traces, diag, listBackups, readBackup, deleteBackup, snapshot, readFile, writeFile, sealText, sealState, BACKUP_DIR };
+module.exports = {
+  load, store, assets, traces, diag, listBackups, readBackup, deleteBackup, snapshot, readFile, writeFile,
+  sealText, sealState, sealOf, computeSeals, buildGuardStatus, guardStatus, saveMode, setSaveMode, BACKUP_DIR,
+};

@@ -28,8 +28,9 @@ const goodCtx = () => ({
   let c = goodCtx(); c.engine = async () => { throw new Error("遊戲版本不相容：找不到 makeUnique"); }; c.engineInfo = { missing: ["makeUnique"] };
   r = await runSelfCheck(c); assert.ok(/makeUnique/.test(find(r, "物品引擎", "error").msg), "引擎失敗要列出缺少的特徵");
   c = goodCtx(); c.dict = async () => ({ a: 1 }); r = await runSelfCheck(c); assert.ok(find(r, "字典", "warn"));
-  c = goodCtx(); c.backend.load = async () => ({ save: {}, seal: "broken" }); r = await runSelfCheck(c); assert.ok(find(r, "存檔", "warn"));
-  c = goodCtx(); c.engine = async () => ({ capabilities: () => ({ supported: true, weaponSets: true }), saveFaults: () => ["bad item"] }); r = await runSelfCheck(c); assert.ok(/bad item/.test(find(r, "存檔").msg));
+  c = goodCtx(); c.backend.load = async () => ({ save: {}, seal: "broken" }); r = await runSelfCheck(c); assert.ok(find(r, "存檔", "warn")); assert.ok(/存檔檢查與防護/.test(find(r, "存檔", "warn").msg));
+  c = goodCtx(); c.engine = async () => ({ capabilities: () => ({ supported: true, weaponSets: true }), saveFaults: () => ["bad item"] }); r = await runSelfCheck(c); assert.ok(/bad item/.test(find(r, "存檔").msg) && /存檔檢查與防護/.test(find(r, "存檔").msg));
+  c = goodCtx(); delete c.backend; r = await runSelfCheck(c); assert.equal(find(r, "存檔"), undefined, "ctx.backend 不存在時略過存檔檢查且不報錯"); assert.equal(r.ok, true);
   { const game = goodGame(); window.__d2autobot.game = game;
     delete game.director.cloneComes; r = await runSelfCheck(goodCtx());
     assert.ok(r.issues.some(i => i.level === "warn" && i.msg.includes("director.cloneComes")));
@@ -133,25 +134,22 @@ const goodCtx = () => ({
 {
   const source = require("node:fs").readFileSync(path.join(__dirname, "..", "autobot.js"), "utf8");
   const region = source.slice(source.indexOf("  function restoreAllSkills() {"), source.indexOf("  // 原版選卡畫面可能讓遊戲迴圈完全停住"));
-  const harnessFor = (settings) => new Function("settings", "document", "save", "refreshControls", "ALL_SKILLS_BONUS", "let goldOverride = null, allSkillsOverride = null, lastAction = \"\";" + region + "return { applyCheats, restoreAllCheats, get invinciblePlayer() { return invinciblePlayer; } };")(settings, { querySelector: () => null }, () => {}, () => {}, 20);
+  const harnessFor = (settings, isOnline = () => false) => new Function("settings", "onlineSave", "document", "save", "refreshControls", "ALL_SKILLS_BONUS", "let goldOverride = null, allSkillsOverride = null, lastAction = \"\";" + region + "return { applyCheats, restoreAllCheats, get invinciblePlayer() { return invinciblePlayer; } };")(settings, isOnline, { querySelector: () => null }, () => {}, () => {}, 20);
   const mkSettings = (cheat) => ({ cheat: { enabled: true, ...cheat } });
-  // E. 怪物數量：開→改 world 密度與導演計數；關→還原；導演計數若已被遊戲消耗（不再等於本模組寫入值）則保留遊戲的值
+  // E. 怪物數量：改用原版 director.spawnPack 生怪（2026-11-13）。不再寫入遊戲不讀取的 world.monsterDensity／spawnRate，
+  //    也不改導演計數；開、關前後這些欄位都必須維持原值。生怪行為本身由 helper/tests/autobot.cjs 的模擬案例驗證。
   {
     const settings = mkSettings({ maxMonsterDensity: true });
     const world = { monsterDensity: 4, spawnRate: 2, enemies: [] };
     const director = { owed: 0, batchTimer: 5, waveDue: 0, waves: { done: false } };
     const h = harnessFor(settings); const g = { world, director, save: {} };
     h.applyCheats(g);
-    assert.equal(world.monsterDensity, 999); assert.equal(world.spawnRate, 999); assert.equal(director.owed, 450); assert.equal(director.waveDue, 450);
+    assert.equal(world.monsterDensity, 4); assert.equal(world.spawnRate, 2);
+    assert.equal(director.owed, 0); assert.equal(director.batchTimer, 5); assert.equal(director.waveDue, 0);
     settings.cheat.maxMonsterDensity = false; h.applyCheats(g);
     assert.equal(world.monsterDensity, 4); assert.equal(world.spawnRate, 2);
     assert.equal(director.owed, 0); assert.equal(director.batchTimer, 5); assert.equal(director.waveDue, 0);
-    settings.cheat.maxMonsterDensity = true; h.applyCheats(g);
-    director.owed = 435; director.waveDue = 435;   // 遊戲消耗了一部分，仍高於原值 0
-    settings.cheat.maxMonsterDensity = false; h.applyCheats(g);
-    assert.equal(director.owed, 0, "關閉後待補數須降回原值，避免繼續補出大量怪物");
-    assert.equal(director.waveDue, 0);
-    assert.equal(world.monsterDensity, 4);
+    assert.deepEqual(g.save, {}, "怪物數量修改不得碰存檔");
   }
   // F. 全精英：已生成的怪不還原（註解已說明），關閉後新的一般怪不再被改
   {

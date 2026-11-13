@@ -558,9 +558,21 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
     const key = str.trim(), exact = Object.prototype.hasOwnProperty.call(dict, key) ? dict[key] : undefined;
     // 版本號後面帶雜湊（例如「Build 20261101.1 ·4e657e90」）：只換「Build」字樣，譯文放在字典鍵「Build (version)」
     const build = /^(\s*)Build (\d+(?:\.\d+)*)(\s*·\s*[a-f\d]+)(\s*)$/i.exec(str), word = dict["Build (version)"];
+    // 畫布可能再次翻譯遊戲已用空白合併的詞綴列，必須先於怪物名稱查詢辨識。
+    const traitWords = key.split(/\s+/), traits = [];
+    for (let i = 0; i < traitWords.length;) {
+      let j = Math.min(traitWords.length, i + 4);
+      while (j > i && !isTrait(traitWords.slice(i, j).join(" "))) j--;
+      if (j === i) { traits.length = 0; break; }
+      traits.push(traitWords.slice(i, j).join(" ")); i = j;
+    }
+    const translatedTraits = traits.map((t) => look(t));
+    const traitLine = traits.length > 1 && translatedTraits.every((t, i) => t !== traits[i])
+      ? translatedTraits.join("\u00a0") : null;
     // 怪物名優先：與技能等一般詞條同名的怪物（Horror、Slayer、Blood Wing、Plague Bearer）也要翻成怪物譯名
     const mon0 = gameTr?.translateAs && /^[A-Z][A-Za-z' -]{1,40}$/.test(key) ? gameTr.translateAs("monster", key) : null;
-    if (mon0 && mon0 !== key) r = str.replace(key, mon0);
+    if (traitLine !== null) r = str.replace(key, traitLine);
+    else if (mon0 && mon0 !== key) r = str.replace(key, mon0);
     else if (typeof exact === "string" && exact) r = str.replace(key, exact);
     else if (build && word) r = build[1] + word + " " + build[2] + build[3] + build[4];
     // 技能的多段數值列表（遊戲執行時組合）：「+19% damage per level of Frost Nova, +19% of Ice Blast, …」
@@ -580,16 +592,6 @@ canvas.d2-text, #game-container canvas, #app canvas { filter: contrast(1.18) bri
           const title = words.length === 4 ? exactOf(gameTr, "unique", `the ${words[3]}`) : "";
           if (pre !== null && suf !== null && title !== null && `unique:${words[0]}` in dict && `unique:${words[1]}` in dict) { r = title + pre + suf; words.length = 0; }
         }
-        // 冠軍怪、唯一怪的屬性列（遊戲把各屬性以空白串起）：逐項切開，屬性之間保留一個空格（不換行空白，cleanCJK 不刪）
-        const traits = [];
-        for (let i = 0; i < words.length;) {
-          let j = Math.min(words.length, i + 4);
-          while (j > i && !isTrait(words.slice(i, j).join(" "))) j--;
-          if (j === i) { traits.length = 0; break; }
-          traits.push(words.slice(i, j).join(" ")); i = j;
-        }
-        const tr = traits.map((t) => look(t));
-        if (traits.length > 1 && tr.every((t, k) => t !== traits[k])) { r = tr.join("\u00a0"); words.length = 0; }
         const parts = [];
         for (let i = 0; i < words.length;) {
           let hit = null, used = 1;

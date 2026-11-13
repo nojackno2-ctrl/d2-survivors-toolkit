@@ -3,12 +3,33 @@ const fs = require("node:fs"), path = require("node:path"), os = require("node:o
 const assert = require("node:assert/strict"), { spawnSync } = require("node:child_process");
 
 const repo = path.resolve(__dirname, "..", "..");
-const SOURCES = ["tools/build-web.js", "d2edit.js", "modifier/editor.html", "site/install.template.html", "editor/package.json", "helper/autobot.js", "helper/forge-local.js", "helper/autoforge.js", "helper/autoforge-ui.js", "helper/stash-sort.js", "helper/selfcheck.js", "lang/zh-TW.json", "modifier/signatures.json"];
+const SOURCES = [
+  "tools/build-web.js",
+  "d2edit.js",
+  "guard/guard.js",
+  "guard/guard.html",
+  "guard/save-check.js",
+  "modifier/editor.html",
+  "site/install.template.html",
+  "editor/package.json",
+  "helper/autobot.js",
+  "helper/forge-local.js",
+  "helper/autoforge.js",
+  "helper/autoforge-ui.js",
+  "helper/stash-sort.js",
+  "helper/selfcheck.js",
+  "lang/zh-TW.json",
+  "modifier/signatures.json",
+];
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "d2toolkit-build-"));
 for (const f of SOURCES) {
+  const src = path.join(repo, f);
+  if (!fs.existsSync(src)) {
+    throw new Error(`[缺檔] 缺少建置測試來源：${f}`);
+  }
   fs.mkdirSync(path.dirname(path.join(temp, f)), { recursive: true });
-  fs.copyFileSync(path.join(repo, f), path.join(temp, f));
+  fs.copyFileSync(src, path.join(temp, f));
 }
 fs.writeFileSync(path.join(temp, "AI_HANDOFF.md"), "協作紀錄"); // 不可被建置覆蓋
 const build = (...args) => spawnSync(process.execPath, [path.join(temp, "tools", "build-web.js"), ...args], { encoding: "utf8" });

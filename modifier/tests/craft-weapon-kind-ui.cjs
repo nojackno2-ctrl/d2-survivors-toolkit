@@ -58,7 +58,7 @@ app.whenReady().then(async () => {
   })()`);
   assert.deepEqual(result.initial, { rar: false, kind: false, base: false, bar: false });
   assert.equal(result.afterCat.rar, true);
-  assert.deepEqual(result.afterCat.rarOpts, ['請選擇品質', '普通', '魔法', '稀有', '暗金']);
+  assert.deepEqual(result.afterCat.rarOpts, ['請選擇品質', '普通', '魔法', '稀有', '獨特']);
   assert.equal(result.afterCat.kind, false); assert.equal(result.afterCat.base, false);
   assert.equal(result.afterRar.kind, true);
   assert.deepEqual(result.afterRar.kindOpts, ['請選擇武器種類', '全部武器', '劍', '斧', '弓']);

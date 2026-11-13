@@ -18,8 +18,8 @@ function verificationFingerprint() {
     }
   };
 
-  // 網頁版、輔助器、語言與測試的程式都在根目錄對應資料夾；不收 game-bundles（遊戲快照）。run-* 執行輸出不計入。
-  for (const d of ["helper", "lang", "modifier", "editor", "tools", "tests"]) collect(path.join(P.root, d), true);
+  // 網頁版、輔助器、語言、防護與測試的程式都在根目錄對應資料夾；不收 game-bundles（遊戲快照）。run-* 執行輸出不計入。
+  for (const d of ["helper", "lang", "modifier", "guard", "editor", "tools", "tests"]) collect(path.join(P.root, d), true);
   if (fs.existsSync(path.join(P.root, "d2edit.js"))) files.push(path.join(P.root, "d2edit.js"));
   // 驗證根目錄只含規則與入口；reports、backups、lastgood 等生成資料不計入。
   for (const ent of fs.readdirSync(P.verify, { withFileTypes: true })) {

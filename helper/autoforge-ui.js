@@ -196,7 +196,7 @@ async function stepOnce(g, cls, ctx = state) {
   if (essenceCount(g, cls) < 1) return { done: true, result: "燃燒的恐懼精華不足，已停止" };
   const d = AF().decideNext(AF().normalizeTargets(ctx.targets), { counts: item.forge?.t ?? {}, hellforgeUsed: !!item.forge?.hf });
   if (d.action === "done") return { done: true, result: d.reason };
-  if (d.action === "temper" && window.__d2forgeLocal?.enabled() && window.__d2autobot?.settings?.cheat?.forgeLocalSure) {
+  if (d.action === "temper" && window.__d2forgeLocal?.enabled() && window.__d2forgeLocal?.settings?.()?.sure) {
     const targets = AF().normalizeTargets(ctx.targets);
     const pending = Object.entries(targets).filter(([k, t]) => t.kind === "min" && (item.forge?.t?.[k] || 0) < t.min).map(([k]) => k);
     wantedByItem.set(item.id, pending.length ? pending : Object.entries(targets).filter(([, t]) => t.kind !== "x").map(([k]) => k));
@@ -583,6 +583,13 @@ function render() {
   b.innerHTML = `
     ${head}
     ${controlRow}
+    <div style="border:1px solid #4a3d25;padding:6px;margin-bottom:6px"><b>本地淬鍊</b>
+      <div style="opacity:.8">不連伺服器，由本機決定淬鍊結果；必定成功需先開啟本地淬鍊。</div>
+      <div id="af-local-unavailable" style="color:#f08070"></div>
+      <div style="display:flex;align-items:center;gap:8px;min-height:44px"><span style="flex:1">本地淬鍊（不連伺服器，本機決定結果）</span><button id="af-local-enabled" type="button" role="switch" style="min-width:64px;min-height:44px"></button></div>
+      <div style="display:flex;align-items:center;gap:8px;min-height:44px"><span style="flex:1">必定成功／地獄熔爐必定倍增</span><button id="af-local-sure" type="button" role="switch" style="min-width:64px;min-height:44px"></button></div>
+      <div id="af-local-stats"></div>
+    </div>
     ${itemLine}
     ${state.warn?.length ? `<div style="margin-top:4px;padding:4px 6px;border:1px solid #c44;border-radius:4px;background:#3a1212;color:#f88">${state.warn.map((w) => esc(w)).join("<br>")}</div>` : ""}
     <div style="border-top:1px solid #4a3d25;margin-top:6px;padding-top:6px">${oddsLine}${lineSel || ""}</div>
@@ -591,6 +598,11 @@ function render() {
     ${state.itemId ? '<div style="opacity:.7;margin-top:4px">設定會自動記住（同稀有度、名稱與底材共用）。</div>' : ""}
     ${queueHtml(g)}`;
   // 必須阻止冒泡：否則同一次點擊會傳到外框，觸發收合後才掛上的「點圖示展開」而立刻又展開。
+  for (const key of ["enabled", "sure"]) b.querySelector("#af-local-" + key).onclick = () => {
+    const local = window.__d2forgeLocal;
+    if (local?.available() && (key !== "sure" || local.enabled())) { local.set({ [key]: !local.settings()[key] }); refreshLocalControls(); }
+  };
+  refreshLocalControls();
   // 手動開啟的面板收合即關閉（之後由工具包再開）；鐵砧選單開著時仍只是收成圖示。
   b.querySelector("#af-fold").onclick = (e) => { e.stopPropagation(); state.folded = true; state.notice = null; if (state.manual && !g.forgeUp) state.manual = false; render(); };
   b.querySelectorAll("select[data-key]").forEach((sel) => sel.onchange = () => {
@@ -644,6 +656,18 @@ function render() {
   if (qc) qc.onclick = () => { if (!state.queueRunning) { state.queue = []; render(); } };
 }
 
+function refreshLocalControls() {
+  if (!box?.isConnected || state.folded) return;
+  const local = window.__d2forgeLocal, available = !!local?.available(), settings = local?.settings() || {};
+  for (const key of ["enabled", "sure"]) {
+    const button = box.querySelector("#af-local-" + key); if (!button) return;
+    const on = available && (key === "enabled" ? !!local.enabled() : !!local.enabled() && !!settings.sure);
+    button.disabled = !available || (key === "sure" && !local.enabled()); button.setAttribute("aria-checked", String(on)); button.textContent = on ? "開啟" : "關閉";
+  }
+  const message = box.querySelector("#af-local-unavailable"); if (message) message.textContent = local && !available ? "線上存檔不可用" : !local ? "本地淬鍊模組尚未載入" : "";
+  const stats = box.querySelector("#af-local-stats"); if (stats) stats.textContent = `本機處理次數：${Object.values(local?.stats?.local || {}).reduce((a, b) => a + b, 0)}／放行次數：${local?.stats?.passed || 0}`;
+}
+
 function queueHtml(g) {
   const cls = g.kit?.id;
   const inQ = new Set(state.queue.map((q) => q.id));
@@ -682,6 +706,7 @@ let lastItemId = undefined;
 const pausedNow = () => document.body.classList.contains("frontend-over-run") || document.body.classList.contains("frontend-open")
   || (() => { const p = document.getElementById("paused"); return !!p && !p.classList.contains("hidden") && getComputedStyle(p).display !== "none"; })();
 function tick() {
+  refreshLocalControls();
   const g = game();
   patchForgeIdle(g);
   // 手動開啟：遊戲恢復執行、且沒有在淬鍊時，自動關閉，避免面板擋住遊戲畫面。

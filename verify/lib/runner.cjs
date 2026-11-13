@@ -1,4 +1,5 @@
 // 並行執行測試登記表；每個測試獨立子行程，失敗自動重試（偶發逾時）。結果只回傳精簡物件。
+const fs = require("node:fs");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 const { P } = require("./util.cjs");
@@ -9,8 +10,20 @@ const electron = () => (electronPath ??= require(path.join(P.editor, "node_modul
 function runOne(t, attempt = 1) {
   return new Promise((resolve) => {
     const started = Date.now();
+    const testPath = path.join(P.root, t.file);
+    if (!fs.existsSync(testPath)) {
+      return resolve({
+        id: t.id,
+        ok: false,
+        missing: true,
+        code: 1,
+        attempt: 1,
+        seconds: 0,
+        tail: `[缺檔] 測試檔不存在：${t.file}`,
+      });
+    }
     const cmd = t.kind === "electron" ? electron() : process.execPath;
-    const args = [path.join(P.root, t.file)]; // 測試檔以根目錄相對路徑登記（見 suite.cjs）
+    const args = [testPath]; // 測試檔以根目錄相對路徑登記（見 suite.cjs）
     let out = "";
     const child = spawn(cmd, args, { cwd: P.editor, windowsHide: true, env: { ...process.env, ELECTRON_ENABLE_LOGGING: "" } });
     const timer = setTimeout(() => { out += "\n[逾時，強制結束]"; child.kill(); }, (t.timeout || 120) * 1000);
