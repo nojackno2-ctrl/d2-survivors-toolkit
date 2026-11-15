@@ -98,12 +98,28 @@ button.addEventListener("click", event => {
     const next = plan(ctx);
     const other = [...ctx.tabs.querySelectorAll("[data-stash-tab]")].find(el => el.dataset.stashTab !== ctx.active);
     if (!other || typeof ctx.game.moved !== "function") throw new Error("無法更新倉庫畫面，未進行整理");
-    const original = next.map(({ item }) => ({ item, hadAt: Object.hasOwn(item, "at"), at: item.at }));
+    const originalList = ctx.list.slice();
+    const original = next.map(({ item }) => ({ item, hadAt: Object.hasOwn(item, "at"), at: item.at, hadCount: Object.hasOwn(item, "count"), count: item.count }));
     try {
       for (const { item, at } of next) item.at = at;
-      ctx.game.moved(next[0].item);
+      const stacks = new Map();
+      for (const { item } of next) {
+        if (item.type !== "essence" || typeof item.base !== "string" || !item.base) continue;
+        let count = item.count ?? 1;
+        if (!Number.isInteger(count) || count < 1 || count > 99) throw new Error("精華數量異常");
+        const targets = stacks.get(item.base) || [];
+        for (const target of targets) {
+          const amount = Math.min(count, 99 - (target.count ?? 1));
+          if (amount > 0) { target.count = (target.count ?? 1) + amount; count -= amount; }
+          if (!count) break;
+        }
+        if (!count) ctx.list.splice(ctx.list.indexOf(item), 1);
+        else { if (count > 1) item.count = count; else delete item.count; targets.push(item); stacks.set(item.base, targets); }
+      }
+      ctx.game.moved(ctx.list[0]);
     } catch (error) {
-      for (const entry of original) { if (entry.hadAt) entry.item.at = entry.at; else delete entry.item.at; }
+      ctx.list.splice(0, ctx.list.length, ...originalList);
+      for (const entry of original) { if (entry.hadAt) entry.item.at = entry.at; else delete entry.item.at; if (entry.hadCount) entry.item.count = entry.count; else delete entry.item.count; }
       try { ctx.game.moved(next[0].item); } catch (_) { /* 已還原記憶體，儲存失敗由外層提示 */ }
       throw new Error("儲存失敗，已還原整理前的位置");
     }

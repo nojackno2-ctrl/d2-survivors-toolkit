@@ -36,6 +36,7 @@
       maxCrit: false,
       oneHitKill: false,
       maxSkills: false,
+      maxCastSpeed: false,
       maxMonsterDensity: false,
       monsterDensity10x: false,
       allElites: false,
@@ -2146,8 +2147,14 @@
     const p = g.world?.player;
     if (!p) {
       for (const key of ["maxCrit", "oneHitKill", "maxDropRate"]) if (!settings.cheat[key]) restoreCheat(key);
+      if (!settings.cheat.maxCastSpeed) restoreCheat("maxCastRecharge");
     }
     if (p) {
+      // 遊戲以同一個倍率控制技能充能時間；兩個開關共用還原紀錄。
+      if (settings.cheat.maxCastSpeed && typeof p.castSpeed === "number") {
+        const cap = (["sorceress", "necromancer", "druid", "assassin"].includes(p.cls) ? 250 : 200) * (1 + (p.castBase ?? 0) / 100);
+        if (cap > 0) cheatField("maxCastRecharge", p, p, "castSpeed", Math.min(p.castSpeed, 100 / cap));
+      } else restoreCheat("maxCastRecharge");
       // 2. 致命攻擊（機率最高）
       if (settings.cheat.maxCrit) {
         cheatField("maxCrit", p, p, "criticalStrike", 100);
@@ -2526,6 +2533,7 @@
   field("cheat.maxCrit", "致命攻擊（致命一擊機率最高）");
   field("cheat.oneHitKill", "一擊必殺（所有屬性傷害提升一百倍）");
   field("cheat.maxSkills", "所有技能 +20（提高裝備「+所有技能」屬性，不改技能等級）");
+  field("cheat.maxCastSpeed", "施法速度最快（技能充能速度拉到遊戲上限）");
   group("怪物與環境修改");
   field("cheat.maxMonsterDensity", "怪物數量最大化（地圖怪物生成速度與數量拉滿）");
   field("cheat.allElites", "一般怪物全部變成精英以上等級（全圖小怪升階為金/藍怪）");

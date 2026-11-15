@@ -76,6 +76,7 @@
   - `node verify/auto.cjs`（全自動更新流程）
 
 ## 進行中與待確認事項
+- **【2026-11-15 Codex：倉庫整理合併精華，未提交、整體實機驗收未通過】** `helper/stash-sort.js` 依遊戲 20261105.3 的 `f9`／`PMe` 規則，合併目前分頁相同底材精華，單堆最多 99；失敗時還原清單、數量與位置。`node helper/tests/stash-sort.cjs` 通過，涵蓋 80＋30＋1、不同底材及寫入失敗還原。官方 `/play/` 隔離存檔副本實測兩次：共用第 3 頁 80＋30＋1 合為 99＋12，畫面無重疊、其他分頁不變、寫入 localStorage 後重新載入原始資料一致；但完整腳本仍失敗：個人頁非位置資料比較不一致，以及遊戲重新載入後整份倉庫位置比較不一致，原因待查，不能宣稱完整驗收通過。腳本 `tests/live-harness/stash-sort-probe.cjs` 使用 `backups/quest-run-20261111/inst-01/seed.json` 副本，已調整支援 JSON 和空分頁；需釐清遊戲讀檔正規化／測試注入資料是否導致差異，再重測。
 - **【2026-11-14 Claude：Rust 版桌面啟動器 `launcher/`（未提交、未發布；Electron 版 `editor/` 保留並存）】** 使用者要求桌面版改成 Rust 啟動器、工具包本體與網頁版通用、連 GitHub 隨時可熱重載。
   - **架構**：wry＋tao＋muda（系統 WebView2，不帶 Chromium），發行版 exe 約 1.3 MB（Electron 版約 76 MB）。修改器／防護頁仍從 GitHub Pages 線上載入，工具包頁面沒有改；`src/shim.js` 注入與 Electron `preload.js` 相同的 `window.api`（`api.launcher = { protocol: 1, rust: true }`，另多 `api.reload()`）。`src/core.rs` 存檔讀寫（`rusty-leveldb`）、`src/engine.rs` 物品引擎（隱藏 WebView＋`d2engine` 協定，唯讀解析官方 `app.asar`，不修改它）、`src/asar.rs`、`src/remote.rs`、`src/main.rs`。遊戲圖檔改由 `https://d2asset.localhost` 提供（https 頁面讀不到 `file://`）。
   - **簽章做法**：`JSON.stringify({...save, seal: undefined})` 在頁面端（shim）產生，Rust 只算 HMAC 並接上 seal——避免 Rust 重新序列化造成數字格式與遊戲不同。

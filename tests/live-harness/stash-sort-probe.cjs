@@ -19,7 +19,8 @@ app.whenReady().then(async () => {
     const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { webSecurity: false, backgroundThrottling: false } });
     const js = s => win.webContents.executeJavaScript(s);
     await win.loadURL("https://d2survivors.lol/play/").catch(() => {}); await sleep(4000);
-    const seed = JSON.parse(zlib.inflateSync(Buffer.from(fs.readFileSync(source, "utf8").trim().slice(5), "base64url")));
+    const raw = fs.readFileSync(source, "utf8").trim();
+    const seed = raw.startsWith("D2S1:") ? JSON.parse(zlib.inflateSync(Buffer.from(raw.slice(5), "base64url"))) : JSON.parse(raw);
     await js(`localStorage.setItem('d2-survivors/save/v1', ${JSON.stringify(JSON.stringify(seed))}); 1`);
     await win.loadURL("https://d2survivors.lol/play/").catch(() => {}); await sleep(4000);
     await js(`document.querySelectorAll('button').forEach(b => { if (/hosted/i.test(b.textContent)) b.click() }); 1`); await sleep(12000);
@@ -37,20 +38,25 @@ app.whenReady().then(async () => {
       const rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}};
       const buttonRect=rect(btn), stashRect=rect(document.querySelector('#stash-panel'));
       const checks=[];
+      g.save.stashTabs.shared3 = [
+        {id:'sorttest0001',base:"Larzuk's Essence",name:"Larzuk's Essence",type:'essence',rarity:'normal',level:1,mods:[],count:80,at:{x:0,y:0}},
+        {id:'sorttest0002',base:"Larzuk's Essence",name:"Larzuk's Essence",type:'essence',rarity:'normal',level:1,mods:[],count:30,at:{x:1,y:0}},
+        {id:'sorttest0003',base:"Larzuk's Essence",name:"Larzuk's Essence",type:'essence',rarity:'normal',level:1,mods:[],at:{x:2,y:0}}
+      ];
       for(const tab of ['personal','shared1','shared2','shared3']){
         tabs.querySelector('[data-stash-tab="'+tab+'"]').click();await sleep(500);
         const key=tab==='personal'?g.kit.id:tab, before=copy(g.save.stashTabs), beforePage=copy(g.save.stashTabs[key]);
-        const nonPosition=x=>x.map(item=>{let o={...item};delete o.at;return o});
+        const nonPosition=x=>x.map(item=>{let o={...item};delete o.at;if(o.type==='essence'&&o.count===1)delete o.count;return o});
         const visible=!btn.hidden&&!btn.disabled, area=document.querySelector('#stash').querySelectorAll('[data-item]').length;
         btn.click();await sleep(500);
         const after=copy(g.save.stashTabs), placements=g.stashView(g.kit.id).tabs[tab];
         const ids=new Set(placements.map(p=>p.item.id));
         const overlaps=[];let occupied=new Set();for(const tile of document.querySelectorAll('#stash [data-item]')){let m=tile.style.gridArea.match(/^(\\d+) \\/ (\\d+) \\/ span (\\d+) \\/ span (\\d+)$/);if(!m){overlaps.push('尺寸不明');continue}let [,y,x,h,w]=m.map(Number);for(let dy=0;dy<h;dy++)for(let dx=0;dx<w;dx++){let pos=(x+dx)+','+(y+dy);if(x+dx>10||y+dy>12||occupied.has(pos))overlaps.push(pos);occupied.add(pos)}}
-        checks.push({tab,visible,area,count:after[key].length,changed:JSON.stringify(beforePage)!==JSON.stringify(after[key]),sameItems:JSON.stringify(nonPosition(beforePage))===JSON.stringify(nonPosition(after[key])),othersSame:Object.keys(before).filter(k=>k!==key).every(k=>JSON.stringify(before[k])===JSON.stringify(after[k])),rendered:ids.size===after[key].length&&area===after[key].length,overlaps,stillOpen:g.stashTab===tab,stored:JSON.stringify(JSON.parse(localStorage.getItem('d2-survivors/save/v1')).stashTabs[key])===JSON.stringify(after[key])});
+        checks.push({tab,visible,area,count:after[key].length,changed:JSON.stringify(beforePage)!==JSON.stringify(after[key]),sameItems:tab==='shared3'?after[key].length===2&&after[key].map(x=>x.count).join(',')==='99,12':JSON.stringify(nonPosition(beforePage))===JSON.stringify(nonPosition(after[key])),othersSame:Object.keys(before).filter(k=>k!==key).every(k=>JSON.stringify(before[k])===JSON.stringify(after[k])),rendered:ids.size===after[key].length&&document.querySelector('#stash').querySelectorAll('[data-item]').length===after[key].length,overlaps,stillOpen:g.stashTab===tab,stored:JSON.stringify(JSON.parse(localStorage.getItem('d2-survivors/save/v1')).stashTabs[key])===JSON.stringify(after[key])});
       }
       tabs.querySelector('[data-stash-tab="uniques"]').click();await sleep(600);const collectionHidden=btn.hidden&&getComputedStyle(btn).display==='none';
       tabs.querySelector('[data-stash-tab="personal"]').click();await sleep(500);const saveBefore=JSON.stringify(g.save.stashTabs);g.save.cursor={item:g.save.stashTabs[g.kit.id][0],cls:g.kit.id,from:'personal'};window.__d2stashSort.sync();const holdingDisabled=btn.disabled;btn.click();const holdingUnchanged=saveBefore===JSON.stringify(g.save.stashTabs);delete g.save.cursor;window.__d2stashSort.sync();
-      g.openCampTrade('store');await sleep(800);g.openCharacter('town',g.kit.id);await sleep(800);const storeTabs=document.querySelector('#stash-tabs');const storeBefore=JSON.stringify(g.save.stashTabs);const storeTab=storeTabs.querySelector('[data-stash-tab="shared1"]');if(storeTab)storeTab.click();await sleep(500);const storeVisible=!!storeTab&&!btn.hidden&&!btn.disabled;btn.click();await sleep(500);const storeAfter=JSON.stringify(g.save.stashTabs),storeOpen=g.stashTab==='shared1';
+      g.openCampTrade('store');await sleep(800);g.openCharacter('town',g.kit.id);await sleep(800);const storeTabs=document.querySelector('#stash-tabs');const storeBefore=JSON.stringify(g.save.stashTabs);const storeTab=storeTabs.querySelector('[data-stash-tab="shared2"]');if(storeTab)storeTab.click();await sleep(500);const storeVisible=!!storeTab&&!btn.hidden&&!btn.disabled;btn.click();await sleep(500);const storeAfter=JSON.stringify(g.save.stashTabs),storeOpen=g.stashTab==='shared2';
       return {camp,buttonRect,stashRect,checks,collectionHidden,holdingDisabled,holdingUnchanged,alerts,store:{visible:storeVisible,unchangedOnRepeat:storeBefore===storeAfter,open:storeOpen},final:copy(g.save.stashTabs)};
     })()`);
     const layouts = [];
@@ -68,7 +74,7 @@ app.whenReady().then(async () => {
     const positions = obj => Object.fromEntries(Object.entries(obj || {}).map(([k, list]) => [k, list.map(item => [item.id, item.at])]));
     const gameReloadMatches = JSON.stringify(positions(gameReload)) === JSON.stringify(positions(out.final));
     delete out.final;
-    const ok = out.camp.state === "camp" && out.camp.ready && out.collectionHidden && out.holdingDisabled && out.holdingUnchanged && out.store.visible && out.store.unchangedOnRepeat && out.store.open && !out.alerts.length && reloadMatches && gameReloadMatches && out.checks.every(x => x.visible && x.changed && x.sameItems && x.othersSame && x.rendered && !x.overlaps.length && x.stillOpen && x.stored) && layouts.every(x => x.visible && x.within && x.clickable);
+    const ok = out.camp.state === "camp" && out.camp.ready && out.collectionHidden && out.holdingDisabled && out.holdingUnchanged && out.store.visible && out.store.unchangedOnRepeat && out.store.open && !out.alerts.length && reloadMatches && gameReloadMatches && out.checks.every(x => (x.area ? x.visible && x.changed : !x.visible) && x.sameItems && x.othersSame && x.rendered && !x.overlaps.length && x.stillOpen && x.stored) && layouts.every(x => x.visible && x.within && x.clickable);
     console.log(JSON.stringify({ ...out, layouts, reloadMatches, gameReloadMatches, ok }));
     if (!ok) throw Error("倉庫整理實機驗證未通過");
     clearTimeout(timeout); app.exit(0);

@@ -28,4 +28,19 @@ assert.throws(() => plan({ ...ctx, list: [...list, { id: "missing" }] }), /未�
 sync(); handlers.click({ preventDefault() {}, stopPropagation() {} });
 assert.deepEqual(a.at, { x: 2, y: 2 }); assert.deepEqual(b.at, { x: 0, y: 3 });
 assert.match(alerts[0], /已還原/);
+const essences = [
+  { id: "e1", type: "essence", base: "A", count: 80 },
+  { id: "e2", type: "essence", base: "A", count: 30 },
+  { id: "e3", type: "essence", base: "A" },
+  { id: "e4", type: "essence", base: "B", count: 2 },
+];
+list.splice(0, list.length, ...essences);
+placement.splice(0, placement.length, ...essences.map((item, x) => ({ item, x, y: 0 })));
+tiles.splice(0, tiles.length, ...essences.map((item, x) => ({ dataset: { item: item.id }, style: { gridArea: `1 / ${x + 1} / span 1 / span 1` } })));
+const before = JSON.stringify(list);
+handlers.click({ preventDefault() {}, stopPropagation() {} });
+assert.equal(JSON.stringify(list), before, "儲存失敗須還原數量與清單");
+game.moved = () => {};
+handlers.click({ preventDefault() {}, stopPropagation() {} });
+assert.deepEqual(list.map(item => [item.base, item.count ?? 1]), [["A", 99], ["A", 12], ["B", 2]]);
 console.log("倉庫整理測試通過：尺寸排位、密集頁備援、資料不一致與寫入失敗保護。");
