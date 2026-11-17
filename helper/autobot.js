@@ -22,7 +22,7 @@
     loot: { enabled: true, vacuum: true, vacuumXp: true, vacuumGold: false, searchRadius: 450, pickupGold: true, minRuneTier: 1, qualityThreshold: { normal: true, magic: true, rare: true, set: true, unique: true, runeword: true }, backtrackForLoot: true, kickJars: true, onlyUpgrades: false },
     terror: { mode: "off", targetFarmTier: 1, autoReviveOrRestart: false, postClearWaitSec: 3 },
     quest: { autoProgress: false, prioritizeBoss: true, autoStart: true, farmDifficulty: "off", fixedDifficulty: "hell" },
-    gear: { autoEquip: true, minGainPercent: 2 },
+    gear: { autoEquip: true, minGainPercent: 2, merc: true },
     // 陣亡回營地後的整備：裝備管理（gear.autoEquip 一個開關管穿上、收藏、存倉、賣出、買裝）、買藥、恰西升級，讓每一局都比上一局強。
     town: { enabled: true, buyPotions: true, charsiUpgrades: true },
     // h4Reset／h4ResetAfter：地獄任務 4（H4）多次失敗後重置技能並只投入同一棵技能樹（見 campTreeReset）。H4 難度高，預設 false＝任務模式略過 H4；使用者開啟才挑戰。
@@ -1123,6 +1123,105 @@
     const spare = desperate ? rows.filter(([, v]) => v.fate === "stash").sort((a, b) => a[1].gain - b[1].gain) : [];
     return [...sells, ...spare].map(([it]) => it);
   }
+  // ── 雇傭兵：回營地向凱莎雇用／復活，並從背包挑最適合他的裝備穿上 ──
+  // 實測（原版 mercViewOf／uO）：雇傭兵的基礎傷害、防禦由職業與等級決定，裝備只靠詞綴（生命、抗性、傷害加成、吸血等）影響他，底材本身沒有作用；
+  // 營地也算不出穿裝後的雇傭兵數值，所以直接依詞綴評分（1 分約傷害或生命 +1％），只比較不寫入。
+  const mercFailed = new WeakSet();
+  // 排行榜高手的雇傭兵（helper/tools/ladder-merc.js，2026-11-17，345 筆紀錄：沙漠傭兵 326、盜賊 13、野蠻人 5、鐵狼 1）：各類型各欄位常用的獨特／套裝／符文之語。
+  const MERC_LADDER = {"types":{"desert":326,"barbarian":5,"rogue":13,"ironWolf":1},"picks":{"desert":[["jab",326],["might",186],["prayer",59],["defiance",51]],"barbarian":[["bash",3],["stun",3],["taunt",1],["battleCry",1]],"rogue":[["innerSight",13],["fireArrow",7],["freezingArrow",3],["explodingArrow",3]],"ironWolf":[["frozenArmor",1],["staticField",1]]},"gear":{"desert":{"weapon":["Infinity","Doom","The Reaper's Toll","Pride","Insight","Arioc's Needle"],"head":["Andariel's Visage","Delirium","Tarnhelm","Harlequin Crest","Dream","Griffon's Eye"],"body":["Chains of Honor","Arkaine's Valor","Enigma","Fortitude","Silks of the Victor","Skullder's Ire"]},"barbarian":{"weapon":["Sazabi's Cobalt Redeemer","Last Wish","Honor"],"head":["Sazabi's Mental Sheath","Vampire Gaze","Delirium"],"body":["Sazabi's Ghost Liberator","Chains of Honor","Shaftstop","Duress"],"shield":["Lawbringer","Blade of Ali Baba"]},"rogue":{"weapon":["Faith","Blood Raven's Charge"],"head":["Andariel's Visage","Dream","Vampire Gaze","Kira's Guardian","Tal Rasha's Horadric Crest","Guillaume's Face"],"body":["Bramble","Chains of Honor","Fortitude","Guardian Angel","Treachery","Naj's Light Plate"]},"ironWolf":{"weapon":["Spirit"],"head":["Harlequin Crest"],"body":["Chains of Honor"],"shield":["Sigon's Guard"]}}};
+  const MERC_LADDER_BONUS = 40; // 約等於傷害或生命 +40％：排行榜常用裝備優先，但明顯更強的詞綴仍可勝出
+  const mercLadderBonus = (type, slot, item) => item?.name && MERC_LADDER.gear[type]?.[slot]?.includes(item.name) ? MERC_LADDER_BONUS : 0;
+  function mercItemValue(item) {
+    let v = 0;
+    for (const { stat, value } of item?.mods || []) {
+      const n = Number(value) || 0;
+      if (stat === "life" || stat === "replenishLife") v += n * 1;
+      else if (stat === "vitality") v += n * 3;
+      else if (/^(fire|cold|lightning|poison)Resist$/.test(stat)) v += n * 1;
+      else if (stat === "allResist" || stat === "allResistances") v += n * 4;
+      else if (stat === "enhancedDamage") v += n * 1;
+      else if (stat === "attackDamage" || /^(min|max)Damage$/i.test(stat)) v += n * 0.5;
+      else if (/(min|max)damage$/i.test(stat)) v += n * 0.15;
+      else if (stat === "lifeLeech") v += Math.min(30, n) * 1.5;
+      else if (stat === "damageReduction") v += n * 3;
+      else if (stat === "strength" || stat === "dexterity") v += n * 0.5;
+      else if (stat === "crushingBlow") v += n * 0.2;
+      else if (stat === "deadlyStrike") v += n * 0.15;
+      else if (stat === "openWounds") v += n * 0.08;
+      else if (stat === "ias" || stat === "attackSpeed") v += n * 1;
+      else if (stat === "frw" || stat === "fhr") v += n * 0.3;
+      else if (stat === "allSkills") v += n * 3;
+      else if (stat === "enhancedDefense") v += n * 0.05;
+      else if (stat === "defense") v += n * 0.02;
+      else if (stat === "attackRatingPoints") v += n * 0.02;
+    }
+    return v;
+  }
+  // 回傳背包裡能讓雇傭兵變強最多的裝備與欄位；沒有達門檻者回傳 null。只比較不寫入。
+  function bestMercGear(g, cls, items) {
+    const m = g.mercOf?.(cls), mg = m && g.mercGear?.(cls);
+    if (!m || !mg) return null;
+    const worn = mg.worn || {};
+    let best = null;
+    for (const item of items) {
+      if (!item?.base || mercFailed.has(item) || keepType(item) || isCharm(item) || Object.values(worn).includes(item)) continue;
+      let ok = false; try { ok = !!mg.doll.canWear?.(item); } catch { ok = false; }
+      if (!ok) continue;
+      const slot = item.type === "ring" ? null : mg.doll.slotFor?.(item, worn);
+      if (!slot) continue;
+      const trial = { ...worn };
+      for (const s of mg.doll.displaced?.(item, worn, slot) || []) delete trial[s];
+      trial[slot] = item;
+      // 不可為了換裝把武器擠掉。
+      if (worn.weapon && !trial.weapon) continue;
+      const total = (set) => Object.entries(set).reduce((a, [k, it]) => a + mercItemValue(it) + mercLadderBonus(m.type, k, it), 0);
+      const gain = total(trial) - total(worn);
+      if (gain > 0 && (worn[slot] ? gain >= Math.max(1, settings.gear.minGainPercent) : true) && (!best || gain > best.gain)) best = { item, slot, gain };
+    }
+    return best;
+  }
+  // 穿一件；成功回傳 true。被換下的裝備回到背包，由原本的賣出／存倉流程處理。
+  // extra＝倉庫／收藏庫的裝備（只有開著倉庫畫面時才傳入）；從那裡穿用原版 gearActions 的倉庫模式，與本職業從倉庫取裝相同。
+  function equipMerc(g, cls, extra = []) {
+    if (!settings.gear.merc || !g.mercOf?.(cls) || typeof g.mercGear !== "function") return false;
+    const inv = g.inventoryOf(cls), best = bestMercGear(g, cls, [...inv, ...extra]);
+    if (!best) return false;
+    g.gearActions(cls, () => {}, !inv.includes(best.item), g.mercGear(cls)).equip(best.item, best.slot);
+    if (Object.values(g.mercOf(cls)?.record?.worn || {}).includes(best.item)) { lastAction = "雇傭兵穿上 " + itemZh(best.item); return true; }
+    mercFailed.add(best.item); // 穿不上（背包滿、不符規則）就不再挑這件
+    return false;
+  }
+  // 暫時攔下 hud.showNpcMenu 取得凱莎的選單項目（原版以 run 回呼執行）；用完立即還原。
+  function npcMenu(g, open) {
+    const hud = g.hud; if (!hud || typeof hud.showNpcMenu !== "function") return null;
+    let got = null; const own = Object.prototype.hasOwnProperty.call(hud, "showNpcMenu"), orig = hud.showNpcMenu;
+    hud.showNpcMenu = function (pos, items, cb) { got = { items, cb }; return Reflect.apply(orig, this, arguments); };
+    try { open(); } finally { if (own) hud.showNpcMenu = orig; else delete hud.showNpcMenu; }
+    return got;
+  }
+  function closeNpcMenu(g, menu) { try { g.hud?.hideNpcMenu?.(); menu?.cb?.(); } catch { /* 原版已關閉 */ } if (g.state === "town" && g.camp && !g.trade) g.state = "camp"; }
+  // 偏好依排行榜高手使用人數：沙漠傭兵（光環）> 盜賊斥候 > 野蠻人 > 鐵狼。
+  const MERC_PREFERENCE = ["Desert Mercenary", "Rogue Scout", "Barbarian", "Iron Wolf"];
+  // 回營地：沒有雇傭兵就雇用（挑能負擔且偏好順序最前者，花費不超過金幣一半），陣亡就復活。每次整備只嘗試一次，回傳 true 表示有動作。
+  function hireMerc(g, cls) {
+    if (!settings.gear.merc || typeof g.openKashya !== "function" || typeof g.openHireList !== "function" || g.state !== "camp" || !g.camp) return false;
+    const have = g.mercOf?.(cls), gold = Number(g.save?.gold) || 0;
+    if (have?.record?.dead) {
+      const menu = npcMenu(g, () => g.openKashya()), item = menu?.items?.find((x) => /^Resurrect/.test(x.label || "") && !x.disabled);
+      if (!item) { closeNpcMenu(g, menu); return false; }
+      item.run(); closeNpcMenu(g, null); lastAction = "整備：向凱莎復活雇傭兵"; return true;
+    }
+    if (have) return false;
+    const menu = npcMenu(g, () => g.openHireList());
+    const rows = (menu?.items || []).filter((x) => !x.disabled && x.note?.text).map((x) => {
+      const t = String(x.note.text), cost = /free/.test(t) ? 0 : Number(/(\d+)\s*gold/.exec(t)?.[1]);
+      return { x, owned: /yours/.test(t), cost, rank: MERC_PREFERENCE.findIndex((n) => t.includes(n)) };
+    }).filter((r) => Number.isFinite(r.cost) && (r.owned || r.cost <= gold * 0.5)).sort((a, b) => (b.owned - a.owned) || ((a.rank < 0 ? 99 : a.rank) - (b.rank < 0 ? 99 : b.rank)));
+    if (!rows.length) { closeNpcMenu(g, menu); return false; }
+    rows[0].x.run(); closeNpcMenu(g, null);
+    lastAction = "整備：向凱莎雇用雇傭兵 " + rows[0].x.label;
+    return !!g.mercOf?.(cls);
+  }
   let charmTried = new WeakSet();
   // 咒符評分（依屬性）：本職業技能／全技能高分，別職業技能 0 分；生命、抗性、跑速、魔法尋寶等；四項屬性依排行榜配點比例加權。
   // 技能詞綴對應職業（遊戲 itemArt 的 T6 順序）：classskillsN → T6[N]、skilltabN → T6[floor(N/3)]。
@@ -1173,6 +1272,8 @@
       charmTried.add(cand);
     }
     const best = bestGear(g, [...g.inventoryOf(p.cls)]);
+    // 自己用不到的裝備先看雇傭兵穿不穿得上，再走賣出／存倉。
+    if (!best && equipMerc(g, p.cls)) return;
     if (!best) {
       // 背包滿時先確認沒有可穿的裝備，再賣掉物品騰空間，避免把空欄可用裝備先賣掉。
       if (g.state === "playing" && finite(g.lastInventoryFull) && performance.now() - g.lastInventoryFull < 5000) {
@@ -1254,6 +1355,17 @@
     return Object.values(tabs).flatMap((t) => Array.isArray(t) ? t : []).map((x) => x?.item ?? x).filter((x) => x?.base);
   }
   const shopSteps = {
+    hire(g) {
+      if (shop.smith || shop.mercTried) return true;
+      shop.mercTried = true;
+      return !hireMerc(g, g.kit.id);
+    },
+    merc(g, cls) {
+      // 本職業自己有更好的裝備時先留給自己（穿戴在倉庫步驟處理）。
+      if (!settings.gear.merc || !g.mercOf?.(cls)) return true;
+      if (bestGear(g, [...g.inventoryOf(cls)])) return true;
+      return !equipMerc(g, cls);
+    },
     stash(g, cls) {
       if (!openTrade(g, "stash")) return true;
       const a = trade.gear?.actions, view = trade.gear?.view?.stash;
@@ -1264,6 +1376,8 @@
         // 倉庫與收藏庫的裝備一起評估；原版 equip 在倉庫情境可直接從倉庫或收藏庫取出穿上。
         const best = bestGear(g, [...g.inventoryOf(cls), ...stashItems(view)].filter((x) => !shop.tried.has(x)));
         if (best) { shop.tried.add(best.item); a.equip(best.item, best.slot); lastAction = "整備：換上較佳裝備 " + itemZh(best.item); return false; }
+        // 本職業不需要時，倉庫與收藏庫的裝備也可給雇傭兵。
+        if (equipMerc(g, cls, stashItems(view))) return false;
       }
       if (settings.gear.autoEquip && (view ? view.collect > 0 : shop.smith) && !shop.collected && typeof a.collectAll === "function") { shop.collected = true; a.collectAll(); lastAction = "整備：把獨特／套裝收進收藏庫"; return false; }
       // 依使用者要求：獨特／套裝／符文之語放收藏庫（原版每個名稱只收一件）；同名的由原版比較，品質較好的換進收藏庫，較差的那件賣掉。
@@ -1392,12 +1506,12 @@
       // 剛逛過就直接離開，避免反覆碰到恰西。
       if (now - smithAt < 60000) { if (!trade) g.showTown?.(); trade?.acts?.leave?.(); trade = null; return true; }
       smithAt = now;
-      shop = { steps: ["stash", "sell", "upgrades", "stash", "sell"], i: 0, at: 0, tried: new Set(), buys: 0, actions: 0, open: "store", collected: false, smith: true };
+      shop = { steps: ["merc", "stash", "merc", "sell", "upgrades", "stash", "merc", "sell"], i: 0, at: 0, tried: new Set(), buys: 0, actions: 0, open: "store", collected: false, smith: true };
     }
     if (!shop) {
       if (g.state !== "camp" || !g.camp || g.swapping || typeof g.openCampTrade !== "function" || !g.kit || !g.world?.player || !hookTown(g)) return false;
       charmTried = new WeakSet();
-      shop = { steps: ["stash", "sell", "potions", "upgrades", "stash", "sell"], i: 0, at: 0, tried: new Set(), buys: 0, actions: 0, open: null, collected: false };
+      shop = { steps: ["hire", "merc", "stash", "merc", "sell", "potions", "upgrades", "stash", "merc", "sell"], i: 0, at: 0, tried: new Set(), buys: 0, actions: 0, open: null, collected: false };
     }
     if (now - shop.at < 250) return true;
     shop.at = now;
@@ -2610,7 +2724,7 @@
   group("關卡進程"); field("quest.prioritizeBoss", "優先接近任務頭目"); field("quest.autoStart", "在營地自動開局／續玩（全新存檔可用）");
   group("排行榜學習"); field("build.ladder", "依排行榜高手配法選升級卡"); field("build.autoStats", "依高手比例自動配屬性點"); field("build.redraft", "技能配置和排行榜差太多時向阿卡拉付費重置技能（普通通關後可用，重置後立刻重新選卡）"); field("build.autoReroll", "自動重抽（升級候選卡評分偏低時自動使用重抽）");
   group("地獄任務 4（巴爾單一技能樹占比 75％）"); field("build.h4Reset", "失敗後重置技能嘗試地獄任務 4：地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，難度高、有機率失敗，任務模式預設略過；開啟後多次打不過會回營地重置技能並只投入同一棵技能樹，且任務模式要等 H4 完成才結束"); field("build.h4ResetAfter", "失敗幾次後重置技能（次）");
-  group("裝備管理"); field("gear.autoEquip", "自動裝備管理：穿上較佳裝備、獨特／套裝收進收藏庫、備用稀有裝備存倉庫、賣掉用不到的、向商人買較佳裝備（統一評分，職業技能詞綴只算本職業）"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）");
+  group("裝備管理"); field("gear.autoEquip", "自動裝備管理：穿上較佳裝備、獨特／套裝收進收藏庫、備用稀有裝備存倉庫、賣掉用不到的、向商人買較佳裝備（統一評分，職業技能詞綴只算本職業）"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）"); field("gear.merc", "雇傭兵：回營地向凱莎雇用／復活，並把用得上的裝備給他穿（以雇傭兵數值評分）");
   group("營地整備（每次回營地自動變強）"); field("town.enabled", "回營地自動整備"); field("town.buyPotions", "用金幣向阿卡拉買生命藥水"); field("town.charsiUpgrades", "用金幣升級恰西永久能力");
   tab("assist"); group("死亡保護"); field("deathProtection.enabled", "死亡保護（緊急離開本局）"); field("deathProtection.emergencyHpPercent", "緊急生命門檻（％）"); field("deathProtection.disableAutomation", "觸發後關閉兩頁總開關");
   tab("cheat");
@@ -2720,7 +2834,7 @@
     virtualEssence: virtualEssenceOn,
     get settings() { return settings; },
     // 測試用（唯讀）：離線／實機評估自動配裝時直接呼叫評分與挑選函式。
-    gearTools: { bestGear, gearScore, gearNumbers, charmValue, gearFates, sellList },
+    gearTools: { bestMercGear, mercItemValue, equipMerc, bestGear, gearScore, gearNumbers, charmValue, gearFates, sellList },
   };
   window.__d2autobot = api;
   connect().catch((err) => { if (alive) hookNote = "無法掛接遊戲程式：" + String(err.message || err); fire(checkGameVersion(""), "版本檢查"); });
