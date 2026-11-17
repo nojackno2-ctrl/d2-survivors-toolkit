@@ -36,7 +36,7 @@
       maxCrit: false,
       oneHitKill: false,
       maxSkills: false,
-      maxCastSpeed: false,
+      maxCastSpeed: false,
       maxMonsterDensity: false,
       monsterDensity10x: false,
       allElites: false,
@@ -962,6 +962,30 @@
     lastAction = (fixed ? "重複刷難度：" : questBack ? "補完未完成任務，回此難度重打：" : farm ? "最高難度打不上去，回低難度刷：" : "從營地開新局：") + fresh.difficulty; runStart = { diff: fresh.difficulty, lv: g.world?.player?.level, at: now }; void g.startRun(g.kit, fresh.difficulty);
     return true;
   }
+  // 技能詞綴對應職業（遊戲 itemArt 的 T6 順序）：classskillsN → T6[N]、skilltabN → T6[floor(N/3)]。
+  const SKILL_CLASS_ORDER = ["amazon", "sorceress", "necromancer", "paladin", "barbarian", "druid", "assassin"];
+  // 裝備上「別職業」的技能等級總和（本職業與全技能不算）；用來判斷浪費的詞綴。
+  function foreignSkillLevels(item, cls) {
+    let total = 0;
+    for (const { stat, value } of item?.mods || []) {
+      const m = /^(classskills|skilltab)(\d+)$/.exec(stat);
+      if (!m) continue;
+      const owner = SKILL_CLASS_ORDER[m[1] === "classskills" ? +m[2] : Math.floor(+m[2] / 3)];
+      if (owner && owner !== cls) total += Math.max(0, Number(value) || 0);
+    }
+    return total;
+  }
+  // 裝備上本職業技能等級＋全技能等級總和。
+  function ownSkillLevels(item, cls) {
+    let total = 0;
+    for (const { stat, value } of item?.mods || []) {
+      const n = Math.max(0, Number(value) || 0);
+      if (stat === "allSkills") { total += n; continue; }
+      const m = /^(classskills|skilltab)(\d+)$/.exec(stat);
+      if (m && SKILL_CLASS_ORDER[m[1] === "classskills" ? +m[2] : Math.floor(+m[2] / 3)] === cls) total += n;
+    }
+    return total;
+  }
   // 以原版角色數值（傷害、生命、減傷、抗性）比較背包裝備，再走原版穿戴流程。
   let gearAt = 0;
   function gearNumbers(g, worn) {
@@ -982,7 +1006,10 @@
     const emptyPenalty = ["weapon", "head", "body", "gloves", "belt", "boots", "amulet", "ring1", "ring2"].filter((k) => !worn[k]).length * 15;
     // 語料審查：原版 heroNumbers 沒有這幾項，直接加總身上裝備詞綴；權重取保守值（1 分約傷害 +1％），並設上限避免被單一屬性帶走。
     const sum = (id) => Object.values(worn).reduce((a, it) => a + (it?.mods || []).reduce((b, m) => b + (m.stat === id ? Number(m.value) || 0 : 0), 0), 0);
-    const extra = Math.min(30, sum("lifeLeech")) * 1.2 + Math.min(40, sum("frw")) * 0.3 + Math.min(50, sum("crushingBlow")) * 0.2 + Math.min(100, sum("openWounds")) * 0.08 + Math.min(100, sum("deadlyStrike")) * 0.12;
+    // 依使用者回報：死靈法師自動配裝穿到「+法師技能等級」的裝備。別職業的技能詞綴對本職業完全沒用，視為浪費詞綴，每級扣 6 分（約傷害 6％），讓同等裝備優先選沒浪費的。
+    // 實機確認遊戲內建數值（heroNumbers）不含技能等級，本職業技能與全技能每級加 6 分，否則同條件下與沒技能的裝備同分。
+    const cls = g.world?.player?.cls, wasted = Object.values(worn).reduce((a, it) => a + foreignSkillLevels(it, cls), 0), useful = Object.values(worn).reduce((a, it) => a + ownSkillLevels(it, cls), 0);
+    const extra = (useful - wasted) * 6 +Math.min(30, sum("lifeLeech")) * 1.2 + Math.min(40, sum("frw")) * 0.3 + Math.min(50, sum("crushingBlow")) * 0.2 + Math.min(100, sum("openWounds")) * 0.08 + Math.min(100, sum("deadlyStrike")) * 0.12;
     return -emptyPenalty + extra + Math.log1p(Math.max(0, n.Damage || 0)) * 100 + Math.log1p(Math.max(0, n.Life || 0)) * 130 - Math.log(1 - reduced) * 150 + res + Math.log1p(Math.max(0, n.Defense || 0) / 1000) * 20 + Math.min(1, n["Faster Cast Rate"] || 0) * 20 + (n["Replenish Life"] || 0) * 0.5 + (n["Magic Find"] || 0) * 0.02;
   }
   const equipFailed = new WeakSet();
@@ -995,7 +1022,7 @@
     let best = null;
     // 候選過多（倉庫／收藏庫上千件）時每件都要跑一次原版數值計算，太慢：先用便宜的粗分（品質、詞綴數值總和、防禦）每個欄位只留前 12 件再精算。
     if (items.length > 60) {
-      const rarityRank = { normal: 0, magic: 1, rare: 2, set: 3, runeword: 3, unique: 3 }, cheap = (it) => (rarityRank[it.rarity] ?? 0) * 20 + (it.mods || []).reduce((a, m) => a + Math.abs(Number(m.value) || 0), 0) + (Number(it.defense) || 0) * 0.1;
+      const rarityRank = { normal: 0, magic: 1, rare: 2, set: 3, runeword: 3, unique: 3 }, cheap = (it) => (rarityRank[it.rarity] ?? 0) * 20 + (it.mods || []).reduce((a, m) => a + Math.abs(Number(m.value) || 0), 0) - foreignSkillLevels(it, p.cls) * 6 + (Number(it.defense) || 0) * 0.1;
       const groups = new Map();
       for (const it of items) {
         if (!it?.base || equipFailed.has(it)) continue;
@@ -1055,6 +1082,47 @@
       return gain;
     } catch { return -Infinity; }
   }
+  // ── 統一裝備決策（穿上／收藏／存倉／賣出／購買共用同一套評分）──
+  // 每件背包裝備只有一個去向：collect＝獨特／套裝／符文之語進收藏庫；stash＝同欄位前幾名的備用稀有裝備進倉庫；sell＝其餘賣掉；keep＝符文、寶石、任務物品與有用咒符。
+  // 依據：舊版穿裝（bestGear）、存倉（gearGain ≥ −5）、賣裝（只看品質）各用各的標準，備用裝備數量不設限，倉庫被同欄位的稀有裝備塞滿，也會賣掉剛好比倉庫裝備好的物品。
+  const BACKUP_PER_SLOT = 2, STASH_GAIN_FLOOR = -5;
+  const wornSig = (g, cls) => Object.entries(g.equippedOf(cls) || {}).map(([k, v]) => k + ":" + (v?.name || v?.base)).join("|");
+  const gainCache = new WeakMap();
+  function cachedGain(g, cls, item, sig) {
+    const hit = gainCache.get(item);
+    if (hit && hit.sig === sig) return hit.gain;
+    const gain = gearGain(g, item);
+    gainCache.set(item, { sig, gain });
+    return gain;
+  }
+  function slotKey(g, cls, item) {
+    try { return item.type === "ring" ? "ring" : g.ownGear(cls).doll.slotFor?.(item, g.equippedOf(cls)) || item.type || "?"; } catch { return item?.type || "?"; }
+  }
+  // pool＝要評分的全部裝備（背包＋倉庫／收藏庫），回傳 Map(item → { fate, gain })；去向只對背包裝備有意義，倉庫裝備只參與名次。
+  function gearFates(g, cls, pool) {
+    const sig = wornSig(g, cls), out = new Map(), slots = new Map();
+    for (const it of pool) {
+      if (!it?.base || out.has(it)) continue;
+      if (isCharm(it)) { out.set(it, { fate: it.rarity !== "unique" && charmValue(it, cls) <= 0 ? "sell" : "keep", gain: 0 }); continue; }
+      if (keepType(it) || (it.base === WIRT_LEG && cowWanted(g))) { out.set(it, { fate: "keep", gain: 0 }); continue; }
+      if (["unique", "set", "runeword"].includes(it.rarity)) { out.set(it, { fate: "collect", gain: cachedGain(g, cls, it, sig) }); continue; }
+      if (!["normal", "magic", "rare"].includes(it.rarity)) { out.set(it, { fate: "keep", gain: 0 }); continue; }
+      const gain = cachedGain(g, cls, it, sig);
+      if (it.rarity === "rare" && gain >= STASH_GAIN_FLOOR && !stashRefused.has(it)) { const k = slotKey(g, cls, it); (slots.get(k) || slots.set(k, []).get(k)).push(it); out.set(it, { fate: "sell", gain }); }
+      else out.set(it, { fate: "sell", gain });
+    }
+    // 同欄位（戒指另計）只留前幾名當備用，其餘賣掉；穿不上的（-Infinity）已在上面被 gain 門檻排除。
+    for (const [k, list] of slots) list.sort((a, b) => out.get(b).gain - out.get(a).gain).slice(0, k === "ring" ? BACKUP_PER_SLOT + 1 : BACKUP_PER_SLOT).forEach((it) => { out.get(it).fate = "stash"; });
+    return out;
+  }
+  // 可賣的裝備，由最不值錢排起；背包太滿（desperate）時連備用裝備也依分數由低到高納入。
+  function sellList(g, cls, pool, desperate = false) {
+    const inv = new Set(g.inventoryOf(cls)), fates = gearFates(g, cls, pool), rank = { normal: 0, magic: 1, rare: 2 };
+    const rows = [...fates].filter(([it]) => inv.has(it));
+    const sells = rows.filter(([, v]) => v.fate === "sell").sort((a, b) => (isCharm(a[0]) ? -1 : rank[a[0].rarity] ?? 3) - (isCharm(b[0]) ? -1 : rank[b[0].rarity] ?? 3) || Math.sign(a[1].gain - b[1].gain) || 0);
+    const spare = desperate ? rows.filter(([, v]) => v.fate === "stash").sort((a, b) => a[1].gain - b[1].gain) : [];
+    return [...sells, ...spare].map(([it]) => it);
+  }
   let charmTried = new WeakSet();
   // 咒符評分（依屬性）：本職業技能／全技能高分，別職業技能 0 分；生命、抗性、跑速、魔法尋寶等；四項屬性依排行榜配點比例加權。
   // 技能詞綴對應職業（遊戲 itemArt 的 T6 順序）：classskillsN → T6[N]、skilltabN → T6[floor(N/3)]。
@@ -1108,14 +1176,14 @@
     if (!best) {
       // 背包滿時先確認沒有可穿的裝備，再賣掉物品騰空間，避免把空欄可用裝備先賣掉。
       if (g.state === "playing" && finite(g.lastInventoryFull) && performance.now() - g.lastInventoryFull < 5000) {
-        const rank = { normal: 0, magic: 1, rare: 2, set: 3, unique: 4 }, junk = g.inventoryOf(p.cls).filter((x) => x?.base && !keepType(x) && !isCharm(x) && x.rarity in rank).sort((a, b) => rank[a.rarity] - rank[b.rarity])[0];
+        const rank = { normal: 0, magic: 1, rare: 2, set: 3, unique: 4 }, junk = sellList(g, p.cls, g.inventoryOf(p.cls), true)[0] || g.inventoryOf(p.cls).filter((x) => x?.base && !keepType(x) && !isCharm(x) && x.rarity in rank).sort((a, b) => rank[a.rarity] - rank[b.rarity])[0];
         if (junk) { g.gearActions(p.cls, () => {}, false).sell(junk); g.lastInventoryFull = -Infinity; lastAction = "背包已滿，賣掉 " + (junk.name || junk.base); return; }
       }
       // 沒用的裝備（普通／魔法／稀有且不比身上好）撿到就賣，不等背包滿；獨特、套裝、符文之語、咒符留給收藏與倉庫。
       if (settings.town.sellJunk) {
         // 背包快滿（約 40 格）時一次多賣幾件並先賣最低品質，避免被裝備塞滿；平時一次一件。
-        const rank = { normal: 0, magic: 1, rare: 2 }, inv = g.inventoryOf(p.cls);
-        const junks = inv.filter((x) => x?.base && (!keepType(x) && !isCharm(x) && x.rarity in rank || isCharm(x) && x.rarity !== "unique" && charmValue(x, p.cls) <= 0)).sort((a, b) => (isCharm(a) ? -1 : rank[a.rarity]) - (isCharm(b) ? -1 : rank[b.rarity]));
+        // 依統一裝備決策：只賣去向為 sell 的；備用裝備（同欄位前幾名稀有）留到回營地存倉庫，背包快滿才一併賣最差的。
+        const inv = g.inventoryOf(p.cls), junks = sellList(g, p.cls, inv, inv.length >= 28);
         const acts = g.gearActions(p.cls, () => {}, false);
         for (const junk of junks.slice(0, inv.length >= 28 ? 4 : 1)) { acts.sell(junk); if (!g.inventoryOf(p.cls).includes(junk)) lastAction = "賣掉用不到的裝備 " + (junk.name || junk.base); }
       }
@@ -1125,7 +1193,7 @@
     if (Object.values(g.equippedOf(p.cls)).includes(best.item)) lastAction = "已自動穿上較佳裝備：" + itemZh(best.item);
     else {
       // 背包塞滿時換裝沒有空格放被換下的裝備：先賣一件用不到的低品質裝備騰空間，下一輪再試；沒有可賣的才放棄這件。
-      const rank = { normal: 0, magic: 1, rare: 2 }, junk = g.inventoryOf(p.cls).filter((x) => x?.base && x !== best.item && !keepType(x) && !isCharm(x) && x.rarity in rank).sort((a, b) => rank[a.rarity] - rank[b.rarity])[0];
+      const junk = sellList(g, p.cls, g.inventoryOf(p.cls).filter((x) => x !== best.item), true)[0];
       const full = finite(g.lastInventoryFull) && performance.now() - g.lastInventoryFull < 5000;
       if (junk && full) { g.gearActions(p.cls, () => {}, false).sell(junk); g.lastInventoryFull = -Infinity; if (!g.inventoryOf(p.cls).includes(junk)) { lastAction = "背包已滿，賣掉 " + (junk.name || junk.base) + " 再換裝"; return; } }
       equipFailed.add(best.item);
@@ -1178,6 +1246,13 @@
     const tabs = values(view?.tabs).flat(), kept = values(view?.uniques).flat();
     return [...tabs, ...kept].map((x) => x?.item ?? x).filter((x) => x?.base);
   }
+  // 倉庫全部裝備：開著倉庫畫面用其 view；沒開（例如在商店畫面）就讀存檔的倉庫分頁，讓名次比較在各步驟都一致。
+  function ownedStash(g, view) {
+    const fromView = view ? stashItems(view) : [];
+    if (fromView.length || view) return fromView;
+    const tabs = g.save?.stashTabs || {};
+    return Object.values(tabs).flatMap((t) => Array.isArray(t) ? t : []).map((x) => x?.item ?? x).filter((x) => x?.base);
+  }
   const shopSteps = {
     stash(g, cls) {
       if (!openTrade(g, "stash")) return true;
@@ -1193,7 +1268,7 @@
       if (settings.town.collect && (view ? view.collect > 0 : shop.smith) && !shop.collected && typeof a.collectAll === "function") { shop.collected = true; a.collectAll(); lastAction = "整備：把獨特／套裝收進收藏庫"; return false; }
       // 依使用者要求：獨特／套裝／符文之語放收藏庫（原版每個名稱只收一件）；同名的由原版比較，品質較好的換進收藏庫，較差的那件賣掉。
       // 原版 toStash 在收藏庫分頁（uniques）：沒有同名→收入；同名且較好→swapIn（舊的回到背包）；同名且不較好→拒絕。
-      if (settings.town.collect && typeof a.toStash === "function" && typeof a.openStashTab === "function" && view?.open) {
+      if (settings.town.collect && typeof a.toStash === "function" && typeof a.openStashTab === "function" && view) {
         const kept = (it) => (view.uniques instanceof Map ? [...view.uniques.values()] : Object.values(view.uniques || {})).flat().map((x) => x?.item ?? x).find((x) => x && x !== it && x.name === it.name && x.rarity === it.rarity);
         if (shop.collecting) { const it = shop.collecting; shop.collecting = null; const old = shop.collectingTwin; shop.collectingTwin = null; if (g.inventoryOf(cls).includes(it)) { if (kept(it)) duplicateJunk.add(it); else shop.tried.delete(it); collectRefused.add(it); } else if (old && g.inventoryOf(cls).includes(old)) duplicateJunk.add(old); }
         const item = g.inventoryOf(cls).find((x) => x?.base && x.name && !shop.tried.has(x) && !collectRefused.has(x) && !duplicateJunk.has(x) && !keepType(x) && !(x.base === WIRT_LEG && cowWanted(g)) && ["unique", "set", "runeword"].includes(x.rarity));
@@ -1204,7 +1279,10 @@
         // 上一件存不進去（個人倉庫已滿，仍留在背包）：記住不再存，稀有的交給賣裝步驟，避免背包被存不進去的裝備塞滿。
         if (shop.stashing) { if (g.inventoryOf(cls).includes(shop.stashing)) { stashRefused.add(shop.stashing); shop.tried.delete(shop.stashing); } shop.stashing = null; }
         // 稀有裝備只有接近身上裝備（分數差 5 分以內，可當備用）才存；其餘留給賣裝，倉庫才不會被用不到的稀有裝備塞滿。獨特／套裝／符文之語一律存。
-        const item = g.inventoryOf(cls).find((x) => x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !keepType(x) && !(x.base === WIRT_LEG && cowWanted(g)) && (["unique", "set", "runeword"].includes(x.rarity) || x.rarity === "rare" && gearGain(g, x) >= -5));
+        // 依統一裝備決策：收藏庫拒收的獨特／套裝（collect）與同欄位前幾名備用稀有（stash）才存。
+        const fates = gearFates(g, cls, [...g.inventoryOf(cls), ...stashItems(view)]);
+        // 依使用者要求：收藏庫優先於個人倉庫——能進收藏庫的（獨特／套裝／符文之語）只有收藏關閉或收藏庫明確拒收（collectRefused）時才存個人倉庫。
+        const item = g.inventoryOf(cls).find((x) => { const f = fates.get(x)?.fate; return x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !duplicateJunk.has(x) && (f === "stash" || f === "collect" && (!settings.town.collect || !x.name || collectRefused.has(x))); });
         // 原版 toStash 存進「目前開著的分頁」；使用者要求只能存個人倉庫，目前不是個人分頁（共用或收藏庫）時先切回個人分頁，下一輪再存。
         if (item && view?.open && view.open !== "personal" && typeof a.openStashTab === "function") { a.openStashTab("personal"); lastAction = "整備：切換到個人倉庫"; return false; }
         if (item) { shop.tried.add(item); shop.stashing = item; a.toStash(item); lastAction = "整備：存入倉庫 " + itemZh(item); return false; }
@@ -1220,7 +1298,9 @@
     },
     sell(g, cls) {
       if (!settings.town.sellJunk || !openTrade(g, "store")) return true;
-      const a = trade.gear?.actions, item = g.inventoryOf(cls).find((x) => x?.base && !keepType(x) && (duplicateJunk.has(x) && !shop.soldTry?.has(x) || !shop.tried.has(x) && ["normal", "magic", "rare"].includes(x.rarity)));
+      // 依統一裝備決策：只賣去向為 sell 的（含收藏庫已有更好同名的重複品、沒用的咒符）；備用裝備與收藏候補不賣。
+      const a = trade.gear?.actions, dup = g.inventoryOf(cls).find((x) => x?.base && !keepType(x) && duplicateJunk.has(x) && !shop.soldTry?.has(x));
+      const item = dup || sellList(g, cls, [...g.inventoryOf(cls), ...ownedStash(g, trade.gear?.view?.stash)]).find((x) => !shop.tried.has(x) && !duplicateJunk.has(x));
       if (!a?.sell || !item) return true;
       shop.tried.add(item); (shop.soldTry ??= new Set()).add(item); a.sell(item); lastAction = "整備：賣出 " + itemZh(item);
       return false;
@@ -1244,7 +1324,15 @@
       if (settings.town.buyGear && settings.gear.autoEquip) {
         const offers = wares.filter((w) => w?.item && w.canBuy && !shop.tried.has(w.item));
         const best = offers.length ? bestGear(g, offers.map((w) => w.item)) : null;
-        if (best) { shop.tried.add(best.item); trade.acts.buy(wares.findIndex((w) => w.item === best.item)); lastAction = "整備：向恰西買較佳裝備 " + itemZh(best.item); return false; }
+        if (best) {
+          shop.tried.add(best.item);
+          // 依統一裝備決策：買進前先確認划算——小幅提升（分數差 < 8）不花超過一半的金幣，也不買背包／倉庫已有更好的同欄位備用裝備（那件穿上即可）。
+          const idx = wares.findIndex((w) => w.item === best.item), cost = Number(wares[idx]?.cost), gold = Number.isFinite(Number(trade.gold)) ? Number(trade.gold) : Infinity;
+          const owned = [...g.inventoryOf(g.kit.id), ...ownedStash(g, trade.gear?.view?.stash)].filter((x) => x?.base && x !== best.item && slotKey(g, g.kit.id, x) === best.slot);
+          const ownedBetter = owned.some((x) => cachedGain(g, g.kit.id, x, wornSig(g, g.kit.id)) >= best.gain);
+          if (ownedBetter || (best.gain < 8 && Number.isFinite(cost) && cost > gold * 0.5)) { lastAction = "整備：略過不划算的商店裝備 " + itemZh(best.item); return false; }
+          trade.acts.buy(idx); lastAction = "整備：向恰西買較佳裝備 " + itemZh(best.item); return false;
+        }
       }
       if (!settings.town.charsiUpgrades) return true;
       // 依優先順序加權並計入已買等級，讓金幣平均投入生命、減傷、回血等永久成長。
@@ -1304,12 +1392,12 @@
       // 剛逛過就直接離開，避免反覆碰到恰西。
       if (now - smithAt < 60000) { if (!trade) g.showTown?.(); trade?.acts?.leave?.(); trade = null; return true; }
       smithAt = now;
-      shop = { steps: ["stash", "sell", "upgrades", "stash"], i: 0, at: 0, tried: new Set(), buys: 0, actions: 0, open: "store", collected: false, smith: true };
+      shop = { steps: ["stash", "sell", "upgrades", "stash", "sell"], i: 0, at: 0, tried: new Set(), buys: 0, actions: 0, open: "store", collected: false, smith: true };
     }
     if (!shop) {
       if (g.state !== "camp" || !g.camp || g.swapping || typeof g.openCampTrade !== "function" || !g.kit || !g.world?.player || !hookTown(g)) return false;
       charmTried = new WeakSet();
-      shop = { steps: ["stash", "sell", "potions", "upgrades", "stash"], i: 0, at: 0, tried: new Set(), buys: 0, actions: 0, open: null, collected: false };
+      shop = { steps: ["stash", "sell", "potions", "upgrades", "stash", "sell"], i: 0, at: 0, tried: new Set(), buys: 0, actions: 0, open: null, collected: false };
     }
     if (now - shop.at < 250) return true;
     shop.at = now;
@@ -2632,7 +2720,7 @@
     virtualEssence: virtualEssenceOn,
     get settings() { return settings; },
     // 測試用（唯讀）：離線／實機評估自動配裝時直接呼叫評分與挑選函式。
-    gearTools: { bestGear, gearScore, gearNumbers, charmValue },
+    gearTools: { bestGear, gearScore, gearNumbers, charmValue, gearFates, sellList },
   };
   window.__d2autobot = api;
   connect().catch((err) => { if (alive) hookNote = "無法掛接遊戲程式：" + String(err.message || err); fire(checkGameVersion(""), "版本檢查"); });
