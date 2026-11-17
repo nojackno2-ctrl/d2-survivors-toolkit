@@ -23,8 +23,8 @@
     terror: { mode: "off", targetFarmTier: 1, autoReviveOrRestart: false, postClearWaitSec: 3 },
     quest: { autoProgress: false, prioritizeBoss: true, autoStart: true, farmDifficulty: "off", fixedDifficulty: "hell" },
     gear: { autoEquip: true, minGainPercent: 2 },
-    // 陣亡回營地後的整備：收藏、倉庫、賣裝、買藥、恰西升級，讓每一局都比上一局強。
-    town: { enabled: true, collect: true, stash: true, sellJunk: true, buyPotions: true, charsiUpgrades: true, buyGear: true },
+    // 陣亡回營地後的整備：裝備管理（gear.autoEquip 一個開關管穿上、收藏、存倉、賣出、買裝）、買藥、恰西升級，讓每一局都比上一局強。
+    town: { enabled: true, buyPotions: true, charsiUpgrades: true },
     // h4Reset／h4ResetAfter：地獄任務 4（H4）多次失敗後重置技能並只投入同一棵技能樹（見 campTreeReset）。H4 難度高，預設 false＝任務模式略過 H4；使用者開啟才挑戰。
     build: { ladder: true, autoStats: true, redraft: true, autoReroll: true, h4Reset: false, h4ResetAfter: 2 },
     // 實測 39～46 級角色陣亡會從 1 級重來；預設開啟：快被打死時原版「儲存並離開」，回營地後自動繼續上次進度。
@@ -1180,7 +1180,7 @@
         if (junk) { g.gearActions(p.cls, () => {}, false).sell(junk); g.lastInventoryFull = -Infinity; lastAction = "背包已滿，賣掉 " + (junk.name || junk.base); return; }
       }
       // 沒用的裝備（普通／魔法／稀有且不比身上好）撿到就賣，不等背包滿；獨特、套裝、符文之語、咒符留給收藏與倉庫。
-      if (settings.town.sellJunk) {
+      if (settings.gear.autoEquip) {
         // 背包快滿（約 40 格）時一次多賣幾件並先賣最低品質，避免被裝備塞滿；平時一次一件。
         // 依統一裝備決策：只賣去向為 sell 的；備用裝備（同欄位前幾名稀有）留到回營地存倉庫，背包快滿才一併賣最差的。
         const inv = g.inventoryOf(p.cls), junks = sellList(g, p.cls, inv, inv.length >= 28);
@@ -1265,24 +1265,24 @@
         const best = bestGear(g, [...g.inventoryOf(cls), ...stashItems(view)].filter((x) => !shop.tried.has(x)));
         if (best) { shop.tried.add(best.item); a.equip(best.item, best.slot); lastAction = "整備：換上較佳裝備 " + itemZh(best.item); return false; }
       }
-      if (settings.town.collect && (view ? view.collect > 0 : shop.smith) && !shop.collected && typeof a.collectAll === "function") { shop.collected = true; a.collectAll(); lastAction = "整備：把獨特／套裝收進收藏庫"; return false; }
+      if (settings.gear.autoEquip && (view ? view.collect > 0 : shop.smith) && !shop.collected && typeof a.collectAll === "function") { shop.collected = true; a.collectAll(); lastAction = "整備：把獨特／套裝收進收藏庫"; return false; }
       // 依使用者要求：獨特／套裝／符文之語放收藏庫（原版每個名稱只收一件）；同名的由原版比較，品質較好的換進收藏庫，較差的那件賣掉。
       // 原版 toStash 在收藏庫分頁（uniques）：沒有同名→收入；同名且較好→swapIn（舊的回到背包）；同名且不較好→拒絕。
-      if (settings.town.collect && typeof a.toStash === "function" && typeof a.openStashTab === "function" && view) {
+      if (settings.gear.autoEquip && typeof a.toStash === "function" && typeof a.openStashTab === "function" && view) {
         const kept = (it) => (view.uniques instanceof Map ? [...view.uniques.values()] : Object.values(view.uniques || {})).flat().map((x) => x?.item ?? x).find((x) => x && x !== it && x.name === it.name && x.rarity === it.rarity);
         if (shop.collecting) { const it = shop.collecting; shop.collecting = null; const old = shop.collectingTwin; shop.collectingTwin = null; if (g.inventoryOf(cls).includes(it)) { if (kept(it)) duplicateJunk.add(it); else shop.tried.delete(it); collectRefused.add(it); } else if (old && g.inventoryOf(cls).includes(old)) duplicateJunk.add(old); }
         const item = g.inventoryOf(cls).find((x) => x?.base && x.name && !shop.tried.has(x) && !collectRefused.has(x) && !duplicateJunk.has(x) && !keepType(x) && !(x.base === WIRT_LEG && cowWanted(g)) && ["unique", "set", "runeword"].includes(x.rarity));
         if (item && view.open !== "uniques") { a.openStashTab("uniques"); lastAction = "整備：切換到收藏庫"; return false; }
         if (item) { shop.tried.add(item); shop.collecting = item; shop.collectingTwin = kept(item) || null; a.toStash(item); lastAction = "整備：放入收藏庫（同名留較好的） " + itemZh(item); return false; }
       }
-      if (settings.town.stash && typeof a.toStash === "function") {
+      if (settings.gear.autoEquip && typeof a.toStash === "function") {
         // 上一件存不進去（個人倉庫已滿，仍留在背包）：記住不再存，稀有的交給賣裝步驟，避免背包被存不進去的裝備塞滿。
         if (shop.stashing) { if (g.inventoryOf(cls).includes(shop.stashing)) { stashRefused.add(shop.stashing); shop.tried.delete(shop.stashing); } shop.stashing = null; }
         // 稀有裝備只有接近身上裝備（分數差 5 分以內，可當備用）才存；其餘留給賣裝，倉庫才不會被用不到的稀有裝備塞滿。獨特／套裝／符文之語一律存。
         // 依統一裝備決策：收藏庫拒收的獨特／套裝（collect）與同欄位前幾名備用稀有（stash）才存。
         const fates = gearFates(g, cls, [...g.inventoryOf(cls), ...stashItems(view)]);
         // 依使用者要求：收藏庫優先於個人倉庫——能進收藏庫的（獨特／套裝／符文之語）只有收藏關閉或收藏庫明確拒收（collectRefused）時才存個人倉庫。
-        const item = g.inventoryOf(cls).find((x) => { const f = fates.get(x)?.fate; return x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !duplicateJunk.has(x) && (f === "stash" || f === "collect" && (!settings.town.collect || !x.name || collectRefused.has(x))); });
+        const item = g.inventoryOf(cls).find((x) => { const f = fates.get(x)?.fate; return x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !duplicateJunk.has(x) && (f === "stash" || f === "collect" && (!x.name || collectRefused.has(x))); });
         // 原版 toStash 存進「目前開著的分頁」；使用者要求只能存個人倉庫，目前不是個人分頁（共用或收藏庫）時先切回個人分頁，下一輪再存。
         if (item && view?.open && view.open !== "personal" && typeof a.openStashTab === "function") { a.openStashTab("personal"); lastAction = "整備：切換到個人倉庫"; return false; }
         if (item) { shop.tried.add(item); shop.stashing = item; a.toStash(item); lastAction = "整備：存入倉庫 " + itemZh(item); return false; }
@@ -1290,14 +1290,14 @@
       // 秘密乳牛關卡（N3）：原版 LM() 只認「背包裡」的維特之腿才開傳送門；腿放在倉庫（例如 shared 分頁，實測 stashTabs.shared3）時
       // 格里斯華爾德死亡只會判成 "nothing"（Game-DPAk 約 230681）。本難度 N3 未完成就用原版倉庫動作 fromStash（約 398125）把腿拿回背包。
       // 放在收進收藏庫（collectAll）之後，避免被一併收走；toStash 已排除維特之腿。
-      if (typeof a.fromStash === "function" && questOn() && cowWanted(g) && (shop.collected || !settings.town.collect) && !g.inventoryOf(cls).some((x) => x?.base === WIRT_LEG)) {
+      if (typeof a.fromStash === "function" && questOn() && cowWanted(g) && (shop.collected || !settings.gear.autoEquip) && !g.inventoryOf(cls).some((x) => x?.base === WIRT_LEG)) {
         const leg = stashItems(view).find((x) => x?.base === WIRT_LEG && !shop.tried.has(x));
         if (leg) { shop.tried.add(leg); a.fromStash(leg); lastAction = "整備：從倉庫取出維特之腿（乳牛關卡）"; return false; }
       }
       return true;
     },
     sell(g, cls) {
-      if (!settings.town.sellJunk || !openTrade(g, "store")) return true;
+      if (!settings.gear.autoEquip || !openTrade(g, "store")) return true;
       // 依統一裝備決策：只賣去向為 sell 的（含收藏庫已有更好同名的重複品、沒用的咒符）；備用裝備與收藏候補不賣。
       const a = trade.gear?.actions, dup = g.inventoryOf(cls).find((x) => x?.base && !keepType(x) && duplicateJunk.has(x) && !shop.soldTry?.has(x));
       const item = dup || sellList(g, cls, [...g.inventoryOf(cls), ...ownedStash(g, trade.gear?.view?.stash)]).find((x) => !shop.tried.has(x) && !duplicateJunk.has(x));
@@ -1321,7 +1321,7 @@
     upgrades(g) {
       if (!openTrade(g, "store")) return true;
       const wares = trade.wares;
-      if (settings.town.buyGear && settings.gear.autoEquip) {
+      if (settings.gear.autoEquip) {
         const offers = wares.filter((w) => w?.item && w.canBuy && !shop.tried.has(w.item));
         const best = offers.length ? bestGear(g, offers.map((w) => w.item)) : null;
         if (best) {
@@ -2610,8 +2610,8 @@
   group("關卡進程"); field("quest.prioritizeBoss", "優先接近任務頭目"); field("quest.autoStart", "在營地自動開局／續玩（全新存檔可用）");
   group("排行榜學習"); field("build.ladder", "依排行榜高手配法選升級卡"); field("build.autoStats", "依高手比例自動配屬性點"); field("build.redraft", "技能配置和排行榜差太多時向阿卡拉付費重置技能（普通通關後可用，重置後立刻重新選卡）"); field("build.autoReroll", "自動重抽（升級候選卡評分偏低時自動使用重抽）");
   group("地獄任務 4（巴爾單一技能樹占比 75％）"); field("build.h4Reset", "失敗後重置技能嘗試地獄任務 4：地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，難度高、有機率失敗，任務模式預設略過；開啟後多次打不過會回營地重置技能並只投入同一棵技能樹，且任務模式要等 H4 完成才結束"); field("build.h4ResetAfter", "失敗幾次後重置技能（次）");
-  group("裝備"); field("gear.autoEquip", "自動穿上較佳裝備"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）");
-  group("營地整備（每次回營地自動變強）"); field("town.enabled", "回營地自動整備"); field("town.collect", "獨特／套裝收進收藏庫"); field("town.stash", "較好的裝備存入倉庫"); field("town.sellJunk", "賣掉用不到的裝備"); field("town.buyPotions", "用金幣向阿卡拉買生命藥水"); field("town.charsiUpgrades", "用金幣升級恰西永久能力"); field("town.buyGear", "向商人買較佳裝備");
+  group("裝備管理"); field("gear.autoEquip", "自動裝備管理：穿上較佳裝備、獨特／套裝收進收藏庫、備用稀有裝備存倉庫、賣掉用不到的、向商人買較佳裝備（統一評分，職業技能詞綴只算本職業）"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）");
+  group("營地整備（每次回營地自動變強）"); field("town.enabled", "回營地自動整備"); field("town.buyPotions", "用金幣向阿卡拉買生命藥水"); field("town.charsiUpgrades", "用金幣升級恰西永久能力");
   tab("assist"); group("死亡保護"); field("deathProtection.enabled", "死亡保護（緊急離開本局）"); field("deathProtection.emergencyHpPercent", "緊急生命門檻（％）"); field("deathProtection.disableAutomation", "觸發後關閉兩頁總開關");
   tab("cheat");
   group("修改總控制");

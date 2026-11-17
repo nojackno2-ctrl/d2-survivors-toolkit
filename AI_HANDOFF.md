@@ -37,7 +37,7 @@
 13. **AI 文件單一原則**：所有 AI 代理紀錄統一於本檔，不另開零散交接檔或分析報告。
 
 ## 長期規則（以最新版為主）
-- **營地裝備統一決策（2026-11-17）**：穿上、收藏、存倉、賣出、買裝共用 `gearFates`（`helper/autobot.js`，`gearTools` 匯出）：獨特／套裝／符文之語→collect；同欄位（戒指 3 件）前 2 名且分數差 ≥ −5 的稀有→stash；其餘→sell；符文寶石任務物品與有用咒符→keep。**收藏庫優先於個人倉庫**：collect 去向的裝備只有收藏關閉、沒有名稱或收藏庫明確拒收時才會存個人倉庫，同名重複品直接賣掉不存倉庫。倉庫裝備一併參與名次（`ownedStash`）。別職業技能詞綴每級扣 6 分、本職業／全技能每級加 6 分（遊戲內建數值不計技能等級）。買裝加價格護欄（小幅提升不花超過一半金幣）；整備步驟尾端多一次 sell，清掉買裝換下的舊裝。實機模擬：`craft-live.cjs` 配 `gear-town-integrated-live.js`、`gear-foreign-skill-live.js`。
+- **營地裝備統一決策（2026-11-17）**：穿上、收藏、存倉、賣出、買裝共用 `gearFates`（`helper/autobot.js`，`gearTools` 匯出）：獨特／套裝／符文之語→collect；同欄位（戒指 3 件）前 2 名且分數差 ≥ −5 的稀有→stash；其餘→sell；符文寶石任務物品與有用咒符→keep。**開關只有一個**：`gear.autoEquip`（輔助器「裝備管理」）管穿上／收藏／存倉／賣出／買裝，舊的 `town.collect／stash／sellJunk／buyGear` 已移除；`town.enabled`、`buyPotions`、`charsiUpgrades` 仍管藥水與恰西升級。**收藏庫優先於個人倉庫**：collect 去向的裝備只有收藏關閉、沒有名稱或收藏庫明確拒收時才會存個人倉庫，同名重複品直接賣掉不存倉庫。倉庫裝備一併參與名次（`ownedStash`）。別職業技能詞綴每級扣 6 分、本職業／全技能每級加 6 分（遊戲內建數值不計技能等級）。買裝加價格護欄（小幅提升不花超過一半金幣）；整備步驟尾端多一次 sell，清掉買裝換下的舊裝。實機模擬：`craft-live.cjs` 配 `gear-town-integrated-live.js`、`gear-foreign-skill-live.js`。
 - **實機測試規範**：一律以官方網址 `https://d2survivors.lol/play/` 進行實測，禁止使用本地快照伺服器（快照缺少 setup.html 會轉址失敗）。測試使用 `tests/live-harness`（Electron）獨立設定檔，不碰使用者真實存檔。
 - **存檔隔離原則**：多個存檔同時測試必須在獨立環境與設定檔。一般實機測試使用 D2S1 存檔副本；測試「自動配裝」時開全新存檔並以修改器解鎖全裝備庫，由輔助器自行挑選穿戴。
 - **遊戲更新流程（全自動）**：使用者說「遊戲更新了」即授權執行 `node verify/auto.cjs`：偵測新版 → `verify.cjs --update` 比對與回歸 → `verify/live-smoke.cjs` 實機煙霧測試 → `publish.cjs --confirm --auto --no-desktop`。失敗即停；工作目錄有未提交修改時不發布。新遊戲內容由使用者決定是否加入。
