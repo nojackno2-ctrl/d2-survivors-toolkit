@@ -165,6 +165,11 @@
   <section>
     <h2>更新日誌</h2>
     <p class="dim">介紹網頁：<a href="https://d2-survivors-toolkit.nojackno2.workers.dev/#changelog" target="_blank" rel="noopener" style="color:var(--gold)">d2-survivors-toolkit.nojackno2.workers.dev</a></p>
+    <h3>2026-11-19</h3>
+    <h4>修改器</h4>
+    <ul>
+      <li>修改器網頁版：修正按「寫入存檔」確認後誤報「無法確認存檔模式，請重試」而寫入失敗的問題（例如一鍵解鎖收藏庫後寫入）。</li>
+    </ul>
     <h3>2026-11-17</h3>
     <h4>輔助器</h4>
     <ul>
@@ -2411,11 +2416,16 @@ async function resolveSaveMode(query) {
     return mode === "local" || mode === "online" ? mode : "unknown";
   } catch { return "unknown"; }
 }
-async function checkSaveMode() {
+// 並行呼叫（視窗聚焦、寫入前檢查）共用同一次查詢；否則後發的查詢會讓先發者因序號過期而誤報「無法確認」
+let saveModeInflight = null;
+function checkSaveMode() {
+  return saveModeInflight ??= runSaveModeCheck().finally(() => { saveModeInflight = null; });
+}
+async function runSaveModeCheck() {
   const seq = ++saveModeSequence;
   onlineSaveMode = true; updateWriteAvailability();
   const mode = await resolveSaveMode(queryBackendSaveMode);
-  if (seq !== saveModeSequence) return false;
+  if (seq !== saveModeSequence) return !onlineSaveMode;
   onlineSaveMode = mode !== "local";
   const banner = $("#onlineModeBanner"), writeBtn = $("#write");
   if (banner) banner.hidden = !onlineSaveMode;

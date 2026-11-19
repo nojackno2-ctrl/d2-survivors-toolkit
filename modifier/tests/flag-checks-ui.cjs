@@ -218,13 +218,18 @@ app.whenReady().then(async () => {
     window.api.saveMode = () => new Promise(() => {}); await write();
     const timeout = { writes, text: document.querySelector('#status').textContent };
     window.api.saveMode = async () => ({ error: '不支援的操作：saveMode' }); await write();
-    return { legacy, online, error, timeout, unsupported: writes };
+    // 回歸：確認視窗關閉後的 focus 事件與寫入前檢查並行，不可誤報「無法確認存檔模式」
+    window.api.saveMode = async () => { await new Promise(r => setTimeout(r, 30)); return 'local'; };
+    const before = writes; window.confirm = () => { setTimeout(() => window.dispatchEvent(new Event('focus')), 0); return true; };
+    await write(); const raced = writes - before;
+    return { legacy, online, error, timeout, unsupported: writes - raced, raced };
   })()`);
   assert.equal(editorModes.legacy, 1);
   assert.equal(editorModes.online, 1);
   assert.deepEqual(editorModes.error, { writes: 1, text: '無法確認存檔模式，請重試' });
   assert.deepEqual(editorModes.timeout, { writes: 1, text: '無法確認存檔模式，請重試' });
   assert.equal(editorModes.unsupported, 2);
+  assert.equal(editorModes.raced, 1, 'focus 與寫入前檢查並行時仍應寫入');
 
   console.log('存檔檢查（旗標／模式）介面測試通過'); clearTimeout(watchdog); app.exit(0);
 }).catch(e => { console.error(e.stack); clearTimeout(watchdog); app.exit(1); });
