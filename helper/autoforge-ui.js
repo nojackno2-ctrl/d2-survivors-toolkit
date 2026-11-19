@@ -587,7 +587,7 @@ function render() {
       <div style="opacity:.8">不連伺服器，由本機決定淬鍊結果；必定成功需先開啟本地淬鍊。</div>
       <div id="af-local-unavailable" style="color:#f08070"></div>
       <div style="display:flex;align-items:center;gap:8px;min-height:44px"><span style="flex:1">本地淬鍊（不連伺服器，本機決定結果）</span><button id="af-local-enabled" type="button" role="switch" style="min-width:64px;min-height:44px"></button></div>
-      <div style="display:flex;align-items:center;gap:8px;min-height:44px"><span style="flex:1">必定成功／地獄熔爐必定倍增</span><button id="af-local-sure" type="button" role="switch" style="min-width:64px;min-height:44px"></button></div>
+      <div style="display:flex;align-items:center;gap:8px;min-height:44px"><span style="flex:1">必定成功／地獄熔爐必定倍增（需先開啟本地淬鍊）</span><button id="af-local-sure" type="button" role="switch" style="min-width:64px;min-height:44px"></button></div>
       <div id="af-local-stats"></div>
     </div>
     ${itemLine}
@@ -662,7 +662,10 @@ function refreshLocalControls() {
   for (const key of ["enabled", "sure"]) {
     const button = box.querySelector("#af-local-" + key); if (!button) return;
     const on = available && (key === "enabled" ? !!local.enabled() : !!local.enabled() && !!settings.sure);
-    button.disabled = !available || (key === "sure" && !local.enabled()); button.setAttribute("aria-checked", String(on)); button.textContent = on ? "開啟" : "關閉";
+    button.disabled = !available || (key === "sure" && !local.enabled()); button.setAttribute("aria-checked", String(on));
+    // 狀態一目瞭然：開＝綠底＋「● 已開啟」，關＝灰底＋「○ 已關閉」，不可用＝變暗（文字寫狀態，不寫動作）。
+    button.textContent = on ? "● 已開啟" : "○ 已關閉";
+    button.style.cssText = `min-width:92px;min-height:44px;border-radius:22px;font-weight:bold;border:2px solid ${on ? "#4caf50" : "#777"};background:${on ? "#2e7d32" : "#3a3a3a"};color:${on ? "#fff" : "#bbb"};opacity:${button.disabled ? ".45" : "1"}`;
   }
   const message = box.querySelector("#af-local-unavailable"); if (message) message.textContent = local && !available ? "線上存檔不可用" : !local ? "本地淬鍊模組尚未載入" : "";
   const stats = box.querySelector("#af-local-stats"); if (stats) stats.textContent = `本機處理次數：${Object.values(local?.stats?.local || {}).reduce((a, b) => a + b, 0)}／放行次數：${local?.stats?.passed || 0}`;

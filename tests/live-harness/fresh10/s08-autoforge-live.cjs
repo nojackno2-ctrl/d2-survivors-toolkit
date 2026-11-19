@@ -44,7 +44,7 @@ async function main() {
     const sleep=ms=>new Promise(r=>setTimeout(r,ms));document.body.classList.add('frontend-over-run');window.__d2autoforgeUI.open();await sleep(300);
     const get=()=>{const a=document.querySelector('#af-local-enabled'),b=document.querySelector('#af-local-sure');return {enabled:{checked:a?.getAttribute('aria-checked'),text:a?.textContent,disabled:a?.disabled},sure:{checked:b?.getAttribute('aria-checked'),text:b?.textContent,disabled:b?.disabled},settings:window.__d2forgeLocal.settings(),active:window.__d2forgeLocal.enabled(),stored:JSON.parse(localStorage.getItem('d2forgeLocal.settings')||'null')}};
     document.querySelector('#af-local-enabled').click();const off=get();document.querySelector('#af-local-enabled').click();document.querySelector('#af-local-sure').click();document.querySelector('#af-local-sure').click();const on=get();
-    return {ok:off.enabled.checked==='false'&&off.enabled.text==='關閉'&&off.sure.disabled&&off.sure.checked==='false'&&!off.active&&!off.settings.enabled&&on.enabled.checked==='true'&&on.enabled.text==='開啟'&&on.sure.checked==='true'&&on.sure.text==='開啟'&&!on.sure.disabled&&on.active&&on.settings.enabled&&on.settings.sure&&on.stored.enabled&&on.stored.sure,off,on};
+    return {ok:off.enabled.checked==='false'&&off.enabled.text==='○ 已關閉'&&off.sure.disabled&&off.sure.checked==='false'&&!off.active&&!off.settings.enabled&&on.enabled.checked==='true'&&on.enabled.text==='● 已開啟'&&on.sure.checked==='true'&&on.sure.text==='● 已開啟'&&!on.sure.disabled&&on.active&&on.settings.enabled&&on.settings.sure&&on.stored.enabled&&on.stored.sure,off,on};
   `);
   const before=forgeCount;
   await run('面板自動淬鍊十次', `
@@ -70,7 +70,7 @@ async function main() {
     const sleep=ms=>new Promise(r=>setTimeout(r,ms)),guard=window.__d2guard;document.querySelector('#af-local-enabled').click();
     const read=()=>{const a=document.querySelector('#af-local-enabled'),b=document.querySelector('#af-local-sure');return {enabled:{checked:a?.getAttribute('aria-checked'),text:a?.textContent,disabled:a?.disabled},sure:{checked:b?.getAttribute('aria-checked'),text:b?.textContent,disabled:b?.disabled},message:document.querySelector('#af-local-unavailable')?.textContent,settings:window.__d2forgeLocal.settings(),active:window.__d2forgeLocal.enabled()}};
     guard.setSaveMode('online');await sleep(600);const online=read();guard.setSaveMode(null);await sleep(600);const restored=read();
-    return {ok:online.enabled.checked==='false'&&online.sure.checked==='false'&&online.enabled.text==='關閉'&&online.sure.text==='關閉'&&online.enabled.disabled&&online.sure.disabled&&online.message.includes('線上存檔不可用')&&!online.active&&restored.enabled.checked==='true'&&restored.sure.checked==='true'&&!restored.enabled.disabled&&!restored.sure.disabled&&restored.active,online,restored};
+    return {ok:online.enabled.checked==='false'&&online.sure.checked==='false'&&online.enabled.text==='○ 已關閉'&&online.sure.text==='○ 已關閉'&&online.enabled.disabled&&online.sure.disabled&&online.message.includes('線上存檔不可用')&&!online.active&&restored.enabled.checked==='true'&&restored.sure.checked==='true'&&!restored.enabled.disabled&&!restored.sure.disabled&&restored.active,online,restored};
   `);
 }
 (async()=>{try{await Promise.race([main(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('實機測試整體逾時')),280000)})])}catch(e){add('執行錯誤',false,{error:String(e.stack||e)})}finally{
