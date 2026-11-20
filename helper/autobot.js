@@ -301,7 +301,7 @@
     const columns = s.w?.belt?.columns;
     if (s.w?.terror?.affixes?.includes("nobelt")) { lastAction = "本層禁止使用藥帶"; return false; }
     if (Array.isArray(columns) && typeof game?.drinkFrom === "function") {
-      // 遊戲沒有魔力藥水；腰帶全放生命藥水（原版欄位內容為 potion）。
+      // 只使用生命或回復藥水回血（原版生命藥水欄位為 potion）。
       const kinds = lethal ? ["rejuvenation", "healing", "potion"] : ["healing", "potion", "rejuvenation"];
       let slot = -1;
       for (const kind of kinds) { slot = columns.findIndex((c) => c?.[0] === kind); if (slot >= 0) break; }
@@ -316,6 +316,16 @@
     lastHp = now;
     lastAction = lethal ? "預估致命傷害，已喝水" : "已喝生命藥水";
     return true;
+  }
+  let beltClearAt = 0;
+  function clearManaBelt(g, s, now) {
+    if (!assistOn() || !settings.potion.autoHp || now - beltClearAt < 500 || s.w?.terror?.affixes?.includes("nobelt") || typeof g?.drinkFrom !== "function") return;
+    const columns = s.w?.belt?.columns;
+    if (!Array.isArray(columns)) return;
+    const slot = columns.findIndex((c) => c?.[0] === "mana");
+    if (slot < 0) return;
+    beltClearAt = now;
+    g.drinkFrom(slot);
   }
   function potions(s, danger, now) {
     let healingFailed = false;
@@ -419,8 +429,9 @@
     // 原版寶箱是 kind=chest 的掉落物（碰到即收進待開寶箱），一律撿。
     if (drop.kind === "chest") return true;
     // 實測：地上藥水是 kind=potion 且沒有 item，舊版只接受金幣，藥水全被略過（角色 49/294 血、腳邊 4 瓶藥水沒撿）。
-    // 遊戲 20261101.1：地上藥水種類有 potion／rejuvenation／mana（法師的魔力藥水補能量護盾，滿了才入腰帶）；腰帶有空或可直接使用就撿。
-    if (["potion", "rejuvenation", "mana"].includes(drop.kind)) { if (drop.kind === "mana" && game?.kit?.id !== "sorceress") return false; const cols = game?.world?.belt?.columns; return !Array.isArray(cols) || cols.some((c) => (c?.length || 0) < 4) || drop.kind === "mana"; }
+    // 腰帶優先留給生命與回復藥水，不主動吸取會佔欄位的法力藥水。
+    if (drop.kind === "mana") return false;
+    if (["potion", "rejuvenation"].includes(drop.kind)) { const cols = game?.world?.belt?.columns; return !Array.isArray(cols) || cols.some((c) => (c?.length || 0) < (game?.world?.belt?.rows || 4)); }
     if (!item) return false;
     // 烏伯鑰匙與器官（Pandemonium 材料，遊戲 itemArt 的 Iv 名單）即使關閉任務自動推進也要撿，否則 Terror 首領掉落會被略過。
     // 秘密乳牛關卡（N3）：維特之腿 base=Wirt's Leg、type=weapon、rarity=unique（itemArt Wirt's Leg 驗證段／j5()，約字元 920050、927242），不是 quest 型別，需另外放行；
@@ -2549,6 +2560,7 @@
       reason = g && deathReason(after, danger, now, healingFailed);
       if (reason) { fire(returnToSafety(g, after, reason, now), "安全離場"); return; }
     }
+    if (g) clearManaBelt(g, after, now);
     if (g && state.p) { if (g.hud?.skillsOpen || g.hud?.questLogOpen) release(); else navigate(after, danger, now); }
   }
   function guarded(g, now) {
