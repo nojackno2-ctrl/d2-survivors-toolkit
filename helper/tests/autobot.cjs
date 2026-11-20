@@ -219,6 +219,26 @@ let server, win;
     check('收藏庫 Map 裝備可自動取出穿戴',worn.boots===kept);
     check('背包與收藏庫可穿裝備先穿再收藏',worn.head===invItem&&events.indexOf('equip:Cap')<events.indexOf('collect')&&events.indexOf('equip:Boots')<events.indexOf('collect'));
    }
+   {reset();await install({...enabled,enabled:false,progressEnabled:true,quest:{autoProgress:true}});
+    const leg={base:"Wirt's Leg",type:'weapon',rarity:'unique'}, inv=[], tabs={sorceress:[leg]};
+    game.state='camp';game.camp={};game.difficulty='normal';game.kit={id:'sorceress'};game.world.player.cls='sorceress';game.save={cain:{quests:{sorceress:{N1:'g'}}},stashTabs:tabs};
+    game.inventoryOf=()=>inv;game.equippedOf=()=>({});game.previewGear=()=>({});game.makePlayer=()=>({});game.heroNumbers=()=>({stats:[{label:'Life',num:100},{label:'Damage',num:10}]});game.ownGear=()=>({doll:{slotFor:()=>null,canWear:()=>false,displaced:()=>[]}});game.hud={showTown(){}};
+    game.openCampTrade=()=>{game.state='town';game.hud.showTown(0,[],{leave:()=>{game.state='camp'}},{actions:{fromStash:(it)=>{tabs.sorceress=tabs.sorceress.filter(x=>x!==it);inv.push(it)}},view:{stash:{tabs,uniques:new Map(),collect:0}}});};
+    for(let i=0;i<10;i++){tick();time+=350;}
+    check('無可收藏品時仍能從倉庫取出維特之腿',inv.includes(leg)&&tabs.sorceress.length===0);
+   }
+   {reset();await install({...enabled,enabled:false,progressEnabled:true,quest:{autoProgress:true}});
+    const junk={base:'Cap',type:'head',slot:'head',rarity:'magic',mods:[]};
+    let inv=[junk],handed=false,started=false;
+    game.state='camp';game.camp={};game.difficulty='normal';game.kit={id:'sorceress'};game.world.player.cls='sorceress';
+    game.save={cain:{quests:{sorceress:{N5:'o'}}},stashTabs:{}};
+    game.inventoryOf=()=>inv;game.equippedOf=()=>({});game.previewGear=()=>({});game.makePlayer=()=>({});game.heroNumbers=()=>({stats:[{label:'Life',num:100},{label:'Damage',num:10}]});game.ownGear=()=>({doll:{slotFor:()=>null,canWear:()=>false,displaced:()=>[]}});game.hud={showTown(){}};
+    game.cainHandOver=()=>{if(inv.length>0)return {given:[]};game.save.cain.quests.sorceress.N5='g';handed=true;return {given:[{quest:'N5'}]};};
+    game.openCampTrade=(kind)=>{game.state='town';game.hud.showTown(0,[],{leave:()=>{game.state='camp'}},{actions:{sell:(it)=>{inv=inv.filter(x=>x!==it)}},view:{stash:{tabs:{},uniques:new Map(),collect:0}}});};
+    game.campStart=()=>{started=true;game.state='playing';};
+    for(let i=0;i<25&&!started;i++){tick();time+=350;}
+    check('營地清包後重試交付任務再開始新局',handed&&game.save.cain.quests.sorceress.N5==='g');
+   }
    {reset();await install({...enabled,enabled:false,progressEnabled:true,quest:{autoProgress:false}});
     const inv=[{base:'Boots',rarity:'magic'}],bought=[],sold=[];game.state='camp';game.camp={};game.world.player.cls='sorceress';
     game.equippedOf=()=>({});game.inventoryOf=()=>inv;game.ownGear=()=>({doll:{slotFor:()=>null,canWear:()=>false}});game.previewGear=()=>({});game.heroNumbers=()=>({stats:[]});game.makePlayer=()=>({});game.gearActions=()=>({equip(){}});

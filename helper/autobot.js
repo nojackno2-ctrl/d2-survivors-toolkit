@@ -1318,7 +1318,7 @@
   }
   // 營地整備：沿用原版 openCampTrade 與商店介面回呼（hud.showTown 的參數），一次只做一個動作。
   // 實測（2026-11-01）：store＝恰西升級與裝備、akara＝藥水（1000 金，下一局放入藥帶）、stash＝倉庫／收藏庫（toStash、collectAll、可直接 equip）。
-  let shop = null, trade = null, smithAt = -Infinity;
+  let shop = null, trade = null, smithAt = -Infinity, turnInAt = 0, turnInChanged = false;
   const RANKS = ["Vitality", "Damage Reduced", "Replenish Life", "Potion Healing", "Faster Cast Rate", "Energy", "Faster Run/Walk", "Strength", "Dexterity", "Fire Pierce", "Cold Pierce", "Lightning Pierce", "Poison Pierce", "Physical Pierce", "Experience", "Magic Find", "Gold Find", "Sell Price", "Reroll", "Banish", "Skip"];
   const keepType = (item) => ["quest", "rune", "gem", "jewel"].includes(item.type) || (item.type !== "weapon" && /charm|jewel|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || "")));
   // 非任務類的保留材料（珠寶、符文、寶石、精華、徽章）可存入個人倉庫，避免長期佔用背包；任務道具、鑰匙、維特之腿與咒符維持留在背包。武器（例如符文權杖）不算材料。
@@ -1422,7 +1422,7 @@
       // 秘密乳牛關卡（N3）：原版 LM() 只認「背包裡」的維特之腿才開傳送門；腿放在倉庫（例如 shared 分頁，實測 stashTabs.shared3）時
       // 格里斯華爾德死亡只會判成 "nothing"（Game-DPAk 約 230681）。本難度 N3 未完成就用原版倉庫動作 fromStash（約 398125）把腿拿回背包。
       // 放在收進收藏庫（collectAll）之後，避免被一併收走；toStash 已排除維特之腿。
-      if (typeof a.fromStash === "function" && questOn() && cowWanted(g) && (shop.collected || !settings.gear.autoEquip) && !g.inventoryOf(cls).some((x) => x?.base === WIRT_LEG)) {
+      if (typeof a.fromStash === "function" && questOn() && cowWanted(g) && (!view || !(view.collect > 0) || shop.collected || !settings.gear.autoEquip) && !g.inventoryOf(cls).some((x) => x?.base === WIRT_LEG)) {
         const leg = stashItems(view).find((x) => x?.base === WIRT_LEG && !shop.tried.has(x));
         if (leg) { shop.tried.add(leg); a.fromStash(leg); lastAction = "整備：從倉庫取出維特之腿（乳牛關卡）"; return false; }
       }
@@ -1542,7 +1542,7 @@
         if (name === "upgrades" || name === "potions") shop.tried.clear();
       }
     } catch (err) { lastAction = "整備中斷：" + String(err.message || err); }
-    leaveTrade(g); shop.done = true; actionAt = now;
+    leaveTrade(g); shop.done = true; turnInAt = 0; actionAt = now;
     return true;
   }
   // 排行榜學習：升級選卡依高手技能／被動權重，屬性點依高手配點比例；技能偏離時到阿卡拉重置（re-draft）。
@@ -2018,7 +2018,6 @@
     lastAction = "任務模式達成（地獄通關、各難度任務全部完成並交付）：自動切換天梯推關";
     return true;
   }
-  let turnInAt = 0, turnInChanged = false;
   function reportQuests(g, now) {
     if (g.state !== "camp" || !g.camp || g.swapping || g.trade || !settings.progressEnabled || now - turnInAt < 3000) return false;
     const qs = questSnapshot(g), ring = ["N1", "M1", "H1"].some((id) => qs.q[id] === "o"), scroll = hasItem(g, "bks"), other = qs.pending.some((id) => !/^[NMH]1$/.test(id));
