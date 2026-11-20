@@ -244,6 +244,14 @@ let server, win;
     check('稀有裝備接近身上才存倉庫，差很多的改賣掉',stored.includes('near')&&stored.includes('uni')&&!stored.includes('bad')&&sold.includes('bad'));
     check('倉庫存不進去的獨特裝備不賣、不重複嘗試',!sold.includes('fullU')&&inv.includes(fullU));}
    {reset();await install({...enabled,enabled:false,progressEnabled:true,quest:{autoProgress:false}});
+    const jwl={base:'Jewel',type:'jewel',rarity:'magic',id:'jwl'},qst={base:'Horadric Malus',type:'quest',rarity:'unique',id:'qst'};
+    const inv=[jwl,qst],stored=[],sold=[];game.state='camp';game.camp={};game.world.player.cls='sorceress';
+    game.equippedOf=()=>({});game.inventoryOf=()=>inv;game.ownGear=()=>({doll:{slotFor:()=>null,canWear:()=>false,displaced:()=>[]}});game.previewGear=()=>({});game.makePlayer=()=>({});game.gearActions=()=>({equip(){}});game.heroNumbers=()=>({stats:[]});
+    game.hud={showTown(){}};
+    game.openCampTrade=(k)=>{game.state='town';const show=()=>game.hud.showTown(100,[],{leave:()=>{game.state='camp'}},{actions:{sell:(it)=>{sold.push(it.id);inv.splice(inv.indexOf(it),1)},collectAll(){},toStash:(it)=>{stored.push(it.id);inv.splice(inv.indexOf(it),1)}},view:{stash:{tabs:{},uniques:{},collect:0,open:'personal'}}});show();};
+    for(let i=0;i<60;i++){tick();time+=300;}
+    check('珠寶自動存入個人倉庫，任務物品保留在背包',stored.includes('jwl')&&!sold.includes('jwl')&&inv.includes(qst)&&!stored.includes('qst'));}
+   {reset();await install({...enabled,enabled:false,progressEnabled:true,quest:{autoProgress:false}});
     const oldK={base:'Ring',type:'ring',rarity:'unique',name:'Nagelring',id:'old',q:1},better={base:'Ring',type:'ring',rarity:'unique',name:'Nagelring',id:'better',q:2},worse={base:'Amulet',type:'amulet',rarity:'runeword',name:'Spirit',id:'worse',q:1},keptRw={base:'Amulet',type:'amulet',rarity:'runeword',name:'Spirit',id:'keptRw',q:5},fresh={base:'Cap',type:'head',rarity:'set',name:'Sigon',id:'fresh',q:1};
     const inv=[better,worse,fresh],col=[oldK,keptRw],sold=[];let open='personal';game.state='camp';game.camp={};game.world.player.cls='sorceress';
     game.equippedOf=()=>({});game.inventoryOf=()=>inv;game.ownGear=()=>({doll:{slotFor:()=>null,canWear:()=>false,displaced:()=>[]}});game.previewGear=()=>({});game.makePlayer=()=>({});game.gearActions=()=>({equip(){}});game.heroNumbers=()=>({stats:[]});

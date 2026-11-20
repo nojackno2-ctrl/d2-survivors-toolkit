@@ -1407,7 +1407,8 @@
         // 依統一裝備決策：收藏庫拒收的獨特／套裝（collect）與同欄位前幾名備用稀有（stash）才存。
         const fates = gearFates(g, cls, [...g.inventoryOf(cls), ...stashItems(view)]);
         // 依使用者要求：收藏庫優先於個人倉庫——能進收藏庫的（獨特／套裝／符文之語）只有收藏關閉或收藏庫明確拒收（collectRefused）時才存個人倉庫。
-        const item = g.inventoryOf(cls).find((x) => { const f = fates.get(x)?.fate; return x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !duplicateJunk.has(x) && (f === "stash" || f === "collect" && (!x.name || collectRefused.has(x))); });
+        // 珠寶／符文／寶石（fate=keep）一併存入個人倉庫，避免塞滿背包導致無法取出維特之腿或交付任務獎勵。
+        const item = g.inventoryOf(cls).find((x) => { const f = fates.get(x)?.fate; return x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !duplicateJunk.has(x) && (f === "stash" || f === "collect" && (!x.name || collectRefused.has(x)) || f === "keep" && ["rune", "gem", "jewel"].includes(x.type)); });
         // 原版 toStash 存進「目前開著的分頁」；使用者要求只能存個人倉庫，目前不是個人分頁（共用或收藏庫）時先切回個人分頁，下一輪再存。
         if (item && view?.open && view.open !== "personal" && typeof a.openStashTab === "function") { a.openStashTab("personal"); lastAction = "整備：切換到個人倉庫"; return false; }
         if (item) { shop.tried.add(item); shop.stashing = item; a.toStash(item); lastAction = "整備：存入倉庫 " + itemZh(item); return false; }
