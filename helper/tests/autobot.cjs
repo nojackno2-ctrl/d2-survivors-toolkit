@@ -234,6 +234,11 @@ let server, win;
     for(let i=0;i<25&&!started;i++){tick();time+=350;}
     check('營地清包後重試交付任務再開始新局',handed&&game.save.cain.quests.sorceress.N5==='g');
    }
+   {const t=window.__d2autobot.gearTools,m={base:'Jewel',type:'jewel',rarity:'magic'},r={base:'Jewel',type:'jewel',rarity:'rare'},u={base:'Rainbow Facet',type:'jewel',rarity:'unique'};
+    reset();await install(enabled);game.equippedOf=()=>({});game.ownGear=()=>({doll:{slotFor:()=>null,canWear:()=>false,displaced:()=>[]}});
+    const f=t.gearFates(game,'sorceress',[m,r,u]);
+    check('一般珠寶賣出且獨特珠寶進收藏庫（避免佔滿背包）',f.get(m)?.fate==='sell'&&f.get(r)?.fate==='sell'&&f.get(u)?.fate==='collect');
+   }
    {reset();await install({...enabled,enabled:false,progressEnabled:true,quest:{autoProgress:false}});
     const inv=[{base:'Boots',rarity:'magic'}],bought=[],sold=[];game.state='camp';game.camp={};game.world.player.cls='sorceress';
     game.equippedOf=()=>({});game.inventoryOf=()=>inv;game.ownGear=()=>({doll:{slotFor:()=>null,canWear:()=>false}});game.previewGear=()=>({});game.heroNumbers=()=>({stats:[]});game.makePlayer=()=>({});game.gearActions=()=>({equip(){}});

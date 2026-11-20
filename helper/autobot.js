@@ -1104,6 +1104,7 @@
     for (const it of pool) {
       if (!it?.base || out.has(it)) continue;
       if (isCharm(it)) { out.set(it, { fate: it.rarity !== "unique" && charmValue(it, cls) <= 0 ? "sell" : "keep", gain: 0 }); continue; }
+      if (isJewel(it)) { out.set(it, { fate: it.rarity === "unique" ? "collect" : "sell", gain: 0 }); continue; }
       if (keepType(it) || (it.base === WIRT_LEG && cowWanted(g))) { out.set(it, { fate: "keep", gain: 0 }); continue; }
       if (["unique", "set", "runeword"].includes(it.rarity)) { out.set(it, { fate: "collect", gain: cachedGain(g, cls, it, sig) }); continue; }
       if (!["normal", "magic", "rare"].includes(it.rarity)) { out.set(it, { fate: "keep", gain: 0 }); continue; }
@@ -1304,7 +1305,8 @@
   // 實測（2026-11-01）：store＝恰西升級與裝備、akara＝藥水（1000 金，下一局放入藥帶）、stash＝倉庫／收藏庫（toStash、collectAll、可直接 equip）。
   let shop = null, trade = null, smithAt = -Infinity, turnInAt = 0, turnInChanged = false;
   const RANKS = ["Vitality", "Damage Reduced", "Replenish Life", "Potion Healing", "Faster Cast Rate", "Energy", "Faster Run/Walk", "Strength", "Dexterity", "Fire Pierce", "Cold Pierce", "Lightning Pierce", "Poison Pierce", "Physical Pierce", "Experience", "Magic Find", "Gold Find", "Sell Price", "Reroll", "Banish", "Skip"];
-  const keepType = (item) => ["quest", "rune", "gem", "jewel"].includes(item.type) || /charm|jewel|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || ""));
+  const isJewel = (item) => item?.type === "jewel" || /\bjewel\b/i.test(String(item?.type || "") + " " + String(item?.base || ""));
+  const keepType = (item) => ["quest", "rune", "gem"].includes(item.type) || /charm|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || ""));
   function hookTown(g) {
     const hud = g.hud;
     if (!hud || typeof hud.showTown !== "function") return false;
