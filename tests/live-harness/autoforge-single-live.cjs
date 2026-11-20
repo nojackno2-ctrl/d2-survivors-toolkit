@@ -10,6 +10,10 @@ const ROOT = path.resolve(__dirname, "..", "..");
 const PAGES = "https://nojackno2-ctrl.github.io/d2-survivors-toolkit/";
 const OUT = process.argv.slice(2).find((a) => !a.startsWith("--") && !a.endsWith("electron.exe") && a !== ".");
 const CLASS = process.env.H_CLASS || "sorceress";
+if (!process.env.H_SEED || !fs.existsSync(process.env.H_SEED)) {
+  console.error("缺少 H_SEED：請先設定環境變數指向存檔副本，例如 $env:H_SEED='C:\\path\\save.json'; npx electron tests/live-harness/autoforge-single-live.cjs out.json");
+  process.exit(2);
+}
 const SEED = fs.readFileSync(process.env.H_SEED, "utf8");
 const SHOT = process.env.H_SHOT || path.join(os.tmpdir(), "autoforge-single-mobile.png");
 const MIME = { ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".html": "text/html", ".css": "text/css", ".svg": "image/svg+xml" };

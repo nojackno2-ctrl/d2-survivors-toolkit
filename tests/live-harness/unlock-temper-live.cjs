@@ -4,6 +4,7 @@
 // 會攔截 /forge 的請求與回應並記錄。不啟動戰鬥、不結束一局，因此不會產生通關紀錄。
 const { app, BrowserWindow, session, net } = require("electron");
 const fs = require("fs"), os = require("os"), path = require("path");
+if (!process.env.H_SEED || !fs.existsSync(process.env.H_SEED)) { console.error("缺少或找不到 H_SEED：請先設定環境變數指向存檔副本，例如 $env:H_SEED='存檔.json'"); process.exit(2); }
 const ROOT = path.resolve(__dirname, "..", "..");
 const PAGES = "https://nojackno2-ctrl.github.io/d2-survivors-toolkit/";
 const OUT = process.argv.slice(2).find((a) => !a.startsWith("--") && !a.endsWith("electron.exe") && a !== ".");

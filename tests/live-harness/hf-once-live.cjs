@@ -1,5 +1,6 @@
 // 隔離設定檔驗證舊版淬鍊資料；所有輸出均位於 H_OUT。
 const fs = require('fs'), path = require('path'), http = require('http'), zlib = require('zlib');
+if (!process.env.H_SEED || !fs.existsSync(process.env.H_SEED)) { console.error("缺少或找不到 H_SEED：請先設定環境變數指向存檔副本，例如 $env:H_SEED='存檔.json'"); process.exit(2); }
 const { app } = require('electron');
 const root = path.resolve(__dirname, '../..'), out = process.env.H_OUT;
 if (!out || !process.env.H_SEED) throw new Error('必須指定 H_OUT 與 H_SEED');

@@ -2,6 +2,7 @@
 // H_SEED 指向存檔 JSON 副本；H_CLASS 指定職業（預設 amazon）。僅在隔離設定檔內使用存檔。
 const { app, BrowserWindow, session, net } = require("electron");
 const fs = require("fs"), os = require("os"), path = require("path");
+if (process.env.H_SEED && !fs.existsSync(process.env.H_SEED)) { console.error("找不到 H_SEED 指定的檔案：" + process.env.H_SEED); process.exit(2); }
 const ROOT = path.resolve(__dirname, "..", "..");
 const PAGES = "https://nojackno2-ctrl.github.io/d2-survivors-toolkit/";
 const OUT = process.argv.slice(2).find((a) => !a.startsWith("--") && !a.endsWith("electron.exe") && a !== ".");

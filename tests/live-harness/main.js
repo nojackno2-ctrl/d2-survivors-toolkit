@@ -1,6 +1,7 @@
 // 測試框架：全新設定檔載入真實遊戲，注入本機 autobot.js，定時記錄狀態與截圖；控制只透過指令檔 cmd.js（僅建檔用）。
 const { app, BrowserWindow } = require("electron");
 const fs = require("fs"), path = require("path");
+if (process.env.H_SEED && !fs.existsSync(process.env.H_SEED)) { console.error("找不到 H_SEED 指定的檔案：" + process.env.H_SEED); process.exit(2); }
 const OUT = process.env.H_OUT || path.join(__dirname, "out");
 fs.mkdirSync(OUT, { recursive: true }); fs.writeFileSync(path.join(OUT, "pid"), String(process.pid));
 app.commandLine.appendSwitch("disable-renderer-backgrounding");

@@ -6,6 +6,7 @@
 // 測試腳本在遊戲頁面內執行，可用 window.__d2editBackend.engine(...) 與修改器 iframe；回傳值會被 JSON 化。
 const { app, BrowserWindow, session, net } = require("electron");
 const fs = require("fs"), os = require("os"), path = require("path");
+if (process.env.H_SEED && !fs.existsSync(process.env.H_SEED)) { console.error("找不到 H_SEED 指定的檔案：" + process.env.H_SEED); process.exit(2); }
 const [script, out] = process.argv.slice(2).filter((a) => !a.startsWith("--") && !a.endsWith("electron.exe") && a !== ".");
 const ROOT = path.resolve(__dirname, "..", ".."), PAGES = "https://nojackno2-ctrl.github.io/d2-survivors-toolkit/";
 const MIME = { ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".html": "text/html", ".svg": "image/svg+xml", ".css": "text/css" };

@@ -1,6 +1,7 @@
 // 使用隔離存檔觀察官方遊戲與輔助器的牛群狀態。
 const { app, BrowserWindow } = require("electron");
 const fs = require("fs"), path = require("path"), http = require("http");
+if (!process.env.H_SEED || !fs.existsSync(process.env.H_SEED)) { console.error("缺少或找不到 H_SEED：請先設定環境變數指向存檔副本，例如 $env:H_SEED='存檔.json'"); process.exit(2); }
 const root = path.resolve(__dirname, "../.."), out = process.env.H_OUT;
 if (!out || !process.env.H_SEED || process.env.H_BASE !== "http://localhost:8773/") throw Error("缺少測試環境變數");
 fs.mkdirSync(out, { recursive: true });

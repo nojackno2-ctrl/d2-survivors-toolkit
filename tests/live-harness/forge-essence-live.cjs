@@ -3,6 +3,7 @@
 // 工具包由 PAGES 攔截至本機檔案；遊戲本體來自官方網址。僅使用隔離的 userData，不碰使用者存檔。
 const { app, BrowserWindow, session, net } = require("electron");
 const fs = require("fs"), os = require("os"), path = require("path");
+if (process.env.H_SEED && !fs.existsSync(process.env.H_SEED)) { console.error("找不到 H_SEED 指定的檔案：" + process.env.H_SEED); process.exit(2); }
 const ROOT = path.resolve(__dirname, "..", "..");
 const PAGES = "https://nojackno2-ctrl.github.io/d2-survivors-toolkit/";
 const OUT = process.argv.slice(2).find((a) => !a.startsWith("--") && !a.endsWith("electron.exe") && a !== ".");

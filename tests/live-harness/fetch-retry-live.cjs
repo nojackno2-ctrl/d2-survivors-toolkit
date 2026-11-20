@@ -4,6 +4,7 @@
 // 確認字典、遊戲資料、修改器頁面、物品引擎仍載入成功、自檢沒有「載入失敗」。工具包由 PAGES 攔截至本機檔案；隔離 userData。
 const { app, BrowserWindow, session, net } = require("electron");
 const fs = require("fs"), os = require("os"), path = require("path");
+if (process.env.H_SEED && !fs.existsSync(process.env.H_SEED)) { console.error("找不到 H_SEED 指定的檔案：" + process.env.H_SEED); process.exit(2); }
 const ROOT = path.resolve(__dirname, "..", "..");
 const PAGES = "https://nojackno2-ctrl.github.io/d2-survivors-toolkit/";
 const OUT = process.argv.slice(2).find((a) => !a.startsWith("--") && !a.endsWith("electron.exe") && a !== ".");
