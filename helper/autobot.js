@@ -25,7 +25,7 @@
     gear: { autoEquip: true, minGainPercent: 2 },
     // 陣亡回營地後的整備：裝備管理（gear.autoEquip 一個開關管穿上、收藏、存倉、賣出、買裝）、買藥、恰西升級，讓每一局都比上一局強。
     town: { enabled: true, buyPotions: true, charsiUpgrades: true },
-    // h4Reset／h4ResetAfter：地獄任務 4（H4）多次失敗後重置技能並只投入同一棵技能樹（見 campTreeReset）。H4 難度高，預設 false＝任務模式略過 H4；使用者開啟才挑戰。
+    // h4Reset／h4ResetAfter：地獄任務 4（H4）多次失敗後選擇性重置技能並只投入同一棵技能樹（見 campTreeReset）。
     build: { ladder: true, autoStats: true, redraft: true, autoReroll: true, h4Reset: false, h4ResetAfter: 2 },
     // 實測 39～46 級角色陣亡會從 1 級重來；預設開啟：快被打死時原版「儲存並離開」，回營地後自動繼續上次進度。
     deathProtection: { enabled: true, emergencyHpPercent: 15, disableAutomation: false },
@@ -132,7 +132,7 @@
   // 自動戰鬥的「自動模式」：推關（普通→惡夢→地獄往上打）、推層（恐怖層數往上推）、固定關卡（重複刷指定難度）、固定層數（重刷指定層）。
   // 只是既有設定的組合（quest.autoProgress、terror.mode、quest.farmDifficulty），戰鬥邏輯與舊設定不必改。
   const autoMode = () => settings.terror.mode === "progress" ? "terror" : settings.terror.mode === "farm" ? "fixedTier" : settings.quest.farmDifficulty !== "off" ? "fixedDifficulty" : "quest";
-  // 依使用者要求：自動模式分「任務模式」（完成所有任務並練到 99 級）與「天梯模式」（推關＝恐怖層往上推、固定關卡＝重複刷指定難度、固定層數＝重刷指定層）。
+  // 任務模式完成全部任務後切換天梯推關；天梯推關會往上推進恐怖層數。
   const DIFF_ZH = { normal: "普通", nightmare: "惡夢", hell: "地獄" };
   const modeLabel = () => ({ quest: "任務模式", terror: "天梯・推關", fixedDifficulty: "固定關卡 " + (DIFF_ZH[settings.quest.fixedDifficulty] || ""), fixedTier: "天梯・固定層數 " + settings.terror.targetFarmTier + " 層" })[autoMode()];
   // 依使用者要求：固定關卡模式是獨立的自動模式（不在天梯模式裡）；天梯模式只有推關與固定層數。
@@ -348,7 +348,7 @@
   // 補任務目標全部失效，還被「75 級以上不刷普通」反覆踢回營地（3 個實例停滯 30 分鐘）。
   // 遊戲存檔自己的通關旗標 baalSlain[職業] 含 hell 也算數，重載後不必再打一次地獄。
   const savedHellClear = (g) => { const v = g?.save?.baalSlain?.[g?.kit?.id]; return v === "hell" || (Array.isArray(v) && v.includes("hell")) || (!!v && typeof v === "object" && !!v.hell); };
-  const cleanupReady = (g) => autoMode() === "quest" && (g?.world?.player?.level ?? 0) >= 99 && !!g?.save && (!!hellClearedSaves.get(g.save)?.has(g.kit?.id) || savedHellClear(g));
+  const cleanupReady = (g) => autoMode() === "quest" && !!g?.save && (!!hellClearedSaves.get(g.save)?.has(g.kit?.id) || savedHellClear(g));
   function deathReason(s, danger, now, healingFailed = false) {
     if (!assistOn() || !settings.deathProtection.enabled || !s.p || !s.hp || s.hp.now <= 0 || s.w === protectedWorld) return "";
     // 無敵實際生效時（遊戲修改總開關開啟且無敵開啟）傷害會被攔截，不需要因預估傷害離場。
@@ -947,7 +947,7 @@
     const farm = opened.length > 1 && (failStreak[opened[0].difficulty] || 0) >= 3 && !noXpAt(g.kit.id, opened[1].difficulty, g.world?.player?.level ?? 0) && !lowLevelUseless(opened[1].difficulty, g.world?.player?.level ?? 0);
     // 固定重複刷：使用者指定的難度已開放就一直開那個難度。
     const fixed = opened.find((s) => s.difficulty === settings.quest.farmDifficulty);
-    // 地獄通關且 99 級後才依序回各難度補任務，不受低難度經驗門檻限制。
+    // 地獄通關後依序回各難度補任務，不受低難度經驗門檻限制。
     const cq = g.save?.cain?.quests?.[g.kit.id] || {};
     const questBack = cleanupReady(g) ? [...opened].reverse().find((s) => [1, 2, 3, 4, 5, 6].some((n) => cq[QUEST_DIFF[s.difficulty] + n] == null)) : null;
     const fresh = fixed || questBack || (farm ? opened[1] : opened[0]);
@@ -1985,20 +1985,19 @@
   // 乳牛關卡提示（N3 未完成才顯示）：依 world／背包狀態說明目前步驟。
   const cowHint = (g) => !cowWanted(g) ? "" : "；乳牛關：" + (g.world?.cowKing ? "追擊牛王" : g.cowPortal ? "進入乳牛傳送門" : hasItem(g, WIRT_LEG) ? "有維特之腿：擊殺格里斯華爾德開門" : "擊殺格里斯華爾德取得維特之腿");
   const questLine = (g) => { const qs = questSnapshot(g); return qs.total ? "任務（" + QUEST_ZH[qs.diff] + "）：完成 " + qs.done + "／" + qs.total + (qs.pending.length ? "，待領 " + qs.pending.join("、") : "") + "；尋找凱恩：" + qs.cain + cowHint(g) : ""; };
-  // 依使用者要求：任務模式達成（普通、惡夢、地獄各 6 項共 18 項都有紀錄，且角色 99 級）就自動改成固定關卡模式刷地獄。
+  // 三難度共 18 項任務完成且全部領取後，切換至天梯推關。
   // 遊戲 20261105.3 任務獎品（Codex 查 itemArt／Game bundle）：bbb 屬性書、xyz 生命藥水、tr2 抗性卷軸、ass 技能書、toa 赦免徽章需使用；hdm 鐵鎚持有即生效。
   const USE_REWARDS = ["bbb", "xyz", "tr2", "ass", "toa"];
   function questModeDone(g) {
-    if (!cleanupReady(g)) return false;
+    if (!questOn() || !cleanupReady(g)) return false;
     const q = g?.save?.cain?.quests?.[g?.kit?.id] || {};
-    // 地獄任務 4（巴爾單一技能樹占比 ≥75％）難度高、會失敗：預設視為可選，不擋任務模式達成；使用者開啟 build.h4Reset 才要求 H4 也完成。
-    if (!Object.values(QUEST_DIFF).every((p) => [1, 2, 3, 4, 5, 6].every((n) => (p + n === "H4" && !settings.build.h4Reset) || (q[p + n] != null && q[p + n] !== "o")))) return false;
+    if (!Object.values(QUEST_DIFF).every((p) => [1, 2, 3, 4, 5, 6].every((n) => q[p + n] != null)) || Object.values(q).includes("o")) return false;
     // 實測（10 實例，第 1 號）：地獄 H1～H6 剛交付（狀態 g）就判定達成並切換模式，背包裡的屬性書、生命藥水、抗性卷軸、技能書都沒用。
     // 依使用者要求「任務獎勵的道具要會使用」：背包還有待使用的獎品（鐵鎚放著就生效、戒指靠配裝，不算）就先不達成，交給 useCodex 用掉。
     const unused = (g.inventoryOf?.(g.kit?.id) || []).filter((x) => USE_REWARDS.includes(x?.base));
     if (unused.length) { lastAction = "任務全部交付，先使用獎品：" + unused.map((x) => x.name || x.base).join("、"); return false; }
-    settings.quest.fixedDifficulty = "hell"; put("autoMode", "fixedDifficulty"); save(true); refreshControls();
-    lastAction = "任務模式達成（地獄通關、99 級、各難度任務全部完成並交付）：自動改為固定關卡模式刷地獄";
+    put("autoMode", "terror"); save(true); refreshControls();
+    lastAction = "任務模式達成（地獄通關、各難度任務全部完成並交付）：自動切換天梯推關";
     return true;
   }
   let turnInAt = 0, turnInChanged = false;
@@ -2717,13 +2716,13 @@
   for (const [path, label] of [["enabled", "自動走位（預判包圍、保持距離、閃避）"], ["combatStyle", "戰鬥方式"], ["dodgeProjectiles", "閃避敵方飛彈"]]) field("movement." + path, label, path === "combatStyle" ? [["auto", "自動（依技能攻擊距離）"], ["melee", "近戰（貼身攻擊）"], ["ranged", "遠程（保持距離）"]] : undefined);
   group("撿寶"); field("loot.enabled", "自動撿寶"); field("loot.vacuumXp", "全圖吸經驗（地上經驗寶石自動飛來；非原版行為）"); field("loot.vacuumGold", "全圖吸金幣"); field("loot.vacuum", "全圖撿寶（撿取距離改為全圖，要撿哪些依遊戲過濾器）"); field("loot.kickJars", "踢地上罐子木桶（可能掉藥水）");
   field("loot.backtrackForLoot", "通關後等待撿裝");
-  tab("progress"); field("progressEnabled", "自動戰鬥開關"); field("autoKind", "自動模式", [["quest", "任務模式（完成所有任務並練到 99 級，達成後自動改刷地獄；地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，難度高、有機率失敗，預設略過，可在下方開啟「失敗後重置技能」嘗試）"], ["fixedDifficulty", "固定關卡模式（重複刷指定難度）"], ["ladder", "天梯模式"]]);
+  tab("progress"); field("progressEnabled", "自動戰鬥開關"); field("autoKind", "自動模式", [["quest", "任務模式（地獄通關後補齊並交付所有難度任務，再自動切換天梯推關；地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，可在下方開啟「失敗後重置技能」嘗試）"], ["fixedDifficulty", "固定關卡模式（重複刷指定難度）"], ["ladder", "天梯模式"]]);
   field("ladderMode", "天梯方式", [["terror", "推關（恐怖層數往上推）"], ["fixedTier", "固定層數（重刷指定層，須已通關）"]]);
   field("quest.fixedDifficulty", "固定關卡難度", [["normal", "普通"], ["nightmare", "惡夢"], ["hell", "地獄"]]); field("terror.targetFarmTier", "固定層數");
   group("恐怖層數"); field("terror.postClearWaitSec", "通關等待（秒）"); field("terror.autoReviveOrRestart", "陣亡後重試（有保留角色時）");
   group("關卡進程"); field("quest.prioritizeBoss", "優先接近任務頭目"); field("quest.autoStart", "在營地自動開局／續玩（全新存檔可用）");
   group("排行榜學習"); field("build.ladder", "依排行榜高手配法選升級卡"); field("build.autoStats", "依高手比例自動配屬性點"); field("build.redraft", "技能配置和排行榜差太多時向阿卡拉付費重置技能（普通通關後可用，重置後立刻重新選卡）"); field("build.autoReroll", "自動重抽（升級候選卡評分偏低時自動使用重抽）");
-  group("地獄任務 4（巴爾單一技能樹占比 75％）"); field("build.h4Reset", "失敗後重置技能嘗試地獄任務 4：地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，難度高、有機率失敗，任務模式預設略過；開啟後多次打不過會回營地重置技能並只投入同一棵技能樹，且任務模式要等 H4 完成才結束"); field("build.h4ResetAfter", "失敗幾次後重置技能（次）");
+  group("地獄任務 4（巴爾單一技能樹占比 75％）"); field("build.h4Reset", "失敗後重置技能嘗試地獄任務 4：任務模式須完成 H4；開啟後多次打不過會回營地重置技能並只投入同一棵技能樹"); field("build.h4ResetAfter", "失敗幾次後重置技能（次）");
   group("裝備管理"); field("gear.autoEquip", "自動裝備管理：穿上較佳裝備、獨特／套裝收進收藏庫、備用稀有裝備存倉庫、賣掉用不到的、向商人買較佳裝備，並把用得上的裝備穿給雇傭兵（統一評分，職業技能詞綴只算本職業）"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）");
   group("營地整備（每次回營地自動變強）"); field("town.enabled", "回營地自動整備"); field("town.buyPotions", "用金幣向阿卡拉買生命藥水"); field("town.charsiUpgrades", "用金幣升級恰西永久能力");
   tab("assist"); group("死亡保護"); field("deathProtection.enabled", "死亡保護（緊急離開本局）"); field("deathProtection.emergencyHpPercent", "緊急生命門檻（％）"); field("deathProtection.disableAutomation", "觸發後關閉兩頁總開關");
