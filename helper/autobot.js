@@ -2062,11 +2062,14 @@
     if (!goldOverride) return;
     const { player, value, own } = goldOverride;
     if (player.goldGain === 999999) { if (own) player.goldGain = value; else delete player.goldGain; }
+    else if (typeof player.goldGain === "number" && Math.abs(player.goldGain - 999999) < 500000) {
+      player.goldGain = (typeof value === "number" ? value : 1) + (player.goldGain - 999999);
+    }
     goldOverride = null;
   }
   // 子開關還原紀錄（致命一擊 maxCrit、一擊必殺 oneHitKill、掉寶 maxDropRate）：每個子開關記下自己改過的欄位，
   // 第一次寫入前記下原值（含是否為自有屬性），每次寫入記下寫入值。還原時只還原「目前值仍等於自己寫入值」的欄位，
-  // 遊戲後來自行改過的值不蓋掉。玩家或導演物件更換前先還原舊紀錄。
+  // 遊戲後來自行改過的值不蓋掉；若遊戲僅在作弊值上做小幅增減（+=/-=），則將差額反映回原值。玩家或導演物件更換前先還原舊紀錄。
   const cheatRecs = new Map();
   let densityNextAt = 0;
   function cheatField(key, owner, obj, prop, value) {
@@ -2075,7 +2078,13 @@
     if (!rec) { rec = { owner, fields: [] }; cheatRecs.set(key, rec); }
     let f = rec.fields.find((x) => x.obj === obj && x.prop === prop);
     if (!f) { f = { obj, prop, own: Object.hasOwn(obj, prop), base: obj[prop], written: undefined }; rec.fields.push(f); }
-    else if (obj[prop] !== f.written) { f.own = Object.hasOwn(obj, prop); f.base = obj[prop]; }
+    else if (obj[prop] !== f.written) {
+      if (typeof obj[prop] === "number" && typeof f.written === "number" && Math.abs(f.written) >= 100 && Math.abs(obj[prop] - f.written) < Math.abs(f.written) * 0.5) {
+        f.base = (typeof f.base === "number" ? f.base : 0) + (obj[prop] - f.written);
+      } else {
+        f.own = Object.hasOwn(obj, prop); f.base = obj[prop];
+      }
+    }
     obj[prop] = value;
     f.written = value;
   }
@@ -2083,8 +2092,11 @@
     const rec = cheatRecs.get(key);
     if (!rec) return;
     for (const f of rec.fields) {
-      if (f.obj[f.prop] !== f.written) continue;
-      if (f.own) f.obj[f.prop] = f.base; else delete f.obj[f.prop];
+      if (f.obj[f.prop] === f.written) {
+        if (f.own) f.obj[f.prop] = f.base; else delete f.obj[f.prop];
+      } else if (typeof f.obj[f.prop] === "number" && typeof f.written === "number" && Math.abs(f.written) >= 100 && Math.abs(f.obj[f.prop] - f.written) < Math.abs(f.written) * 0.5) {
+        f.obj[f.prop] = (typeof f.base === "number" ? f.base : 0) + (f.obj[f.prop] - f.written);
+      }
     }
     cheatRecs.delete(key);
   }
@@ -2381,7 +2393,11 @@
 
       // 掉寶與金幣倍率
       if (settings.cheat.maxGoldRate) {
-        if (!goldOverride || p.goldGain !== 999999) goldOverride = { player: p, value: p.goldGain, own: Object.hasOwn(p, "goldGain") };
+        if (!goldOverride) goldOverride = { player: p, value: p.goldGain, own: Object.hasOwn(p, "goldGain") };
+        else if (p.goldGain !== 999999) {
+          if (typeof p.goldGain === "number" && Math.abs(p.goldGain - 999999) < 500000) goldOverride.value = (typeof goldOverride.value === "number" ? goldOverride.value : 1) + (p.goldGain - 999999);
+          else goldOverride = { player: p, value: p.goldGain, own: Object.hasOwn(p, "goldGain") };
+        }
         p.goldGain = 999999;
       }
       if (settings.cheat.maxDropRate) {
