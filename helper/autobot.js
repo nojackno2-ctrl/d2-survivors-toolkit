@@ -1320,7 +1320,7 @@
   // 實測（2026-11-01）：store＝恰西升級與裝備、akara＝藥水（1000 金，下一局放入藥帶）、stash＝倉庫／收藏庫（toStash、collectAll、可直接 equip）。
   let shop = null, trade = null, smithAt = -Infinity;
   const RANKS = ["Vitality", "Damage Reduced", "Replenish Life", "Potion Healing", "Faster Cast Rate", "Energy", "Faster Run/Walk", "Strength", "Dexterity", "Fire Pierce", "Cold Pierce", "Lightning Pierce", "Poison Pierce", "Physical Pierce", "Experience", "Magic Find", "Gold Find", "Sell Price", "Reroll", "Banish", "Skip"];
-  const keepType = (item) => ["quest", "rune", "gem", "jewel"].includes(item.type) || /charm|jewel|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || ""));
+  const keepType = (item) => ["quest", "rune", "gem", "jewel"].includes(item.type) || (item.type !== "weapon" && /charm|jewel|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || "")));
   function hookTown(g) {
     const hud = g.hud;
     if (!hud || typeof hud.showTown !== "function") return false;
