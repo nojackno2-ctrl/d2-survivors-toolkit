@@ -960,10 +960,11 @@
     const higherResume = questBack && resume && resumeDiff && resumeDiff !== questBack.difficulty;
     // 若該難度已連續離場失敗 3 次以上且無法回低難度刷，放棄卡關的續玩存檔點，改開同難度新局。
     const dropStuckResume = !!resume && (failStreak[resumeDiff || opened[0]?.difficulty] || 0) >= 3;
-    if (resume && !farm && !lowerResume && !higherResume && !dropStuckResume && (settings.quest.farmDifficulty === "off" || resume.difficulty === settings.quest.farmDifficulty) && typeof g.continueRun === "function") { lastAction = "從營地繼續上次進度"; runStart = { diff: resumeDiff, lv: g.world?.player?.level, at: now }; fire(g.continueRun(g.kit, "hero"), "續玩"); return true; }
-    if (!fresh || typeof g.startRun !== "function") return false;
+    if (resume && !farm && !lowerResume && !higherResume && !dropStuckResume && (settings.quest.farmDifficulty === "off" || resume.difficulty === settings.quest.farmDifficulty) && (typeof g.startAt === "function" || typeof g.continueRun === "function")) { lastAction = "從營地繼續上次進度"; runStart = { diff: resumeDiff, lv: g.world?.player?.level, at: now }; fire(typeof g.startAt === "function" ? g.startAt(g.kit, resume) : g.continueRun(g.kit, "hero"), "續玩"); return true; }
+    if (!fresh || (typeof g.startAt !== "function" && typeof g.startRun !== "function")) return false;
     if (dropStuckResume && !farm && !fixed && !questBack) failStreak[fresh.difficulty] = 0;
-    lastAction = (fixed ? "重複刷難度：" : questBack ? "補完未完成任務，回此難度重打：" : farm ? "最高難度打不上去，回低難度刷：" : dropStuckResume ? "連續失敗，放棄卡關進度重開新局：" : "從營地開新局：") + fresh.difficulty; runStart = { diff: fresh.difficulty, lv: g.world?.player?.level, at: now }; void g.startRun(g.kit, fresh.difficulty);
+    // 原版傳送平台入口會先處理尚未完成的技能重配；直接 startRun 會帶著空技能進場。
+    lastAction = (fixed ? "重複刷難度：" : questBack ? "補完未完成任務，回此難度重打：" : farm ? "最高難度打不上去，回低難度刷：" : dropStuckResume ? "連續失敗，放棄卡關進度重開新局：" : "從營地開新局：") + fresh.difficulty; runStart = { diff: fresh.difficulty, lv: g.world?.player?.level, at: now }; if (typeof g.startAt === "function") g.startAt(g.kit, fresh); else void g.startRun(g.kit, fresh.difficulty);
     return true;
   }
   // 技能詞綴對應職業（遊戲 itemArt 的 T6 順序）：classskillsN → T6[N]、skilltabN → T6[floor(N/3)]。
