@@ -25,7 +25,7 @@
     gear: { autoEquip: true, minGainPercent: 2 },
     // 陣亡回營地後的整備：裝備管理（gear.autoEquip 一個開關管穿上、收藏、存倉、賣出、買裝）、買藥、恰西升級，讓每一局都比上一局強。
     town: { enabled: true, buyPotions: true, charsiUpgrades: true },
-    // h4Reset／h4ResetAfter：地獄任務 4（H4）多次失敗後重置技能並只投入同一棵技能樹（見 campTreeReset）。H4 難度高，預設 false＝任務模式略過 H4；使用者開啟才挑戰。
+    // h4Reset／h4ResetAfter：地獄任務 4（H4）多次失敗後選擇性重置技能並只投入同一棵技能樹（見 campTreeReset）。
     build: { ladder: true, autoStats: true, redraft: true, autoReroll: true, h4Reset: false, h4ResetAfter: 2 },
     // 實測 39～46 級角色陣亡會從 1 級重來；預設開啟：快被打死時原版「儲存並離開」，回營地後自動繼續上次進度。
     deathProtection: { enabled: true, emergencyHpPercent: 15, disableAutomation: false },
@@ -132,7 +132,7 @@
   // 自動戰鬥的「自動模式」：推關（普通→惡夢→地獄往上打）、推層（恐怖層數往上推）、固定關卡（重複刷指定難度）、固定層數（重刷指定層）。
   // 只是既有設定的組合（quest.autoProgress、terror.mode、quest.farmDifficulty），戰鬥邏輯與舊設定不必改。
   const autoMode = () => settings.terror.mode === "progress" ? "terror" : settings.terror.mode === "farm" ? "fixedTier" : settings.quest.farmDifficulty !== "off" ? "fixedDifficulty" : "quest";
-  // 依使用者要求：自動模式分「任務模式」（完成所有任務並練到 99 級）與「天梯模式」（推關＝恐怖層往上推、固定關卡＝重複刷指定難度、固定層數＝重刷指定層）。
+  // 任務模式完成全部任務後切換天梯推關；天梯推關會往上推進恐怖層數。
   const DIFF_ZH = { normal: "普通", nightmare: "惡夢", hell: "地獄" };
   const modeLabel = () => ({ quest: "任務模式", terror: "天梯・推關", fixedDifficulty: "固定關卡 " + (DIFF_ZH[settings.quest.fixedDifficulty] || ""), fixedTier: "天梯・固定層數 " + settings.terror.targetFarmTier + " 層" })[autoMode()];
   // 依使用者要求：固定關卡模式是獨立的自動模式（不在天梯模式裡）；天梯模式只有推關與固定層數。
@@ -301,7 +301,7 @@
     const columns = s.w?.belt?.columns;
     if (s.w?.terror?.affixes?.includes("nobelt")) { lastAction = "本層禁止使用藥帶"; return false; }
     if (Array.isArray(columns) && typeof game?.drinkFrom === "function") {
-      // 遊戲沒有魔力藥水；腰帶全放生命藥水（原版欄位內容為 potion）。
+      // 只使用生命或回復藥水回血（原版生命藥水欄位為 potion）。
       const kinds = lethal ? ["rejuvenation", "healing", "potion"] : ["healing", "potion", "rejuvenation"];
       let slot = -1;
       for (const kind of kinds) { slot = columns.findIndex((c) => c?.[0] === kind); if (slot >= 0) break; }
@@ -316,6 +316,16 @@
     lastHp = now;
     lastAction = lethal ? "預估致命傷害，已喝水" : "已喝生命藥水";
     return true;
+  }
+  let beltClearAt = 0;
+  function clearManaBelt(g, s, now) {
+    if (!assistOn() || !settings.potion.autoHp || now - beltClearAt < 500 || s.w?.terror?.affixes?.includes("nobelt") || typeof g?.drinkFrom !== "function") return;
+    const columns = s.w?.belt?.columns;
+    if (!Array.isArray(columns)) return;
+    const slot = columns.findIndex((c) => c?.[0] === "mana");
+    if (slot < 0) return;
+    beltClearAt = now;
+    g.drinkFrom(slot);
   }
   function potions(s, danger, now) {
     let healingFailed = false;
@@ -348,7 +358,7 @@
   // 補任務目標全部失效，還被「75 級以上不刷普通」反覆踢回營地（3 個實例停滯 30 分鐘）。
   // 遊戲存檔自己的通關旗標 baalSlain[職業] 含 hell 也算數，重載後不必再打一次地獄。
   const savedHellClear = (g) => { const v = g?.save?.baalSlain?.[g?.kit?.id]; return v === "hell" || (Array.isArray(v) && v.includes("hell")) || (!!v && typeof v === "object" && !!v.hell); };
-  const cleanupReady = (g) => autoMode() === "quest" && (g?.world?.player?.level ?? 0) >= 99 && !!g?.save && (!!hellClearedSaves.get(g.save)?.has(g.kit?.id) || savedHellClear(g));
+  const cleanupReady = (g) => autoMode() === "quest" && !!g?.save && (!!hellClearedSaves.get(g.save)?.has(g.kit?.id) || savedHellClear(g));
   function deathReason(s, danger, now, healingFailed = false) {
     if (!assistOn() || !settings.deathProtection.enabled || !s.p || !s.hp || s.hp.now <= 0 || s.w === protectedWorld) return "";
     // 無敵實際生效時（遊戲修改總開關開啟且無敵開啟）傷害會被攔截，不需要因預估傷害離場。
@@ -419,8 +429,9 @@
     // 原版寶箱是 kind=chest 的掉落物（碰到即收進待開寶箱），一律撿。
     if (drop.kind === "chest") return true;
     // 實測：地上藥水是 kind=potion 且沒有 item，舊版只接受金幣，藥水全被略過（角色 49/294 血、腳邊 4 瓶藥水沒撿）。
-    // 遊戲 20261101.1：地上藥水種類有 potion／rejuvenation／mana（法師的魔力藥水補能量護盾，滿了才入腰帶）；腰帶有空或可直接使用就撿。
-    if (["potion", "rejuvenation", "mana"].includes(drop.kind)) { if (drop.kind === "mana" && game?.kit?.id !== "sorceress") return false; const cols = game?.world?.belt?.columns; return !Array.isArray(cols) || cols.some((c) => (c?.length || 0) < 4) || drop.kind === "mana"; }
+    // 腰帶優先留給生命與回復藥水，不主動吸取會佔欄位的法力藥水。
+    if (drop.kind === "mana") return false;
+    if (["potion", "rejuvenation"].includes(drop.kind)) { const cols = game?.world?.belt?.columns; return !Array.isArray(cols) || cols.some((c) => (c?.length || 0) < (game?.world?.belt?.rows || 4)); }
     if (!item) return false;
     // 烏伯鑰匙與器官（Pandemonium 材料，遊戲 itemArt 的 Iv 名單）即使關閉任務自動推進也要撿，否則 Terror 首領掉落會被略過。
     // 秘密乳牛關卡（N3）：維特之腿 base=Wirt's Leg、type=weapon、rarity=unique（itemArt Wirt's Leg 驗證段／j5()，約字元 920050、927242），不是 quest 型別，需另外放行；
@@ -944,12 +955,13 @@
     const opened = starts.filter((s) => s.kind === "new" && order.includes(s.difficulty)).sort((a, b) => order.indexOf(b.difficulty) - order.indexOf(a.difficulty));
     // 最高難度連續陣亡 2 次就回低一級難度刷一局（賺金幣與裝備），之後再挑戰。
     // 實測（35 存檔）：惡夢死亡保護離場 2 次就回普通重打 5 幕，79 級角色在普通拿不到好經驗與裝備（等級、裝備陣亡也保留）；門檻改 3 次。
-    const farm = opened.length > 1 && (failStreak[opened[0].difficulty] || 0) >= 3 && !noXpAt(g.kit.id, opened[1].difficulty, g.world?.player?.level ?? 0) && !lowLevelUseless(opened[1].difficulty, g.world?.player?.level ?? 0);
+    const failCount = opened[0] ? (failStreak[opened[0].difficulty] || 0) : 0;
+    const farm = opened.length > 1 && failCount >= 3 && !noXpAt(g.kit.id, opened[1].difficulty, g.world?.player?.level ?? 0) && !lowLevelUseless(opened[1].difficulty, g.world?.player?.level ?? 0);
     // 固定重複刷：使用者指定的難度已開放就一直開那個難度。
     const fixed = opened.find((s) => s.difficulty === settings.quest.farmDifficulty);
-    // 地獄通關且 99 級後才依序回各難度補任務，不受低難度經驗門檻限制。
+    // 地獄通關後依序回各難度補任務，不受低難度經驗門檻限制。
     const cq = g.save?.cain?.quests?.[g.kit.id] || {};
-    const questBack = cleanupReady(g) ? [...opened].reverse().find((s) => [1, 2, 3, 4, 5, 6].some((n) => cq[QUEST_DIFF[s.difficulty] + n] == null)) : null;
+    const questBack = cleanupReady(g) ? [...opened].reverse().find((s) => [1, 2, 3, 4, 5, 6].some((n) => questRequired(QUEST_DIFF[s.difficulty] + n) && cq[QUEST_DIFF[s.difficulty] + n] == null)) : null;
     const fresh = fixed || questBack || (farm ? opened[1] : opened[0]);
     if (farm) failStreak[opened[0].difficulty] = 0;
     // 上次進度是較低難度的局（回刷中離場）時不再續玩，直接開最高難度。
@@ -957,9 +969,13 @@
     const resumeDiff = resume ? resume.difficulty ?? g.save?.heroes?.[g.kit.id]?.kept?.difficulty ?? lastRunDiff : null;
     const lowerResume = resume && opened[0] && resumeDiff && order.indexOf(resumeDiff) < order.indexOf(opened[0].difficulty) && settings.quest.farmDifficulty === "off" && resumeDiff !== questBack?.difficulty;
     const higherResume = questBack && resume && resumeDiff && resumeDiff !== questBack.difficulty;
-    if (resume && !farm && !lowerResume && !higherResume && (settings.quest.farmDifficulty === "off" || resume.difficulty === settings.quest.farmDifficulty) && typeof g.continueRun === "function") { lastAction = "從營地繼續上次進度"; runStart = { diff: resumeDiff, lv: g.world?.player?.level, at: now }; fire(g.continueRun(g.kit, "hero"), "續玩"); return true; }
-    if (!fresh || typeof g.startRun !== "function") return false;
-    lastAction = (fixed ? "重複刷難度：" : questBack ? "補完未完成任務，回此難度重打：" : farm ? "最高難度打不上去，回低難度刷：" : "從營地開新局：") + fresh.difficulty; runStart = { diff: fresh.difficulty, lv: g.world?.player?.level, at: now }; void g.startRun(g.kit, fresh.difficulty);
+    // 若該難度已連續離場失敗 3 次以上且無法回低難度刷，放棄卡關的續玩存檔點，改開同難度新局。
+    const dropStuckResume = !!resume && (failStreak[resumeDiff || opened[0]?.difficulty] || 0) >= 3;
+    if (resume && !farm && !lowerResume && !higherResume && !dropStuckResume && (settings.quest.farmDifficulty === "off" || resume.difficulty === settings.quest.farmDifficulty) && (typeof g.startAt === "function" || typeof g.continueRun === "function")) { lastAction = "從營地繼續上次進度"; runStart = { diff: resumeDiff, lv: g.world?.player?.level, at: now }; fire(typeof g.startAt === "function" ? g.startAt(g.kit, resume) : g.continueRun(g.kit, "hero"), "續玩"); return true; }
+    if (!fresh || (typeof g.startAt !== "function" && typeof g.startRun !== "function")) return false;
+    if (dropStuckResume && !farm && !fixed && !questBack) failStreak[fresh.difficulty] = 0;
+    // 原版傳送平台入口會先處理尚未完成的技能重配；直接 startRun 會帶著空技能進場。
+    lastAction = (fixed ? "重複刷難度：" : questBack ? "補完未完成任務，回此難度重打：" : farm ? "最高難度打不上去，回低難度刷：" : dropStuckResume ? "連續失敗，放棄卡關進度重開新局：" : "從營地開新局：") + fresh.difficulty; runStart = { diff: fresh.difficulty, lv: g.world?.player?.level, at: now }; if (typeof g.startAt === "function") g.startAt(g.kit, fresh); else void g.startRun(g.kit, fresh.difficulty);
     return true;
   }
   // 技能詞綴對應職業（遊戲 itemArt 的 T6 順序）：classskillsN → T6[N]、skilltabN → T6[floor(N/3)]。
@@ -1302,9 +1318,11 @@
   }
   // 營地整備：沿用原版 openCampTrade 與商店介面回呼（hud.showTown 的參數），一次只做一個動作。
   // 實測（2026-11-01）：store＝恰西升級與裝備、akara＝藥水（1000 金，下一局放入藥帶）、stash＝倉庫／收藏庫（toStash、collectAll、可直接 equip）。
-  let shop = null, trade = null, smithAt = -Infinity;
+  let shop = null, trade = null, smithAt = -Infinity, turnInAt = 0, turnInChanged = false;
   const RANKS = ["Vitality", "Damage Reduced", "Replenish Life", "Potion Healing", "Faster Cast Rate", "Energy", "Faster Run/Walk", "Strength", "Dexterity", "Fire Pierce", "Cold Pierce", "Lightning Pierce", "Poison Pierce", "Physical Pierce", "Experience", "Magic Find", "Gold Find", "Sell Price", "Reroll", "Banish", "Skip"];
-  const keepType = (item) => ["quest", "rune", "gem", "jewel"].includes(item.type) || /charm|jewel|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || ""));
+  const keepType = (item) => ["quest", "rune", "gem", "jewel"].includes(item.type) || (item.type !== "weapon" && /charm|jewel|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || "")));
+  // 非任務類的保留材料（珠寶、符文、寶石、精華、徽章）可存入個人倉庫，避免長期佔用背包；任務道具、鑰匙、維特之腿與咒符維持留在背包。武器（例如符文權杖）不算材料。
+  const stashKeepType = (item) => !isCharm(item) && item?.type !== "quest" && item?.type !== "weapon" && item?.base !== WIRT_LEG && !/\bkey\b/i.test(String(item?.base || "")) && (["rune", "gem", "jewel"].includes(item?.type) || /jewel|rune|gem|essence|token/i.test(String(item?.type || "") + " " + String(item?.base || "")));
   function hookTown(g) {
     const hud = g.hud;
     if (!hud || typeof hud.showTown !== "function") return false;
@@ -1396,7 +1414,7 @@
         // 依統一裝備決策：收藏庫拒收的獨特／套裝（collect）與同欄位前幾名備用稀有（stash）才存。
         const fates = gearFates(g, cls, [...g.inventoryOf(cls), ...stashItems(view)]);
         // 依使用者要求：收藏庫優先於個人倉庫——能進收藏庫的（獨特／套裝／符文之語）只有收藏關閉或收藏庫明確拒收（collectRefused）時才存個人倉庫。
-        const item = g.inventoryOf(cls).find((x) => { const f = fates.get(x)?.fate; return x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !duplicateJunk.has(x) && (f === "stash" || f === "collect" && (!x.name || collectRefused.has(x))); });
+        const item = g.inventoryOf(cls).find((x) => { const f = fates.get(x)?.fate; return x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !duplicateJunk.has(x) && (f === "stash" || f === "collect" && (!x.name || collectRefused.has(x)) || f === "keep" && stashKeepType(x)); });
         // 原版 toStash 存進「目前開著的分頁」；使用者要求只能存個人倉庫，目前不是個人分頁（共用或收藏庫）時先切回個人分頁，下一輪再存。
         if (item && view?.open && view.open !== "personal" && typeof a.openStashTab === "function") { a.openStashTab("personal"); lastAction = "整備：切換到個人倉庫"; return false; }
         if (item) { shop.tried.add(item); shop.stashing = item; a.toStash(item); lastAction = "整備：存入倉庫 " + itemZh(item); return false; }
@@ -1404,7 +1422,7 @@
       // 秘密乳牛關卡（N3）：原版 LM() 只認「背包裡」的維特之腿才開傳送門；腿放在倉庫（例如 shared 分頁，實測 stashTabs.shared3）時
       // 格里斯華爾德死亡只會判成 "nothing"（Game-DPAk 約 230681）。本難度 N3 未完成就用原版倉庫動作 fromStash（約 398125）把腿拿回背包。
       // 放在收進收藏庫（collectAll）之後，避免被一併收走；toStash 已排除維特之腿。
-      if (typeof a.fromStash === "function" && questOn() && cowWanted(g) && (shop.collected || !settings.gear.autoEquip) && !g.inventoryOf(cls).some((x) => x?.base === WIRT_LEG)) {
+      if (typeof a.fromStash === "function" && questOn() && cowWanted(g) && (!view || !(view.collect > 0) || shop.collected || !settings.gear.autoEquip) && !g.inventoryOf(cls).some((x) => x?.base === WIRT_LEG)) {
         const leg = stashItems(view).find((x) => x?.base === WIRT_LEG && !shop.tried.has(x));
         if (leg) { shop.tried.add(leg); a.fromStash(leg); lastAction = "整備：從倉庫取出維特之腿（乳牛關卡）"; return false; }
       }
@@ -1524,7 +1542,7 @@
         if (name === "upgrades" || name === "potions") shop.tried.clear();
       }
     } catch (err) { lastAction = "整備中斷：" + String(err.message || err); }
-    leaveTrade(g); shop.done = true; actionAt = now;
+    leaveTrade(g); shop.done = true; turnInAt = 0; actionAt = now;
     return true;
   }
   // 排行榜學習：升級選卡依高手技能／被動權重，屬性點依高手配點比例；技能偏離時到阿卡拉重置（re-draft）。
@@ -1967,6 +1985,9 @@
   // 原版存檔 save.cain.quests[職業][任務ID]：'o'＝完成待領、'g'＝已領、'u' 等＝已使用；N1／M1／H1（尋找凱恩）戒指向阿卡拉領（akaraSearch），
   // 其餘 21 項向凱恩領（cainHandOver）。伊尼弗斯卷軸 bks 也由 akaraSearch 翻譯成鑰匙 bkd。
   const QUEST_DIFF = { normal: "N", nightmare: "M", hell: "H" }, QUEST_ZH = { normal: "普通", nightmare: "惡夢", hell: "地獄" };
+  // 地獄任務 4（巴爾單一技能樹占比 ≥75％）難度高、會失敗：使用者決定預設略過（build.h4Reset=false），不擋補任務與切換天梯；開啟 h4Reset 才要求 H4。
+  // 實測（2026-11-20，14 存檔）：H4 單樹占比 34％～52％ 反覆失敗，若一律要求 H4，任務模式會一直回地獄重打、永遠切不到天梯。
+  const questRequired = (id) => id !== "H4" || !!settings.build.h4Reset;
   const WIRT_LEG = "Wirt's Leg";
   // 本難度（QUEST_DIFF 前綴＋"3"）的 N3 乳牛關卡尚未完成（任何紀錄，含待領 "o"，都算完成）。
   function cowWanted(g) {
@@ -1985,23 +2006,21 @@
   // 乳牛關卡提示（N3 未完成才顯示）：依 world／背包狀態說明目前步驟。
   const cowHint = (g) => !cowWanted(g) ? "" : "；乳牛關：" + (g.world?.cowKing ? "追擊牛王" : g.cowPortal ? "進入乳牛傳送門" : hasItem(g, WIRT_LEG) ? "有維特之腿：擊殺格里斯華爾德開門" : "擊殺格里斯華爾德取得維特之腿");
   const questLine = (g) => { const qs = questSnapshot(g); return qs.total ? "任務（" + QUEST_ZH[qs.diff] + "）：完成 " + qs.done + "／" + qs.total + (qs.pending.length ? "，待領 " + qs.pending.join("、") : "") + "；尋找凱恩：" + qs.cain + cowHint(g) : ""; };
-  // 依使用者要求：任務模式達成（普通、惡夢、地獄各 6 項共 18 項都有紀錄，且角色 99 級）就自動改成固定關卡模式刷地獄。
+  // 三難度共 18 項任務完成且全部領取後，切換至天梯推關。
   // 遊戲 20261105.3 任務獎品（Codex 查 itemArt／Game bundle）：bbb 屬性書、xyz 生命藥水、tr2 抗性卷軸、ass 技能書、toa 赦免徽章需使用；hdm 鐵鎚持有即生效。
   const USE_REWARDS = ["bbb", "xyz", "tr2", "ass", "toa"];
   function questModeDone(g) {
-    if (!cleanupReady(g)) return false;
+    if (!questOn() || !cleanupReady(g)) return false;
     const q = g?.save?.cain?.quests?.[g?.kit?.id] || {};
-    // 地獄任務 4（巴爾單一技能樹占比 ≥75％）難度高、會失敗：預設視為可選，不擋任務模式達成；使用者開啟 build.h4Reset 才要求 H4 也完成。
-    if (!Object.values(QUEST_DIFF).every((p) => [1, 2, 3, 4, 5, 6].every((n) => (p + n === "H4" && !settings.build.h4Reset) || (q[p + n] != null && q[p + n] !== "o")))) return false;
+    if (!Object.values(QUEST_DIFF).every((p) => [1, 2, 3, 4, 5, 6].every((n) => !questRequired(p + n) || q[p + n] != null)) || Object.values(q).includes("o")) return false;
     // 實測（10 實例，第 1 號）：地獄 H1～H6 剛交付（狀態 g）就判定達成並切換模式，背包裡的屬性書、生命藥水、抗性卷軸、技能書都沒用。
     // 依使用者要求「任務獎勵的道具要會使用」：背包還有待使用的獎品（鐵鎚放著就生效、戒指靠配裝，不算）就先不達成，交給 useCodex 用掉。
     const unused = (g.inventoryOf?.(g.kit?.id) || []).filter((x) => USE_REWARDS.includes(x?.base));
     if (unused.length) { lastAction = "任務全部交付，先使用獎品：" + unused.map((x) => x.name || x.base).join("、"); return false; }
-    settings.quest.fixedDifficulty = "hell"; put("autoMode", "fixedDifficulty"); save(true); refreshControls();
-    lastAction = "任務模式達成（地獄通關、99 級、各難度任務全部完成並交付）：自動改為固定關卡模式刷地獄";
+    put("autoMode", "terror"); save(true); refreshControls();
+    lastAction = "任務模式達成（地獄通關、各難度任務全部完成並交付）：自動切換天梯推關";
     return true;
   }
-  let turnInAt = 0, turnInChanged = false;
   function reportQuests(g, now) {
     if (g.state !== "camp" || !g.camp || g.swapping || g.trade || !settings.progressEnabled || now - turnInAt < 3000) return false;
     const qs = questSnapshot(g), ring = ["N1", "M1", "H1"].some((id) => qs.q[id] === "o"), scroll = hasItem(g, "bks"), other = qs.pending.some((id) => !/^[NMH]1$/.test(id));
@@ -2062,11 +2081,14 @@
     if (!goldOverride) return;
     const { player, value, own } = goldOverride;
     if (player.goldGain === 999999) { if (own) player.goldGain = value; else delete player.goldGain; }
+    else if (typeof player.goldGain === "number" && Math.abs(player.goldGain - 999999) < 500000) {
+      player.goldGain = (typeof value === "number" ? value : 1) + (player.goldGain - 999999);
+    }
     goldOverride = null;
   }
   // 子開關還原紀錄（致命一擊 maxCrit、一擊必殺 oneHitKill、掉寶 maxDropRate）：每個子開關記下自己改過的欄位，
   // 第一次寫入前記下原值（含是否為自有屬性），每次寫入記下寫入值。還原時只還原「目前值仍等於自己寫入值」的欄位，
-  // 遊戲後來自行改過的值不蓋掉。玩家或導演物件更換前先還原舊紀錄。
+  // 遊戲後來自行改過的值不蓋掉；若遊戲僅在作弊值上做小幅增減（+=/-=），則將差額反映回原值。玩家或導演物件更換前先還原舊紀錄。
   const cheatRecs = new Map();
   let densityNextAt = 0;
   function cheatField(key, owner, obj, prop, value) {
@@ -2075,7 +2097,13 @@
     if (!rec) { rec = { owner, fields: [] }; cheatRecs.set(key, rec); }
     let f = rec.fields.find((x) => x.obj === obj && x.prop === prop);
     if (!f) { f = { obj, prop, own: Object.hasOwn(obj, prop), base: obj[prop], written: undefined }; rec.fields.push(f); }
-    else if (obj[prop] !== f.written) { f.own = Object.hasOwn(obj, prop); f.base = obj[prop]; }
+    else if (obj[prop] !== f.written) {
+      if (typeof obj[prop] === "number" && typeof f.written === "number" && Math.abs(f.written) >= 100 && Math.abs(obj[prop] - f.written) < Math.abs(f.written) * 0.5) {
+        f.base = (typeof f.base === "number" ? f.base : 0) + (obj[prop] - f.written);
+      } else {
+        f.own = Object.hasOwn(obj, prop); f.base = obj[prop];
+      }
+    }
     obj[prop] = value;
     f.written = value;
   }
@@ -2083,8 +2111,11 @@
     const rec = cheatRecs.get(key);
     if (!rec) return;
     for (const f of rec.fields) {
-      if (f.obj[f.prop] !== f.written) continue;
-      if (f.own) f.obj[f.prop] = f.base; else delete f.obj[f.prop];
+      if (f.obj[f.prop] === f.written) {
+        if (f.own) f.obj[f.prop] = f.base; else delete f.obj[f.prop];
+      } else if (typeof f.obj[f.prop] === "number" && typeof f.written === "number" && Math.abs(f.written) >= 100 && Math.abs(f.obj[f.prop] - f.written) < Math.abs(f.written) * 0.5) {
+        f.obj[f.prop] = (typeof f.base === "number" ? f.base : 0) + (f.obj[f.prop] - f.written);
+      }
     }
     cheatRecs.delete(key);
   }
@@ -2381,7 +2412,11 @@
 
       // 掉寶與金幣倍率
       if (settings.cheat.maxGoldRate) {
-        if (!goldOverride || p.goldGain !== 999999) goldOverride = { player: p, value: p.goldGain, own: Object.hasOwn(p, "goldGain") };
+        if (!goldOverride) goldOverride = { player: p, value: p.goldGain, own: Object.hasOwn(p, "goldGain") };
+        else if (p.goldGain !== 999999) {
+          if (typeof p.goldGain === "number" && Math.abs(p.goldGain - 999999) < 500000) goldOverride.value = (typeof goldOverride.value === "number" ? goldOverride.value : 1) + (p.goldGain - 999999);
+          else goldOverride = { player: p, value: p.goldGain, own: Object.hasOwn(p, "goldGain") };
+        }
         p.goldGain = 999999;
       }
       if (settings.cheat.maxDropRate) {
@@ -2549,6 +2584,7 @@
       reason = g && deathReason(after, danger, now, healingFailed);
       if (reason) { fire(returnToSafety(g, after, reason, now), "安全離場"); return; }
     }
+    if (g) clearManaBelt(g, after, now);
     if (g && state.p) { if (g.hud?.skillsOpen || g.hud?.questLogOpen) release(); else navigate(after, danger, now); }
   }
   function guarded(g, now) {
@@ -2717,13 +2753,13 @@
   for (const [path, label] of [["enabled", "自動走位（預判包圍、保持距離、閃避）"], ["combatStyle", "戰鬥方式"], ["dodgeProjectiles", "閃避敵方飛彈"]]) field("movement." + path, label, path === "combatStyle" ? [["auto", "自動（依技能攻擊距離）"], ["melee", "近戰（貼身攻擊）"], ["ranged", "遠程（保持距離）"]] : undefined);
   group("撿寶"); field("loot.enabled", "自動撿寶"); field("loot.vacuumXp", "全圖吸經驗（地上經驗寶石自動飛來；非原版行為）"); field("loot.vacuumGold", "全圖吸金幣"); field("loot.vacuum", "全圖撿寶（撿取距離改為全圖，要撿哪些依遊戲過濾器）"); field("loot.kickJars", "踢地上罐子木桶（可能掉藥水）");
   field("loot.backtrackForLoot", "通關後等待撿裝");
-  tab("progress"); field("progressEnabled", "自動戰鬥開關"); field("autoKind", "自動模式", [["quest", "任務模式（完成所有任務並練到 99 級，達成後自動改刷地獄；地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，難度高、有機率失敗，預設略過，可在下方開啟「失敗後重置技能」嘗試）"], ["fixedDifficulty", "固定關卡模式（重複刷指定難度）"], ["ladder", "天梯模式"]]);
+  tab("progress"); field("progressEnabled", "自動戰鬥開關"); field("autoKind", "自動模式", [["quest", "任務模式（地獄通關後補齊並交付所有難度任務，再自動切換天梯推關；地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，難度高、預設略過，可在下方開啟「失敗後重置技能」嘗試）"], ["fixedDifficulty", "固定關卡模式（重複刷指定難度）"], ["ladder", "天梯模式"]]);
   field("ladderMode", "天梯方式", [["terror", "推關（恐怖層數往上推）"], ["fixedTier", "固定層數（重刷指定層，須已通關）"]]);
   field("quest.fixedDifficulty", "固定關卡難度", [["normal", "普通"], ["nightmare", "惡夢"], ["hell", "地獄"]]); field("terror.targetFarmTier", "固定層數");
   group("恐怖層數"); field("terror.postClearWaitSec", "通關等待（秒）"); field("terror.autoReviveOrRestart", "陣亡後重試（有保留角色時）");
   group("關卡進程"); field("quest.prioritizeBoss", "優先接近任務頭目"); field("quest.autoStart", "在營地自動開局／續玩（全新存檔可用）");
   group("排行榜學習"); field("build.ladder", "依排行榜高手配法選升級卡"); field("build.autoStats", "依高手比例自動配屬性點"); field("build.redraft", "技能配置和排行榜差太多時向阿卡拉付費重置技能（普通通關後可用，重置後立刻重新選卡）"); field("build.autoReroll", "自動重抽（升級候選卡評分偏低時自動使用重抽）");
-  group("地獄任務 4（巴爾單一技能樹占比 75％）"); field("build.h4Reset", "失敗後重置技能嘗試地獄任務 4：地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，難度高、有機率失敗，任務模式預設略過；開啟後多次打不過會回營地重置技能並只投入同一棵技能樹，且任務模式要等 H4 完成才結束"); field("build.h4ResetAfter", "失敗幾次後重置技能（次）");
+  group("地獄任務 4（巴爾單一技能樹占比 75％）"); field("build.h4Reset", "失敗後重置技能嘗試地獄任務 4：預設關閉＝任務模式略過 H4；開啟後任務模式須完成 H4，多次打不過會回營地重置技能並只投入同一棵技能樹"); field("build.h4ResetAfter", "失敗幾次後重置技能（次）");
   group("裝備管理"); field("gear.autoEquip", "自動裝備管理：穿上較佳裝備、獨特／套裝收進收藏庫、備用稀有裝備存倉庫、賣掉用不到的、向商人買較佳裝備，並把用得上的裝備穿給雇傭兵（統一評分，職業技能詞綴只算本職業）"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）");
   group("營地整備（每次回營地自動變強）"); field("town.enabled", "回營地自動整備"); field("town.buyPotions", "用金幣向阿卡拉買生命藥水"); field("town.charsiUpgrades", "用金幣升級恰西永久能力");
   tab("assist"); group("死亡保護"); field("deathProtection.enabled", "死亡保護（緊急離開本局）"); field("deathProtection.emergencyHpPercent", "緊急生命門檻（％）"); field("deathProtection.disableAutomation", "觸發後關閉兩頁總開關");
@@ -2829,7 +2865,7 @@
   }, 200);
   const api = {
     destroy() { if (!alive) return; alive = false; virtualEss.restore?.(); cleanupVirtualEssence(game); restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); setPickupRadius(pickupOwner, false); release(); abort.abort(); clearInterval(timer); for (const restore of restores.reverse()) restore(); launcher.remove(); stopButton.remove(); statusLine.remove(); host.remove(); if (window.__d2autobot === api) delete window.__d2autobot; }, stop,
-    diagnostics: () => ({ hellClears, h4: (() => { try { return h4Info(game); } catch { return null; } })(), hookUrl, hookNote, connected: !!game, state: game?.state ?? null, lastAction, storageNote, quests: (() => { try { const q = questSnapshot(game); return { line: questLine(game), done: q.done, total: q.total, pending: q.pending, cain: q.cain }; } catch { return null; } })(), gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() }),
+    diagnostics: () => ({ hellClears, hellClearedSave: (() => { try { return savedHellClear(game); } catch { return null; } })(), h4: (() => { try { return h4Info(game); } catch { return null; } })(), hookUrl, hookNote, connected: !!game, state: game?.state ?? null, lastAction, storageNote, quests: (() => { try { const q = questSnapshot(game); return { line: questLine(game), done: q.done, total: q.total, pending: q.pending, cain: q.cain }; } catch { return null; } })(), gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() }),
     get game() { return game; },
     saveMode,
     onlineSave,
