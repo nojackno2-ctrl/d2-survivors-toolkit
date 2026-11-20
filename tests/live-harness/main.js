@@ -5,6 +5,10 @@ const OUT = process.env.H_OUT || path.join(__dirname, "out");
 fs.mkdirSync(OUT, { recursive: true }); fs.writeFileSync(path.join(OUT, "pid"), String(process.pid));
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-background-timer-throttling");
+// 視窗放在螢幕外（x:-2000）時，Windows 的原生遮蔽判定會把頁面當成隱藏（visibilityState=hidden、requestAnimationFrame 停止、截圖失敗）。
+// 實測（2026-11-20 druid-2）：關閉遮蔽判定後螢幕外視窗照常算繪；多實例並跑不必把視窗搬到螢幕上。
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 app.setPath("userData", path.join(OUT, "profile"));
 const log = (...a) => fs.appendFileSync(path.join(OUT, "log.txt"), new Date().toISOString().slice(11, 19) + " " + a.join(" ") + "\n");
 // H_BLOCK_API：攔截遊戲的 /api/ 請求（排行榜上傳與回報），請求不送出，只記錄網址；用於測試上傳佇列而不影響正式排行榜。

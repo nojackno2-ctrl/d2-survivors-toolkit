@@ -24,7 +24,8 @@
     if (g.frontend?.open && !g.plainSelect().onPick) { g.frontend.actions.play(); await sleep(3000); }
     if (!g.plainSelect().onPick) { g.chooseClass(); await sleep(1500); }
     const s = g.plainSelect(), i = s.cards.findIndex((c) => c.dataset?.class === CLS);
-    s.select(i); await sleep(300); s.confirm(false); // false：有存檔進度就接續原角色，沒有才開新角色（原版 confirm 實作） await sleep(1000); window.__hPicked = g.state !== "select";
+    // confirm(false)：有存檔進度就接續原角色，沒有才開新角色（原版 confirm 實作）。
+    s.select(i); await sleep(300); s.confirm(false); await sleep(1000); window.__hPicked = g.state !== "select";
   }
   // 陣亡畫面很短，status 每 5 秒取樣會漏；改為每 200ms 偵測。
   let deaths = 0, lastState = "";
