@@ -961,7 +961,7 @@
     const fixed = opened.find((s) => s.difficulty === settings.quest.farmDifficulty);
     // 地獄通關後依序回各難度補任務，不受低難度經驗門檻限制。
     const cq = g.save?.cain?.quests?.[g.kit.id] || {};
-    const questBack = cleanupReady(g) ? [...opened].reverse().find((s) => [1, 2, 3, 4, 5, 6].some((n) => cq[QUEST_DIFF[s.difficulty] + n] == null)) : null;
+    const questBack = cleanupReady(g) ? [...opened].reverse().find((s) => [1, 2, 3, 4, 5, 6].some((n) => questRequired(QUEST_DIFF[s.difficulty] + n) && cq[QUEST_DIFF[s.difficulty] + n] == null)) : null;
     const fresh = fixed || questBack || (farm ? opened[1] : opened[0]);
     if (farm) failStreak[opened[0].difficulty] = 0;
     // 上次進度是較低難度的局（回刷中離場）時不再續玩，直接開最高難度。
@@ -1985,6 +1985,9 @@
   // 原版存檔 save.cain.quests[職業][任務ID]：'o'＝完成待領、'g'＝已領、'u' 等＝已使用；N1／M1／H1（尋找凱恩）戒指向阿卡拉領（akaraSearch），
   // 其餘 21 項向凱恩領（cainHandOver）。伊尼弗斯卷軸 bks 也由 akaraSearch 翻譯成鑰匙 bkd。
   const QUEST_DIFF = { normal: "N", nightmare: "M", hell: "H" }, QUEST_ZH = { normal: "普通", nightmare: "惡夢", hell: "地獄" };
+  // 地獄任務 4（巴爾單一技能樹占比 ≥75％）難度高、會失敗：使用者決定預設略過（build.h4Reset=false），不擋補任務與切換天梯；開啟 h4Reset 才要求 H4。
+  // 實測（2026-11-20，14 存檔）：H4 單樹占比 34％～52％ 反覆失敗，若一律要求 H4，任務模式會一直回地獄重打、永遠切不到天梯。
+  const questRequired = (id) => id !== "H4" || !!settings.build.h4Reset;
   const WIRT_LEG = "Wirt's Leg";
   // 本難度（QUEST_DIFF 前綴＋"3"）的 N3 乳牛關卡尚未完成（任何紀錄，含待領 "o"，都算完成）。
   function cowWanted(g) {
@@ -2009,7 +2012,7 @@
   function questModeDone(g) {
     if (!questOn() || !cleanupReady(g)) return false;
     const q = g?.save?.cain?.quests?.[g?.kit?.id] || {};
-    if (!Object.values(QUEST_DIFF).every((p) => [1, 2, 3, 4, 5, 6].every((n) => q[p + n] != null)) || Object.values(q).includes("o")) return false;
+    if (!Object.values(QUEST_DIFF).every((p) => [1, 2, 3, 4, 5, 6].every((n) => !questRequired(p + n) || q[p + n] != null)) || Object.values(q).includes("o")) return false;
     // 實測（10 實例，第 1 號）：地獄 H1～H6 剛交付（狀態 g）就判定達成並切換模式，背包裡的屬性書、生命藥水、抗性卷軸、技能書都沒用。
     // 依使用者要求「任務獎勵的道具要會使用」：背包還有待使用的獎品（鐵鎚放著就生效、戒指靠配裝，不算）就先不達成，交給 useCodex 用掉。
     const unused = (g.inventoryOf?.(g.kit?.id) || []).filter((x) => USE_REWARDS.includes(x?.base));
@@ -2750,13 +2753,13 @@
   for (const [path, label] of [["enabled", "自動走位（預判包圍、保持距離、閃避）"], ["combatStyle", "戰鬥方式"], ["dodgeProjectiles", "閃避敵方飛彈"]]) field("movement." + path, label, path === "combatStyle" ? [["auto", "自動（依技能攻擊距離）"], ["melee", "近戰（貼身攻擊）"], ["ranged", "遠程（保持距離）"]] : undefined);
   group("撿寶"); field("loot.enabled", "自動撿寶"); field("loot.vacuumXp", "全圖吸經驗（地上經驗寶石自動飛來；非原版行為）"); field("loot.vacuumGold", "全圖吸金幣"); field("loot.vacuum", "全圖撿寶（撿取距離改為全圖，要撿哪些依遊戲過濾器）"); field("loot.kickJars", "踢地上罐子木桶（可能掉藥水）");
   field("loot.backtrackForLoot", "通關後等待撿裝");
-  tab("progress"); field("progressEnabled", "自動戰鬥開關"); field("autoKind", "自動模式", [["quest", "任務模式（地獄通關後補齊並交付所有難度任務，再自動切換天梯推關；地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，可在下方開啟「失敗後重置技能」嘗試）"], ["fixedDifficulty", "固定關卡模式（重複刷指定難度）"], ["ladder", "天梯模式"]]);
+  tab("progress"); field("progressEnabled", "自動戰鬥開關"); field("autoKind", "自動模式", [["quest", "任務模式（地獄通關後補齊並交付所有難度任務，再自動切換天梯推關；地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，難度高、預設略過，可在下方開啟「失敗後重置技能」嘗試）"], ["fixedDifficulty", "固定關卡模式（重複刷指定難度）"], ["ladder", "天梯模式"]]);
   field("ladderMode", "天梯方式", [["terror", "推關（恐怖層數往上推）"], ["fixedTier", "固定層數（重刷指定層，須已通關）"]]);
   field("quest.fixedDifficulty", "固定關卡難度", [["normal", "普通"], ["nightmare", "惡夢"], ["hell", "地獄"]]); field("terror.targetFarmTier", "固定層數");
   group("恐怖層數"); field("terror.postClearWaitSec", "通關等待（秒）"); field("terror.autoReviveOrRestart", "陣亡後重試（有保留角色時）");
   group("關卡進程"); field("quest.prioritizeBoss", "優先接近任務頭目"); field("quest.autoStart", "在營地自動開局／續玩（全新存檔可用）");
   group("排行榜學習"); field("build.ladder", "依排行榜高手配法選升級卡"); field("build.autoStats", "依高手比例自動配屬性點"); field("build.redraft", "技能配置和排行榜差太多時向阿卡拉付費重置技能（普通通關後可用，重置後立刻重新選卡）"); field("build.autoReroll", "自動重抽（升級候選卡評分偏低時自動使用重抽）");
-  group("地獄任務 4（巴爾單一技能樹占比 75％）"); field("build.h4Reset", "失敗後重置技能嘗試地獄任務 4：任務模式須完成 H4；開啟後多次打不過會回營地重置技能並只投入同一棵技能樹"); field("build.h4ResetAfter", "失敗幾次後重置技能（次）");
+  group("地獄任務 4（巴爾單一技能樹占比 75％）"); field("build.h4Reset", "失敗後重置技能嘗試地獄任務 4：預設關閉＝任務模式略過 H4；開啟後任務模式須完成 H4，多次打不過會回營地重置技能並只投入同一棵技能樹"); field("build.h4ResetAfter", "失敗幾次後重置技能（次）");
   group("裝備管理"); field("gear.autoEquip", "自動裝備管理：穿上較佳裝備、獨特／套裝收進收藏庫、備用稀有裝備存倉庫、賣掉用不到的、向商人買較佳裝備，並把用得上的裝備穿給雇傭兵（統一評分，職業技能詞綴只算本職業）"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）");
   group("營地整備（每次回營地自動變強）"); field("town.enabled", "回營地自動整備"); field("town.buyPotions", "用金幣向阿卡拉買生命藥水"); field("town.charsiUpgrades", "用金幣升級恰西永久能力");
   tab("assist"); group("死亡保護"); field("deathProtection.enabled", "死亡保護（緊急離開本局）"); field("deathProtection.emergencyHpPercent", "緊急生命門檻（％）"); field("deathProtection.disableAutomation", "觸發後關閉兩頁總開關");
@@ -2862,7 +2865,7 @@
   }, 200);
   const api = {
     destroy() { if (!alive) return; alive = false; virtualEss.restore?.(); cleanupVirtualEssence(game); restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); setPickupRadius(pickupOwner, false); release(); abort.abort(); clearInterval(timer); for (const restore of restores.reverse()) restore(); launcher.remove(); stopButton.remove(); statusLine.remove(); host.remove(); if (window.__d2autobot === api) delete window.__d2autobot; }, stop,
-    diagnostics: () => ({ hellClears, h4: (() => { try { return h4Info(game); } catch { return null; } })(), hookUrl, hookNote, connected: !!game, state: game?.state ?? null, lastAction, storageNote, quests: (() => { try { const q = questSnapshot(game); return { line: questLine(game), done: q.done, total: q.total, pending: q.pending, cain: q.cain }; } catch { return null; } })(), gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() }),
+    diagnostics: () => ({ hellClears, hellClearedSave: (() => { try { return savedHellClear(game); } catch { return null; } })(), h4: (() => { try { return h4Info(game); } catch { return null; } })(), hookUrl, hookNote, connected: !!game, state: game?.state ?? null, lastAction, storageNote, quests: (() => { try { const q = questSnapshot(game); return { line: questLine(game), done: q.done, total: q.total, pending: q.pending, cain: q.cain }; } catch { return null; } })(), gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() }),
     get game() { return game; },
     saveMode,
     onlineSave,
