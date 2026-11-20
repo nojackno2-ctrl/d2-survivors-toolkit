@@ -248,6 +248,14 @@ let server, win;
     check('稀有裝備接近身上才存倉庫，差很多的改賣掉',stored.includes('near')&&stored.includes('uni')&&!stored.includes('bad')&&sold.includes('bad'));
     check('倉庫存不進去的獨特裝備不賣、不重複嘗試',!sold.includes('fullU')&&inv.includes(fullU));}
    {reset();await install({...enabled,enabled:false,progressEnabled:true,quest:{autoProgress:false}});
+    const jewel={base:'Jewel',type:'jewel',rarity:'magic',id:'jw1'},rune={base:'El Rune',type:'rune',rarity:'normal',id:'rn1'},quest={base:'bkd',name:'Key to the Cairn Stones',type:'quest',rarity:'unique',id:'q1'},keyItem={base:'Key',type:'key',rarity:'normal',id:'k1'},charm={base:'Small Charm',type:'charm',rarity:'magic',id:'ch1',mods:[{stat:'life',value:10}]};
+    const inv=[jewel,rune,quest,keyItem,charm],stored=[],sold=[];game.state='camp';game.camp={};game.world.player.cls='sorceress';
+    game.equippedOf=()=>({});game.inventoryOf=()=>inv;game.ownGear=()=>({doll:{slotFor:()=>null,canWear:()=>false,displaced:()=>[]}});game.previewGear=()=>({});game.makePlayer=()=>({});game.gearActions=()=>({equip(){}});game.heroNumbers=()=>({stats:[]});
+    game.hud={showTown(){}};
+    game.openCampTrade=(k)=>{game.state='town';const show=()=>game.hud.showTown(100,[],{leave:()=>{game.state='camp'}},{actions:{sell:(it)=>{sold.push(it.id);inv.splice(inv.indexOf(it),1)},collectAll(){},toStash:(it)=>{stored.push(it.id);inv.splice(inv.indexOf(it),1)}},view:{stash:{tabs:{},uniques:{},collect:0,open:'personal'}}});show();};
+    for(let i=0;i<60;i++){tick();time+=300;}
+    check('珠寶與符文存入個人倉庫，任務道具與咒符留在背包不賣也不存',stored.includes('jw1')&&stored.includes('rn1')&&!stored.includes('q1')&&!stored.includes('k1')&&!stored.includes('ch1')&&inv.includes(quest)&&inv.includes(keyItem)&&inv.includes(charm)&&sold.length===0);}
+   {reset();await install({...enabled,enabled:false,progressEnabled:true,quest:{autoProgress:false}});
     const oldK={base:'Ring',type:'ring',rarity:'unique',name:'Nagelring',id:'old',q:1},better={base:'Ring',type:'ring',rarity:'unique',name:'Nagelring',id:'better',q:2},worse={base:'Amulet',type:'amulet',rarity:'runeword',name:'Spirit',id:'worse',q:1},keptRw={base:'Amulet',type:'amulet',rarity:'runeword',name:'Spirit',id:'keptRw',q:5},fresh={base:'Cap',type:'head',rarity:'set',name:'Sigon',id:'fresh',q:1};
     const inv=[better,worse,fresh],col=[oldK,keptRw],sold=[];let open='personal';game.state='camp';game.camp={};game.world.player.cls='sorceress';
     game.equippedOf=()=>({});game.inventoryOf=()=>inv;game.ownGear=()=>({doll:{slotFor:()=>null,canWear:()=>false,displaced:()=>[]}});game.previewGear=()=>({});game.makePlayer=()=>({});game.gearActions=()=>({equip(){}});game.heroNumbers=()=>({stats:[]});

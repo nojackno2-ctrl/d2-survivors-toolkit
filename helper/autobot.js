@@ -1321,6 +1321,8 @@
   let shop = null, trade = null, smithAt = -Infinity;
   const RANKS = ["Vitality", "Damage Reduced", "Replenish Life", "Potion Healing", "Faster Cast Rate", "Energy", "Faster Run/Walk", "Strength", "Dexterity", "Fire Pierce", "Cold Pierce", "Lightning Pierce", "Poison Pierce", "Physical Pierce", "Experience", "Magic Find", "Gold Find", "Sell Price", "Reroll", "Banish", "Skip"];
   const keepType = (item) => ["quest", "rune", "gem", "jewel"].includes(item.type) || (item.type !== "weapon" && /charm|jewel|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || "")));
+  // 非任務類的保留材料（珠寶、符文、寶石、精華、徽章）可存入個人倉庫，避免長期佔用背包；任務道具、鑰匙、維特之腿與咒符維持留在背包。武器（例如符文權杖）不算材料。
+  const stashKeepType = (item) => !isCharm(item) && item?.type !== "quest" && item?.type !== "weapon" && item?.base !== WIRT_LEG && !/\bkey\b/i.test(String(item?.base || "")) && (["rune", "gem", "jewel"].includes(item?.type) || /jewel|rune|gem|essence|token/i.test(String(item?.type || "") + " " + String(item?.base || "")));
   function hookTown(g) {
     const hud = g.hud;
     if (!hud || typeof hud.showTown !== "function") return false;
@@ -1412,7 +1414,7 @@
         // 依統一裝備決策：收藏庫拒收的獨特／套裝（collect）與同欄位前幾名備用稀有（stash）才存。
         const fates = gearFates(g, cls, [...g.inventoryOf(cls), ...stashItems(view)]);
         // 依使用者要求：收藏庫優先於個人倉庫——能進收藏庫的（獨特／套裝／符文之語）只有收藏關閉或收藏庫明確拒收（collectRefused）時才存個人倉庫。
-        const item = g.inventoryOf(cls).find((x) => { const f = fates.get(x)?.fate; return x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !duplicateJunk.has(x) && (f === "stash" || f === "collect" && (!x.name || collectRefused.has(x))); });
+        const item = g.inventoryOf(cls).find((x) => { const f = fates.get(x)?.fate; return x?.base && !shop.tried.has(x) && !stashRefused.has(x) && !duplicateJunk.has(x) && (f === "stash" || f === "collect" && (!x.name || collectRefused.has(x)) || f === "keep" && stashKeepType(x)); });
         // 原版 toStash 存進「目前開著的分頁」；使用者要求只能存個人倉庫，目前不是個人分頁（共用或收藏庫）時先切回個人分頁，下一輪再存。
         if (item && view?.open && view.open !== "personal" && typeof a.openStashTab === "function") { a.openStashTab("personal"); lastAction = "整備：切換到個人倉庫"; return false; }
         if (item) { shop.tried.add(item); shop.stashing = item; a.toStash(item); lastAction = "整備：存入倉庫 " + itemZh(item); return false; }
