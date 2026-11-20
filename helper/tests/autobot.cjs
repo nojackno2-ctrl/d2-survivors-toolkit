@@ -121,6 +121,7 @@ let server, win;
    reset();await install(enabled);game.state='playing';game.world.player.life=90;game.world.projectiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:1000}];tick();check('玩家飛彈不觸發致命預警',game.calls.length===0);
    reset();await install(enabled);game.state='playing';game.world.player.life=10;game.world.terror={tier:1,affixes:['nobelt']};tick();check('遵守恐怖禁止藥帶詞綴',game.calls.length===0);
    reset();await install({...enabled});game.state='playing';game.world.mana.mana=10;tick();check('遊戲沒有魔力藥水：魔力低時不喝水',!game.calls.length);
+   reset();await install({...enabled});game.state='playing';game.world.belt.columns=[['mana','potion'],[],[],[]];time+=1000;tick();check('自動喝生命藥開啟時以原版操作清出法力藥水並保留生命藥',game.calls.some(x=>x[0]==='drink')&&game.world.belt.columns[0][0]==='potion');
    reset();await install({enabled:true,loot:{enabled:false}});game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:10,life:2}];tick();check('飛彈正面來襲側向閃避',Math.abs(game.walkTarget?.y)>0);
    reset();await install({enabled:true,loot:{enabled:false}});game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:1,life:2}];tick();check('不痛不癢的飛彈不特別閃，沒有威脅就站在原地',!game.walkTarget&&__d2autobot.diagnostics().lastAction.indexOf('閃避')<0&&__d2autobot.diagnostics().lastAction.indexOf('站在原地')>=0);
    reset();await install({enabled:true,loot:{enabled:false}});game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:10,life:2}];tick();
