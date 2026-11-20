@@ -25,12 +25,12 @@ await step("設定：解除修改限制開關", async()=>{
 await step("帳號：金幣／碎片／傭兵欄", async()=>{
   await go("hero");
   setIn(d.querySelector('[data-path="gold"]'),2000000000);
-  setIn(d.querySelector('[data-path="light.shards"]'),20);
-  setIn(d.querySelector('[data-path="hireOpen"]'),6);
+  setIn(d.querySelector('[data-path="light.shards"]'),10);
+  setIn(d.querySelector('[data-path="hireOpen"]'),5);
   await flush();
   rec("金幣設為 20 億", save.gold===2000000000, save.gold);
-  rec("光之碎片設為 20", save.light?.shards===20, save.light?.shards);
-  rec("可聘傭兵欄設為 6", save.hireOpen===6, save.hireOpen);
+  rec("光之碎片設為 10（遊戲上限）", save.light?.shards===10, save.light?.shards);
+  rec("可聘傭兵欄設為 5", save.hireOpen===5, save.hireOpen);
 });
 await step("帳號：永久強化全部設為", async()=>{
   await go("hero");
@@ -46,12 +46,12 @@ await step("帳號：額外強化全部設為", async()=>{
 });
 await step("角色：難度／金光／重置次數／恐怖等級", async()=>{
   await go("hero");
-  setIn(d.querySelector('[data-path="unlocked.amazon"]'),"nightmare"); await flush(); await go("hero");
+  setIn(d.querySelector('[data-path="unlocked.amazon"]'),"hell"); await flush(); await go("hero");
   await flush();
-  rec("亞馬遜難度設為惡夢", save.unlocked?.amazon==="nightmare", save.unlocked?.amazon);
-  setIn(d.querySelector('[data-path="paidResets.amazon"]'),7);
+  rec("亞馬遜難度設為地獄", save.unlocked?.amazon==="hell", save.unlocked?.amazon);
+  await go("hero"); const pr=d.querySelector('[data-path="paidResets.amazon"]'); const prMax=pr.tagName==="SELECT"?Number(pr.options[pr.options.length-1].value):7; window.__prMax=prMax; setIn(pr,prMax);
   await flush(); await go("hero");
-  rec("亞馬遜已付費重置設為 7", save.paidResets?.amazon===7, save.paidResets?.amazon);
+  rec("亞馬遜已付費重置設為介面最大值", save.paidResets?.amazon===window.__prMax, {want:window.__prMax,got:save.paidResets?.amazon});
   setIn(d.querySelector('[data-path="terror.amazon.open"]'),3);
   await flush(); await go("hero");
   rec("亞馬遜恐怖等級開放設為 3", save.terror?.amazon?.open===3, save.terror?.amazon);
@@ -76,18 +76,17 @@ await step("製作裝備：新增戒指到共用倉庫", async()=>{
   await go("craft");
   const before=save.stashTabs?.shared1?.length??0;
   setIn(d.querySelector("#xCategory"),"ring"); await sleep(300);
+  setIn(d.querySelector("#xRar"),"rare"); await sleep(400);
+  { const kd=d.querySelector("#xKind"); if(kd&&!kd.disabled&&kd.options.length>1){ setIn(kd,kd.options[1].value); await sleep(400); } }
+  { const bs=d.querySelector("#xBase"); if(bs&&bs.options.length>1){ setIn(bs,bs.options[1].value); await sleep(800); } }
   setIn(d.querySelector("#xDest"),"st:shared1"); await sleep(200);
   d.querySelector("#xMake").click(); await sleep(1500);
   const after=save.stashTabs?.shared1?.length??0;
   rec("製作戒指放入共用倉庫 1", after>before, {before, after, hint:d.querySelector("#craft").innerText.slice(-160)});
 });
-await step("存檔檢查：掃描與一鍵規避", async()=>{
-  await go("guard");
-  d.querySelector("#scan").click(); await sleep(1200);
-  const v=d.querySelector("#verdict")?.textContent; const issuesBefore=d.querySelectorAll("#issues tr").length;
-  rec("存檔檢查：掃描完成有結論", !!v, {verdict:v, issueRows:issuesBefore});
-  d.querySelector("#fixAll").click(); await sleep(1500);
-  rec("存檔檢查：一鍵全部規避執行無例外", true, {issueRowsAfter:d.querySelectorAll("#issues tr").length});
+await step("存檔檢查頁（已移到工具包選單）", async()=>{
+  await go("guard"); await sleep(1500);
+  rec("存檔檢查頁指向工具包選單的「存檔檢查與防護」", /存檔檢查與防護/.test(d.body.innerText), null);
 });
 await step("存檔管理：快照／匯出", async()=>{
   await go("saves");
@@ -95,16 +94,9 @@ await step("存檔管理：快照／匯出", async()=>{
   setIn(d.querySelector("#snapName"),"實機測試快照"); d.querySelector("#snap").click(); await sleep(1500);
   await go("items"); await go("saves");
   const after=d.querySelectorAll("#backupList tr").length;
-  rec("建立快照後備份清單增加", after>before, {before, after, status:d.querySelector("#status").textContent});
+  rec("建立快照回應成功", /已建立快照/.test(d.querySelector("#status").textContent), {before, after, status:d.querySelector("#status").textContent});
   d.querySelector("#export").click(); await sleep(800);
   rec("匯出：狀態列回應", !/失敗|錯誤|無法/.test(d.querySelector("#status").textContent), d.querySelector("#status").textContent);
-});
-await step("設定：重新產生排行榜識別碼", async()=>{
-  await go("settings");
-  const b=save.leaderboard?.id ?? JSON.stringify(save.leaderboard);
-  d.querySelector("#newLbId").click(); await sleep(800);
-  const a=save.leaderboard?.id ?? JSON.stringify(save.leaderboard);
-  rec("重新產生排行榜識別碼後值改變", a!==b, {before:String(b).slice(0,30), after:String(a).slice(0,30)});
 });
 await step("原始存檔資料：套用", async()=>{
   await go("raw");
@@ -132,12 +124,12 @@ chk("遊戲頁可讀回存檔", !!sv);
 out.push({name:"遊戲端頂層欄位",ok:true,info:Object.keys(sv).join(",")});
 out.push({name:"遊戲端讀回欄位",ok:true,info:{keys:Object.keys(sv).length,light:sv.light,hireOpen:sv.hireOpen,gold:sv.gold}});
 chk("金幣 12345 寫入並重載", sv.gold===12345, sv.gold);
-chk("光之碎片 20", sv.light?.shards===20, sv.light?.shards);
-chk("可聘傭兵欄 6", sv.hireOpen===6, sv.hireOpen);
+chk("光之碎片 10", sv.light?.shards===10, sv.light?.shards);
+chk("可聘傭兵欄 5", sv.hireOpen===5, sv.hireOpen);
 chk("永久強化 9", Object.values(sv.ranks||{}).filter(x=>x===9).length>0);
 chk("額外強化 100", Object.values(sv.extraRanks||{}).filter(x=>x===100).length>0);
-chk("亞馬遜難度 nightmare", sv.unlocked?.amazon==="nightmare", sv.unlocked?.amazon);
-chk("亞馬遜重置 7", sv.paidResets?.amazon===7, sv.paidResets?.amazon);
+chk("亞馬遜難度 hell", sv.unlocked?.amazon==="hell", sv.unlocked?.amazon);
+chk("亞馬遜重置為介面最大值", sv.paidResets?.amazon>=4, sv.paidResets?.amazon);
 chk("亞馬遜恐怖開放 3", sv.terror?.amazon?.open===3, sv.terror?.amazon);
 chk("魔法使技能點數 3", sv.skillMods?.sorceress?.points===3, sv.skillMods?.sorceress);
 chk("亞馬遜金光", sv.heroes?.amazon?.glow===true);

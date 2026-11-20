@@ -63,6 +63,14 @@ app.whenReady().then(async () => {
       const queueRewrite = localStorage.getItem("d2s:leaderboard-queue");
       let postBlocked = false; try { await fetch("/api/leaderboard", { method: "POST", body: "{}" }); } catch { postBlocked = true; }
       let getStatus = null; try { getStatus = (await fetch("/api/leaderboard")).status; } catch (e) { getStatus = "err " + e.message; }
+      // 全新設定檔在選角前遊戲不寫存檔：實際進場玩幾秒、離場，讓遊戲寫入存檔後再檢查 leaderboard.off。
+      if (g.state === "select") { if (!g.plainSelect().onPick) { g.chooseClass(); await sleep(1500); } const sel = g.plainSelect(), idx = sel.cards.findIndex(c => c.dataset?.class === "amazon"); if (idx >= 0) { sel.select(idx); await sleep(300); sel.confirm(false); } }
+      for (let i = 0; i < 120 && !g.world?.player; i++) await sleep(500);
+      await sleep(8000);
+      if (g.state === "playing" && g.pause) g.pause();
+      await sleep(500);
+      if (g.state === "paused" && g.leaveRun) await g.leaveRun();
+      await sleep(3000);
       for (let i = 0; i < 60 && !JSON.parse(localStorage.getItem("d2-survivors/save/v1") || "{}").leaderboard?.off; i++) await sleep(1000);
       const stored = JSON.parse(localStorage.getItem("d2-survivors/save/v1") || "{}").leaderboard;
       return { queueBefore, queueAfterLoad, offLocked, toggleErr, offAfterToggle, queueRewrite, postBlocked, getStatus, storedOff: stored?.off ?? null };

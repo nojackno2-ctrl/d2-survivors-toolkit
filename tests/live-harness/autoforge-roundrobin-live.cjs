@@ -64,7 +64,7 @@ app.whenReady().then(async () => {
       const essences = () => (g.save?.inventoryByClass?.[cls] || []).filter(i => i?.type === "essence" && i.base === essenceName).reduce((s, i) => s + (i.count ?? 1), 0);
       const root = document.querySelector("#d2autobot-panel")?.shadowRoot;
       const toggle = (name, enabled) => { const b = root?.querySelector('[data-setting="' + name + '"]'); if (!b) throw new Error("找不到設定：" + name); if ((b.getAttribute("aria-checked") === "true") !== enabled) b.click(); };
-      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true); await sleep(2000); toggle("cheat.enabled", false); await sleep(1000);
+      toggle("cheat.enabled", true); toggle("cheat.forgeMax", true); await sleep(2000); /* 虛擬精華需總開關保持開啟 */
       const ok = it => it && ["unique", "set", "runeword"].includes(it.rarity) && Array.isArray(it.mods) && it.mods.length;
       // 1) 背包中可淬鍊的裝備；不足 10 件時，從同一副本的倉庫／傭兵搬入背包（僅隔離副本）
       const inv = () => g.save.inventoryByClass[cls] = g.save.inventoryByClass[cls] || [];

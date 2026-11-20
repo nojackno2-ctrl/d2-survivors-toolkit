@@ -81,7 +81,7 @@ app.whenReady().then(async () => {
       };
       const trace = { state: g.state, cls, essencesBefore: essences() };
       // 1) 作弊給 99 精華（與 forge-essence-live 相同方式）
-      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true);
+      toggle("cheat.enabled", true); toggle("cheat.forgeMax", true);
       await sleep(2000);
       toggle("cheat.enabled", false);
       await sleep(1500);

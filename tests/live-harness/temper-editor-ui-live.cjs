@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
         if ((button.getAttribute("aria-checked") === "true") !== enabled) button.click();
         if ((button.getAttribute("aria-checked") === "true") !== enabled) throw new Error("設定切換失敗：" + name);
       };
-      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true);
+      toggle("cheat.enabled", true); toggle("cheat.forgeMax", true);
       await sleep(2000);
       toggle("cheat.enabled", false);
       await sleep(1500);

@@ -165,10 +165,20 @@
   <section>
     <h2>更新日誌</h2>
     <p class="dim">介紹網頁：<a href="https://d2-survivors-toolkit.nojackno2.workers.dev/#changelog" target="_blank" rel="noopener" style="color:var(--gold)">d2-survivors-toolkit.nojackno2.workers.dev</a></p>
+    <h3>2026-11-20</h3>
+    <h4>輔助器</h4>
+    <ul>
+      <li>雇傭兵預設跟著自動戰鬥啟用，「雇傭兵」獨立開關已移除；傭兵穿裝併入「自動裝備管理」。</li>
+      <li>遊戲修改總開關關閉時，底下的各項修改開關顯示為「關閉」並停用。</li>
+      <li>自動淬鍊面板在視窗縮窄時會重新排版，不再跑出畫面外。</li>
+    </ul>
     <h3>2026-11-19</h3>
     <h4>修改器</h4>
     <ul>
       <li>修改器網頁版：修正按「寫入存檔」確認後誤報「無法確認存檔模式，請重試」而寫入失敗的問題（例如一鍵解鎖收藏庫後寫入）。</li>
+      <li>修正「恐怖等級開放」只改開放層數，導致遊戲讀檔時整筆丟掉該職業恐怖階進度的問題：現在會一併同步最佳、通關、候選層數；該職業還沒有恐怖階紀錄時會提示無法直接設定。</li>
+      <li>「光之碎片」欄位加上上限 10（遊戲只接受到 10，超過會整筆丟掉）。</li>
+      <li>原始存檔資料貼入前先檢查必須是物件；尚未讀檔時按快照、匯出、建立全新存檔會提示；複製診斷失敗不再顯示成功。</li>
     </ul>
     <h4>自動淬鍊</h4>
     <ul>
@@ -610,7 +620,7 @@
     <h2>基本</h2>
     <div class="grid">
       <label><span>金幣</span><input type="number" data-path="gold" min="0" data-max="10000000000"></label>
-      <label><span>光之碎片</span><input type="number" data-path="light.shards" min="0"></label>
+      <label><span>光之碎片</span><input type="number" data-path="light.shards" min="0" max="10" data-max="10" title="遊戲上限 10；超過 10 遊戲讀檔時會整筆丟掉"></label>
       <label><span>可聘傭兵欄</span><select data-path="hireOpen" data-num><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select><span class="dim">（遊戲只接受 1、2、3、5）</span></label>
     </div>
     <p id="goldWarn" class="bad" hidden>金幣原版上限為 10,000,000,000；超過時遊戲會把存檔標記為「被外部修改」（排行榜不計分），未解除限制時無法超過。</p>
@@ -2341,6 +2351,18 @@ function collectHero() {
     // 數字欄位只接受有限且不為負的值（HTML min 僅是瀏覽器提示，JS 不會擋）；無效輸入不寫入，還原為原值。
     if (el.type === "number" && (!Number.isFinite(v) || v < 0)) { el.value = old ?? ""; continue; }
     if (old === undefined && v === 0 && el.dataset.num !== undefined) continue; // 沒動過的 0 不寫進存檔
+    // 恐怖階「開放層數」：遊戲讀檔會驗證整筆紀錄一致（最佳／通關／候選層數／重打／選擇），只改 open 會讓遊戲整筆丟掉該職業的恐怖階進度，所以一併同步。
+    const tm = /^terror.([a-z]+).open$/.exec(p);
+    if (tm && old !== v) {
+      const rec = save.terror?.[tm[1]];
+      if (!rec) { el.value = ""; status("這個職業還沒有恐怖階紀錄，無法直接設定開放層數（先在遊戲裡進入恐怖階）", "bad"); continue; }
+      const n = Math.max(1, Math.floor(v));
+      rec.open = n; rec.best = rec.cleared = n - 1;
+      for (const o of rec.offers ?? []) o.tier = n;
+      if (rec.replay) rec.replay.tier = n - 1;
+      if (rec.pick !== undefined) rec.pick = n - 1;
+      continue;
+    }
     if (old !== v) setP(save, p, v);
   }
   // 原版上限：金幣 100 億、額外強化 999
@@ -2571,16 +2593,17 @@ $("#reload").onclick = load;
 $("#mode").onchange = load;
 $("#write").onclick = write;
 $("#backups").onclick = () => window.api.openBackups();
-$("#snap").onclick = async () => { const r = await window.api.snapshot(save, $("#snapName").value || "快照"); if (r.error) return status(r.error, "bad"); $("#snapName").value = ""; renderSaves(); status("已建立快照", "ok"); };
-$("#export").onclick = async () => { const r = await window.api.exportSave(save); if (r.error) return status(r.error, "bad"); if (!r.canceled) status("已匯出：" + r.path, "ok"); };
+$("#snap").onclick = async () => { if (!save) return status("尚未讀取存檔", "bad"); const r = await window.api.snapshot(save, $("#snapName").value || "快照"); if (r.error) return status(r.error, "bad"); $("#snapName").value = ""; renderSaves(); status("已建立快照", "ok"); };
+$("#export").onclick = async () => { if (!save) return status("尚未讀取存檔", "bad"); const r = await window.api.exportSave(save); if (r.error) return status(r.error, "bad"); if (!r.canceled) status("已匯出：" + r.path, "ok"); };
 $("#import").onclick = async () => { const r = await window.api.importSave(); if (r.error) return status(r.error, "bad"); if (r.canceled) return; save = r.save; lastSeal = "none"; sel = null; renderAll(); status("已匯入檔案（尚未寫入存檔）", "ok"); };
 $("#fresh").onclick = () => {
+  if (!save) return status("尚未讀取存檔", "bad");
   const opts = Object.fromEntries([...document.querySelectorAll("[data-keep]")].map(c => [c.dataset.keep, c.checked]));
   if (!confirm("以勾選的內容建立全新存檔？（建立後按「寫入存檔」才會取代遊戲中的存檔，原存檔會先自動備份）")) return;
   save = freshSave(save, opts); lastSeal = "none"; sel = null; renderAll();
   status("已建立全新存檔（尚未寫入存檔）", "ok");
 };
-$("#fromRaw").onclick = () => { try { save = JSON.parse($("#rawText").value); sel = null; renderAll(); status("已套用存檔資料（尚未寫入存檔）", "ok"); } catch (e) { status("存檔資料格式錯誤：" + e.message, "bad"); } };
+$("#fromRaw").onclick = () => { try { const next = JSON.parse($("#rawText").value); if (!next || typeof next !== "object" || Array.isArray(next)) throw new Error("存檔資料必須是物件"); save = next; lastSeal = "none"; sel = null; renderAll(); status("已套用存檔資料（尚未寫入存檔）", "ok"); } catch (e) { status("存檔資料格式錯誤：" + e.message, "bad"); } };
 document.addEventListener("input", (e) => {
   if (e.target.dataset?.path === "gold") checkGold();
   else if (!unlocked() && e.target.dataset?.max && Number(e.target.value) > Number(e.target.dataset.max)) e.target.value = e.target.dataset.max;
@@ -2612,8 +2635,9 @@ $("#diagMake").onclick = makeDiag;
 $("#diagCopy").onclick = async () => {
   const t = $("#diagText");
   if (!t.value) await makeDiag();
-  try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand("copy"); }
-  $("#diagMsg").textContent = "已複製，可以貼上了";
+  let copied = false;
+  try { await navigator.clipboard.writeText(t.value); copied = true; } catch { t.select(); try { copied = document.execCommand("copy"); } catch { copied = false; } }
+  $("#diagMsg").textContent = copied ? "已複製，可以貼上了" : "無法自動複製，請手動選取文字複製";
 };
 $("#versionDismiss").onclick = () => { versionDismissed = true; refreshVersionNotice(); };
 $("#unlockMode").onchange = (e) => {

@@ -75,7 +75,7 @@ app.whenReady().then(async () => {
       const trace = { state: g.state, cls };
       trace.before = { essences: essences(), weapon: snap(wpn()), stored: snap(storedWeapon()) };
       // 1) 作弊給精華（與 forge-essence-live 相同的方式）
-      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true);
+      toggle("cheat.enabled", true); toggle("cheat.forgeMax", true);
       await sleep(2000);
       toggle("cheat.enabled", false);
       await sleep(1500);

@@ -129,7 +129,7 @@ app.whenReady().then(async () => {
       const essences = () => (g.save?.inventoryByClass?.[cls] || []).filter(i => i?.type === "essence" && i.base === essenceName).reduce((s, i) => s + (i.count ?? 1), 0);
       const root = document.querySelector("#d2autobot-panel")?.shadowRoot;
       const toggle = (name, enabled) => { const b = root?.querySelector('[data-setting="' + name + '"]'); if (!b) throw new Error("找不到設定：" + name); if ((b.getAttribute("aria-checked") === "true") !== enabled) b.click(); };
-      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true); await sleep(2500); toggle("cheat.enabled", false); await sleep(1000);
+      toggle("cheat.enabled", true); toggle("cheat.forgeMax", true); await sleep(2500); toggle("cheat.enabled", false); await sleep(1000);
       // 修改器的「放到」沒有背包選項（只有共用倉庫等）→ 造在共用倉庫，這裡把它們從共用倉庫移進角色背包（隔離存檔）。
       let moved = 0;
       if (!(g.inventoryOf(cls) || []).some(i => /Jordan/i.test(i?.name || ""))) {

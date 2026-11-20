@@ -58,7 +58,7 @@ app.whenReady().then(async () => {
         const ess = () => (g.save?.inventoryByClass?.[cls] || []).filter(i => i?.type === "essence" && i.base === "Burning Essence of Terror").reduce((s, i) => s + (i.count ?? 1), 0);
         const root = document.querySelector("#d2autobot-panel")?.shadowRoot;
         const toggle = (name, on) => { const b = root?.querySelector('[data-setting="' + name + '"]'); if (!b) throw new Error("找不到設定：" + name); if ((b.getAttribute("aria-checked") === "true") !== on) b.click(); };
-        if (ess() < 45) { toggle("cheat.forgeMax", true); toggle("cheat.enabled", true); await sleep(2000); toggle("cheat.enabled", false); await sleep(1500); }
+        if (ess() < 45) { toggle("cheat.enabled", true); toggle("cheat.forgeMax", true); await sleep(2000); toggle("cheat.enabled", false); await sleep(1500); }
         const item = JSON.parse(${JSON.stringify(ITEM)}); item.id = ${JSON.stringify(id)};
         g.save.equippedByClass = g.save.equippedByClass || {}; g.save.equippedByClass[cls] = g.save.equippedByClass[cls] || {};
         g.save.equippedByClass[cls].weapon = item;
