@@ -238,6 +238,8 @@ async function main() {
   await run("屬性點分配與 statCarry 寫入", async () => evalMain(`
     const g = window.__d2autobot?.game;
     if (!g) throw Error("找不到遊戲物件");
+    // 全新存檔 90 秒內遊戲不給未分配屬性點：注入 6 點，讓輔助器自動配點實際執行
+    if (g.build && !(g.build.unspent > 0)) { window.__d2autobot.settings.build.autoStats = true; g.build.unspent = 6; await new Promise(r => setTimeout(r, 6000)); }
     const unspent = g.build?.unspent | 0;
     const attributes = g.build?.attributes || {};
     const rawCarry = localStorage.getItem("d2autobot:statCarry");

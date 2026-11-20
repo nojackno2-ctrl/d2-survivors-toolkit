@@ -59,7 +59,7 @@ app.whenReady().then(async () => {
       const essences = () => (g.save?.inventoryByClass?.[cls] || []).filter(i => i?.type === "essence" && i.base === essenceName).reduce((s, i) => s + (i.count ?? 1), 0);
       const root = document.querySelector("#d2autobot-panel")?.shadowRoot;
       const toggle = (name, enabled) => { const b = root?.querySelector('[data-setting="' + name + '"]'); if (!b) throw new Error("找不到設定：" + name); if ((b.getAttribute("aria-checked") === "true") !== enabled) b.click(); };
-      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true); await sleep(2000);
+      toggle("cheat.enabled", true); toggle("cheat.forgeMax", true); await sleep(2000);
       // H_LOCAL=1：本地化＋必定成功（總開關保持開啟），其餘屬性設為 X，驗證只淬到指定屬性
       const local = ${JSON.stringify(process.env.H_LOCAL || "")} === "1";
       if (local) { toggle("cheat.forgeMax", false); window.__d2forgeLocal.set({ enabled: true, sure: true }); } else toggle("cheat.enabled", false);

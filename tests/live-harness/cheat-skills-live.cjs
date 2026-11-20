@@ -70,7 +70,7 @@ app.whenReady().then(async () => {
       toggle("cheat.enabled", false); toggle("cheat.maxSkills", false);
       await sleep(500);
       const before = snapshot();
-      toggle("cheat.maxSkills", true); toggle("cheat.enabled", true);
+      toggle("cheat.enabled", true); toggle("cheat.maxSkills", true);
       const start = performance.now(), samples = [];
       for (const seconds of [0, 1, 3]) {
         await sleep(Math.max(0, start + seconds * 1000 - performance.now()));

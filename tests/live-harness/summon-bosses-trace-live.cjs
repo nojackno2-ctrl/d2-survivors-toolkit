@@ -63,7 +63,7 @@ app.whenReady().then(async () => {
       toggle("enabled", true); toggle("progressEnabled", true);
       for (let i = 0; i < 60 && g.state !== "playing"; i++) await sleep(500);
       await sleep(2000);
-      toggle("cheat.pauseStageTime", true); toggle("cheat.invincible", true); toggle("cheat.oneHitKill", true); toggle("cheat.summonAllBosses", true); toggle("cheat.enabled", true);
+      toggle("cheat.pauseStageTime", true); toggle("cheat.invincible", true); toggle("cheat.oneHitKill", true); toggle("cheat.enabled", true); toggle("cheat.summonAllBosses", true);
       const trace = [];
       const t0 = Date.now();
       const log = (what, extra) => trace.push({ ms: Date.now() - t0, what, state: g.state, boss: g.world?.boss?.name ?? null, life: g.world?.player?.life ?? null, extra });

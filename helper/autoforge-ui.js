@@ -736,7 +736,14 @@ function tick() {
 }
 setInterval(tick, 300);
 // 橫直向切換時同步更新收合圖示位置，避免與掛機入口重疊。
-window.addEventListener("resize", () => { if (state.folded && box?.isConnected) render(); });
+window.addEventListener("resize", () => {
+  if (state.folded && box?.isConnected) render();
+  // 面板寬度與位置只在建立時判斷過窄螢幕；視窗改變尺寸（手機旋轉、縮小視窗）後重新套用，避免展開的面板超出畫面。
+  if (box?.isConnected) {
+    const narrow = window.innerWidth < 600, st = box.style;
+    st.top = narrow ? "8vh" : "12px"; st.right = narrow ? "8px" : "12px"; st.width = narrow ? "calc(100vw - 16px)" : "480px"; st.maxHeight = narrow ? "80vh" : "88vh";
+  }
+});
 // 暫停倒數：每秒只更新倒數文字，不重畫整個面板（避免打斷下拉選單操作）。
 setInterval(() => { const el = document.getElementById("af-cd"); if (el) el.textContent = pauseCountdownText();
   // 縮小圖示的提示：倒數每秒更新；等待開始或結束時（提示出現／消失）重畫圖示。

@@ -73,7 +73,7 @@ app.whenReady().then(async () => {
         return { stacks: st.length, total: st.reduce((s, i) => s + (i.count ?? 1), 0), rawBaseBet: inv.filter(i => i?.base === "bet").length };
       };
       const before = count();
-      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true);
+      toggle("cheat.enabled", true); toggle("cheat.forgeMax", true);
       await sleep(2000);
       const during = count();
       toggle("cheat.enabled", false);

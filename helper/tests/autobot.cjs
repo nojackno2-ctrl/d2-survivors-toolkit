@@ -57,8 +57,11 @@ let server, win;
      check('明顯開關與可及性 '+setting,button?.getAttribute('role')==='switch'&&['開啟','關閉'].includes(button.textContent));
      const before=button.getAttribute('aria-checked');button.click();
      check('開關立即切換 '+setting,button.getAttribute('aria-checked')!==before);
-     button.click();
+     if(setting!=='cheat.enabled')button.click();// 總開關保持開啟，讓後面的修改項目可切換；迴圈後再關閉
    }
+   {const master=shadow.querySelector('[data-setting="cheat.enabled"]'),sub=shadow.querySelector('[data-setting="cheat.invincible"]');master.click();
+    check('遊戲修改總開關關閉時子開關顯示關閉且停用',master.getAttribute('aria-checked')==='false'&&sub.disabled&&sub.getAttribute('aria-checked')==='false'&&sub.textContent==='關閉');
+    master.click();check('遊戲修改總開關開啟後子開關可操作',!sub.disabled);master.click();}
    check('包含遊戲修改分頁',[...shadow.querySelectorAll('[data-tab]')].some((b)=>b.textContent==='遊戲修改')&&!!shadow.querySelector('[data-pane="cheat"]'));
    const mode=shadow.querySelector('[data-setting="autoKind"]'),ladder=shadow.querySelector('[data-setting="ladderMode"]'),pickMode=(v)=>{mode.value=['quest','fixedDifficulty'].includes(v)?v:'ladder';mode.dispatchEvent(new Event('change'));if(!['quest','fixedDifficulty'].includes(v)){ladder.value=v;ladder.dispatchEvent(new Event('change'));}};
    check('分頁改名自動戰鬥',[...shadow.querySelectorAll('[data-tab]')].some((b)=>b.textContent==='自動戰鬥')&&mode?.tagName==='SELECT'&&mode.options.length===3&&ladder?.options.length===2);

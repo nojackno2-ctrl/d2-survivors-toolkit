@@ -54,7 +54,7 @@ app.whenReady().then(async () => {
       const cls = g.kit?.id;
       const root = document.querySelector("#d2autobot-panel")?.shadowRoot;
       const toggle = (name, enabled) => { const b = root?.querySelector('[data-setting="' + name + '"]'); if (!b) throw new Error("找不到設定：" + name); if ((b.getAttribute("aria-checked") === "true") !== enabled) b.click(); };
-      toggle("cheat.forgeMax", true); toggle("cheat.enabled", true); await sleep(2000); toggle("cheat.enabled", false); await sleep(1000);
+      toggle("cheat.enabled", true); toggle("cheat.forgeMax", true); await sleep(2000); toggle("cheat.enabled", false); await sleep(1000);
       const it = JSON.parse(${JSON.stringify(process.env.H_ITEM_JSON || "null")});
       if (!it) throw new Error("缺少 H_ITEM");
       g.save.inventoryByClass = g.save.inventoryByClass || {};

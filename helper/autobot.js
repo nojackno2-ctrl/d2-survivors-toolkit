@@ -22,7 +22,7 @@
     loot: { enabled: true, vacuum: true, vacuumXp: true, vacuumGold: false, searchRadius: 450, pickupGold: true, minRuneTier: 1, qualityThreshold: { normal: true, magic: true, rare: true, set: true, unique: true, runeword: true }, backtrackForLoot: true, kickJars: true, onlyUpgrades: false },
     terror: { mode: "off", targetFarmTier: 1, autoReviveOrRestart: false, postClearWaitSec: 3 },
     quest: { autoProgress: false, prioritizeBoss: true, autoStart: true, farmDifficulty: "off", fixedDifficulty: "hell" },
-    gear: { autoEquip: true, minGainPercent: 2, merc: true },
+    gear: { autoEquip: true, minGainPercent: 2 },
     // 陣亡回營地後的整備：裝備管理（gear.autoEquip 一個開關管穿上、收藏、存倉、賣出、買裝）、買藥、恰西升級，讓每一局都比上一局強。
     town: { enabled: true, buyPotions: true, charsiUpgrades: true },
     // h4Reset／h4ResetAfter：地獄任務 4（H4）多次失敗後重置技能並只投入同一棵技能樹（見 campTreeReset）。H4 難度高，預設 false＝任務模式略過 H4；使用者開啟才挑戰。
@@ -1183,7 +1183,7 @@
   // 穿一件；成功回傳 true。被換下的裝備回到背包，由原本的賣出／存倉流程處理。
   // extra＝倉庫／收藏庫的裝備（只有開著倉庫畫面時才傳入）；從那裡穿用原版 gearActions 的倉庫模式，與本職業從倉庫取裝相同。
   function equipMerc(g, cls, extra = []) {
-    if (!settings.gear.merc || !g.mercOf?.(cls) || typeof g.mercGear !== "function") return false;
+    if (!settings.gear.autoEquip || !g.mercOf?.(cls) || typeof g.mercGear !== "function") return false; // 傭兵裝備整合在「自動裝備管理」內
     const inv = g.inventoryOf(cls), best = bestMercGear(g, cls, [...inv, ...extra]);
     if (!best) return false;
     g.gearActions(cls, () => {}, !inv.includes(best.item), g.mercGear(cls)).equip(best.item, best.slot);
@@ -1204,7 +1204,7 @@
   const MERC_PREFERENCE = ["Desert Mercenary", "Rogue Scout", "Barbarian", "Iron Wolf"];
   // 回營地：沒有雇傭兵就雇用（挑能負擔且偏好順序最前者，花費不超過金幣一半），陣亡就復活。每次整備只嘗試一次，回傳 true 表示有動作。
   function hireMerc(g, cls) {
-    if (!settings.gear.merc || typeof g.openKashya !== "function" || typeof g.openHireList !== "function" || g.state !== "camp" || !g.camp) return false;
+    if (!settings.progressEnabled || typeof g.openKashya !== "function" || typeof g.openHireList !== "function" || g.state !== "camp" || !g.camp) return false;
     const have = g.mercOf?.(cls), gold = Number(g.save?.gold) || 0;
     if (have?.record?.dead) {
       const menu = npcMenu(g, () => g.openKashya()), item = menu?.items?.find((x) => /^Resurrect/.test(x.label || "") && !x.disabled);
@@ -1362,7 +1362,7 @@
     },
     merc(g, cls) {
       // 本職業自己有更好的裝備時先留給自己（穿戴在倉庫步驟處理）。
-      if (!settings.gear.merc || !g.mercOf?.(cls)) return true;
+      if (!settings.gear.autoEquip || !g.mercOf?.(cls)) return true;
       if (bestGear(g, [...g.inventoryOf(cls)])) return true;
       return !equipMerc(g, cls);
     },
@@ -2724,7 +2724,7 @@
   group("關卡進程"); field("quest.prioritizeBoss", "優先接近任務頭目"); field("quest.autoStart", "在營地自動開局／續玩（全新存檔可用）");
   group("排行榜學習"); field("build.ladder", "依排行榜高手配法選升級卡"); field("build.autoStats", "依高手比例自動配屬性點"); field("build.redraft", "技能配置和排行榜差太多時向阿卡拉付費重置技能（普通通關後可用，重置後立刻重新選卡）"); field("build.autoReroll", "自動重抽（升級候選卡評分偏低時自動使用重抽）");
   group("地獄任務 4（巴爾單一技能樹占比 75％）"); field("build.h4Reset", "失敗後重置技能嘗試地獄任務 4：地獄任務 4 需擊殺巴爾時單一技能樹傷害占 75% 以上，難度高、有機率失敗，任務模式預設略過；開啟後多次打不過會回營地重置技能並只投入同一棵技能樹，且任務模式要等 H4 完成才結束"); field("build.h4ResetAfter", "失敗幾次後重置技能（次）");
-  group("裝備管理"); field("gear.autoEquip", "自動裝備管理：穿上較佳裝備、獨特／套裝收進收藏庫、備用稀有裝備存倉庫、賣掉用不到的、向商人買較佳裝備（統一評分，職業技能詞綴只算本職業）"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）"); field("gear.merc", "雇傭兵：回營地向凱莎雇用／復活，並把用得上的裝備給他穿（以雇傭兵數值評分）");
+  group("裝備管理"); field("gear.autoEquip", "自動裝備管理：穿上較佳裝備、獨特／套裝收進收藏庫、備用稀有裝備存倉庫、賣掉用不到的、向商人買較佳裝備，並把用得上的裝備穿給雇傭兵（統一評分，職業技能詞綴只算本職業）"); field("gear.minGainPercent", "替換門檻（約等於傷害提升％）");
   group("營地整備（每次回營地自動變強）"); field("town.enabled", "回營地自動整備"); field("town.buyPotions", "用金幣向阿卡拉買生命藥水"); field("town.charsiUpgrades", "用金幣升級恰西永久能力");
   tab("assist"); group("死亡保護"); field("deathProtection.enabled", "死亡保護（緊急離開本局）"); field("deathProtection.emergencyHpPercent", "緊急生命門檻（％）"); field("deathProtection.disableAutomation", "觸發後關閉兩頁總開關");
   tab("cheat");
@@ -2766,13 +2766,15 @@
       const baseLabel = labelEl?.dataset.baseLabel || "";
       if (input.getAttribute("role") === "switch") {
         const disabledInOnline = isOnline && ONLINE_DISABLED_CHEATS.has(path);
-        const on = !disabledInOnline && !!get(path);
-        input.disabled = disabledInOnline;
-        input.setAttribute("aria-disabled", String(disabledInOnline));
+        // 遊戲修改總開關關閉時，各修改項目實際不生效：顯示必須等於實際狀態（關閉＋停用）。
+        const masterOff = path.startsWith("cheat.") && path !== "cheat.enabled" && !settings.cheat?.enabled;
+        const on = !disabledInOnline && !masterOff && !!get(path);
+        input.disabled = disabledInOnline || masterOff;
+        input.setAttribute("aria-disabled", String(disabledInOnline || masterOff));
         input.setAttribute("aria-checked", String(on));
         input.textContent = on ? "開啟" : "關閉";
         if (labelEl) {
-          const nextLabel = disabledInOnline ? baseLabel + "（線上存檔不可用）" : isOnline && path === "cheat.infiniteRerolls" ? baseLabel + "（本局有效）" : baseLabel;
+          const nextLabel = disabledInOnline ? baseLabel + "（線上存檔不可用）" : masterOff ? baseLabel + "（需先開啟遊戲修改總開關）" : isOnline && path === "cheat.infiniteRerolls" ? baseLabel + "（本局有效）" : baseLabel;
           if (labelEl.textContent !== nextLabel) labelEl.textContent = nextLabel;
         }
       } else {

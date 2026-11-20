@@ -63,7 +63,7 @@ app.whenReady().then(async () => {
       toggle("enabled", true); toggle("progressEnabled", true);
       for (let i = 0; i < 60 && g.state !== "playing"; i++) await sleep(500);
       await sleep(2000);
-      toggle("cheat.pauseStageTime", true); toggle("cheat.invincible", true); toggle("cheat.oneHitKill", true); toggle("cheat.summonAllBosses", true); toggle("cheat.enabled", true);
+      toggle("cheat.pauseStageTime", true); toggle("cheat.invincible", true); toggle("cheat.oneHitKill", true); toggle("cheat.enabled", true); toggle("cheat.summonAllBosses", true);
       const samples = [], seen = new Map();
       let lastBoss = null, spawns = 0;
       const startKills = g.world?.kills ?? 0;

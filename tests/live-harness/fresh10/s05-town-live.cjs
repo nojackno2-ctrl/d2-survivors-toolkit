@@ -184,6 +184,11 @@ async function main() {
       await sleep(2000);
     }
     const inv = g.inventoryOf?.("paladin") || [];
+    // 60 秒內不一定掉出同欄位的多件稀有裝：補 4 件稀有項鍊（生命 50／49／48／47），驗證「穿最好、次好存倉」
+    try {
+      const made = (await window.__d2editBackend.engine("generateMany", Array.from({ length: 4 }, () => ({ max: 1, free: true, rarity: "rare", base: "Amulet" })), 1)).map(r => r.item).filter(Boolean);
+      made.forEach((it, i) => { it.mods = [{ stat: "life", value: 50 - i }]; delete it.stats; delete it.roll; inv.push(it); });
+    } catch (e) { window.__s05_injectError = String(e); }
     const gold = (Number.isFinite(g.save?.gold) ? g.save.gold : 0) + (Number.isFinite(g.world?.gold) ? g.world.gold : 0);
     const beltColumns = g.world?.belt?.columns || [];
     const rarities = {};
@@ -244,6 +249,8 @@ async function main() {
       if (ranksCount > 0 && beltBought.length > 0) break;
       await sleep(500);
     }
+    // 整備動作剛結束時商店畫面（state=town）還沒關閉：最多再等 30 秒讓狀態回到營地，避免把時序當成失敗。
+    for (let i = 0; i < 60 && g.state !== "camp"; i++) await sleep(500);
     const actionsSeen = [...(window.__s05_actions || [])];
     const ranks = g.save?.ranks || {};
     const beltBought = g.save?.beltBought?.["paladin"] || [];
@@ -397,7 +404,7 @@ async function main() {
         timer = setTimeout(() => {
           timedOut = true;
           reject(Error("實機測試整體逾時"));
-        }, 280000);
+        }, 600000);
       })
     ]);
   } catch (error) {

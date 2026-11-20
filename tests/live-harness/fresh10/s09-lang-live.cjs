@@ -140,7 +140,7 @@ async function main() {
     const traitHyphenOk = traitHyphen.includes("\\u00a0") && traitHyphen.replace(/\\u00a0/g, " ") === "特別強壯 靈氣強化";
     const traitSpaceOk = traitSpace.includes("\\u00a0") && traitSpace.replace(/\\u00a0/g, " ") === "特別強壯 靈氣強化";
 
-    const allOk = ringOk && monsterHyphenOk && traitHyphenOk && traitSpaceOk;
+    const allOk = ringOk && monsterHyphenOk && monsterSpaceOk && traitHyphenOk && traitSpaceOk;
 
     return {
       ok: allOk,
@@ -345,7 +345,7 @@ async function main() {
       });
 
     return {
-      ok: true,
+      ok: allCollected.length > 0, // 沒取到任何畫面文字代表取樣本身失敗，不可當作通過
       totalCollected: allCollected.length,
       englishNodesCount: englishNodes.length,
       top30English: sortedSummary,

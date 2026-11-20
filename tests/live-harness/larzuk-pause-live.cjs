@@ -73,7 +73,7 @@ app.whenReady().then(async () => {
       };
       // 1. 拉蘇克精華
       const essenceBefore = essence();
-      toggle("cheat.larzukMax", true); toggle("cheat.enabled", true);
+      toggle("cheat.enabled", true); toggle("cheat.larzukMax", true);
       await sleep(2000);
       const essenceDuring = essence();
       toggle("cheat.enabled", false);
@@ -85,7 +85,7 @@ app.whenReady().then(async () => {
       for (let i = 0; i < 60 && g.state !== "playing"; i++) await sleep(500);
       await sleep(3000);
       const stateAtStart = g.state;
-      toggle("cheat.pauseStageTime", true); toggle("cheat.enabled", true);
+      toggle("cheat.enabled", true); toggle("cheat.pauseStageTime", true);
       await sleep(1000);
       const pauseA = stage();
       await sleep(8000);

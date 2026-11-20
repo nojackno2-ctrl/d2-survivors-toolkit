@@ -64,7 +64,7 @@ app.whenReady().then(async () => {
       if (ess() < 5) {
         const root = document.querySelector("#d2autobot-panel")?.shadowRoot;
         const toggle = (name, on) => { const b = root?.querySelector('[data-setting="' + name + '"]'); if (!b) throw new Error("找不到設定：" + name); if ((b.getAttribute("aria-checked") === "true") !== on) b.click(); };
-        toggle("cheat.forgeMax", true); toggle("cheat.enabled", true); await sleep(2000); toggle("cheat.enabled", false); await sleep(1500);
+        toggle("cheat.enabled", true); toggle("cheat.forgeMax", true); await sleep(2000); toggle("cheat.enabled", false); await sleep(1500);
       }
       let item = (g.inventoryOf(cls) || []).find(ok) || Object.values(g.save.equippedByClass[cls] || {}).find(ok);
       if (!item && ${JSON.stringify(ITEM)}) {
