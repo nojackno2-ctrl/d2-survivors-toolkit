@@ -1164,7 +1164,7 @@
     const worn = mg.worn || {};
     let best = null;
     for (const item of items) {
-      if (!item?.base || mercFailed.has(item) || keepType(item) || isCharm(item) || Object.values(worn).includes(item)) continue;
+      if (!item?.base || item.type === "jewel" || mercFailed.has(item) || keepType(item) || isCharm(item) || Object.values(worn).includes(item)) continue;
       let ok = false; try { ok = !!mg.doll.canWear?.(item); } catch { ok = false; }
       if (!ok) continue;
       const slot = item.type === "ring" ? null : mg.doll.slotFor?.(item, worn);
@@ -1304,7 +1304,8 @@
   // 實測（2026-11-01）：store＝恰西升級與裝備、akara＝藥水（1000 金，下一局放入藥帶）、stash＝倉庫／收藏庫（toStash、collectAll、可直接 equip）。
   let shop = null, trade = null, smithAt = -Infinity;
   const RANKS = ["Vitality", "Damage Reduced", "Replenish Life", "Potion Healing", "Faster Cast Rate", "Energy", "Faster Run/Walk", "Strength", "Dexterity", "Fire Pierce", "Cold Pierce", "Lightning Pierce", "Poison Pierce", "Physical Pierce", "Experience", "Magic Find", "Gold Find", "Sell Price", "Reroll", "Banish", "Skip"];
-  const keepType = (item) => ["quest", "rune", "gem", "jewel"].includes(item.type) || /charm|jewel|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || ""));
+  // 珠寶目前無自動鑲嵌功能：不列入 keepType，讓魔法／稀有珠寶可賣出騰出背包空間，獨特珠寶可進收藏庫。
+  const keepType = (item) => ["quest", "rune", "gem"].includes(item.type) || /charm|rune|gem|key|essence|token/i.test(String(item.type || "") + " " + String(item.base || ""));
   function hookTown(g) {
     const hud = g.hud;
     if (!hud || typeof hud.showTown !== "function") return false;
