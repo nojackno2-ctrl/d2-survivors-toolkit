@@ -84,6 +84,17 @@ function profile() {
     const off = JSON.parse(await gl.evaluate(`(()=>{const g=window.__d2autobotGame,P=Object.getPrototypeOf(g),a=window.__d2autobot,d=a.diagnostics(),pl=g.world&&g.world.player,desc=pl&&Object.getOwnPropertyDescriptor(pl,"life");return JSON.stringify({hooks:d.hooks,tickSame:P.tick===window.__hk0.tick,steerSame:P.steer===window.__hk0.steer,sortSame:Array.prototype.sort===window.__hk0.sort,pushSame:Array.prototype.push===window.__hk0.push,lifeData:!!(desc&&"value" in desc)})})()`));
     check("例外開關關閉後函式與屬性還原為原參照", !off.hooks.some((n) => ["invincible", "stageTime", "xp"].includes(n)) && off.tickSame && off.steerSame && off.sortSame && off.pushSame && off.lifeData, JSON.stringify(off));
 
+    // 4c. 營地畫面與高難度（取代舊網頁版 town／difficulty 實機腳本的核心情境；開啟畫面用遊戲方法，內容是否為中文由 H_SCREENS／H_CENSUS 普查負責）
+    await gl.helperSet("enabled", false); await gl.helperSet("progressEnabled", false); // 暫停輔助，避免干擾畫面操作
+    await gl.evaluate("(()=>{const g=window.__d2autobotGame;try{g.enterCamp()}catch(e){}return g.state})()");
+    await sleep(3500);
+    for (const [name, call] of [["阿卡拉商店", 'g.openAkaraTrade()'], ["營地交易（倉庫）", 'g.openCampTrade("stash")'], ["營地交易（賭博）", 'g.openCampTrade("gamble")'], ["恰西選單", 'g.charsiMenu("charsi")'], ["雇傭兵名單", 'g.openHireList()']]) {
+      const r = await gl.evaluate(`(()=>{const g=window.__d2autobotGame;try{${call};return "ok:"+g.state}catch(e){return "ERR "+e.message}})()`);
+      check("營地畫面可開啟：" + name, /^ok:/.test(r), r); await sleep(800); await gl.key("Escape", "press", 80); await sleep(500);
+    }
+    const hell = await gl.evaluate("(async()=>{const g=window.__d2autobotGame;try{for(let i=0;i<40&&g.state===\"loading\";i++)await new Promise(r=>setTimeout(r,500));await g.startRun(g.kit,\"hell\");for(let i=0;i<60&&g.state!==\"playing\";i++)await new Promise(r=>setTimeout(r,500));return g.state+\"/\"+(g.world&&g.world.difficulty)}catch(e){return \"ERR \"+e.message}})()");
+    check("可開地獄難度新局（startRun hell）", /^playing[/]hell$/.test(hell), hell);
+
     // 5. 設定介面改由獨立應用提供：經 CDP 讀寫、遊戲內面板隱藏
     const st0 = await gl.helperSettings();
     check("獨立應用可讀輔助器設定", st0 && typeof st0.enabled === "boolean", `autoMode=${st0 && st0.autoMode}`);
