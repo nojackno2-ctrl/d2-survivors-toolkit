@@ -58,18 +58,20 @@ function prepareProfile() {
   if (!process.env.H_NOBOT) {
     const sw = JSON.stringify({ enabled: true, progressEnabled: true, cheat: false, ...(process.env.H_SWITCHES ? JSON.parse(process.env.H_SWITCHES) : {}) });
     await gl.injectScript(`window.__d2autobotSwitches=${sw};window.__d2gameBuild=${JSON.stringify(process.env.H_BUILD || "2026.1105.3")};`);
-    for (const f of ["input.js", "hooks.js", "autobot.js"]) await gl.injectScript(fs.readFileSync(path.join(ROOT, "helper", f), "utf8"));
+    const HD = process.env.H_HELPER_DIR || path.join(ROOT, "helper"); // H_HELPER_DIR 指向舊版輔助器時只載入該資料夾內存在的檔案（A/B 比較用）
+    for (const f of ["input.js", "hooks.js", "autobot.js"]) if (fs.existsSync(path.join(HD, f))) await gl.injectScript(fs.readFileSync(path.join(HD, f), "utf8"));
     log("helper injected");
   }
   const end = Date.now() + Number(process.env.H_SECONDS || 120) * 1000;
-  let n = 0;
+  let n = 0, deaths = 0, lastState = "", minHp = 1, hpSum = 0, hpN = 0;
   while (Date.now() < end && gl.running) {
     try {
       const st = await gl.readSnapshot(`(g)=>{const w=g.world,p=w&&w.player;return {state:g.state,cls:g.kit&&g.kit.id,level:p&&p.level,hp:p?Math.round(p.life)+"/"+Math.round(p.maxLife):null,x:p&&Math.round(p.x),y:p&&Math.round(p.y),enemies:w&&w.enemies&&w.enemies.length,diag:window.__d2autobot&&window.__d2autobot.diagnostics?window.__d2autobot.diagnostics():null}}`);
-      fs.writeFileSync(path.join(OUT, "status.json"), JSON.stringify({ t: new Date().toISOString(), stubHits: gl.status().stubHits, ...st }, null, 1));
+      if (st.state === "dead" && lastState !== "dead") deaths++; lastState = st.state; const hpf = st.hp ? Number(st.hp.split("/")[0]) / Number(st.hp.split("/")[1]) : null; if (hpf != null && st.state === "playing") { minHp = Math.min(minHp, hpf); hpSum += hpf; hpN++; }
+      fs.writeFileSync(path.join(OUT, "status.json"), JSON.stringify({ t: new Date().toISOString(), stubHits: gl.status().stubHits, deaths, minHpFrac: Number(minHp.toFixed(3)), avgHpFrac: hpN ? Number((hpSum / hpN).toFixed(3)) : null, samples: hpN, ...st }, null, 1));
       if (n++ % 3 === 0) { const r = await gl.send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(path.join(OUT, "shot.png"), Buffer.from(r.data, "base64")); }
     } catch (e) { log("err", e.message); }
-    await sleep(2000);
+    await sleep(500);
   }
   log("end; stubHits", gl.status().stubHits);
   await gl.close();
