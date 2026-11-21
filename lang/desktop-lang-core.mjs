@@ -160,6 +160,44 @@ export function patchForeignCharCheck(assetsDir) {
   return { file, fnName: m[1], ranges: CJK_RANGES };
 }
 
+// 魔法物品名稱串接：遊戲翻譯器把「字尾 字首 底材」用半形空白串接；D2R 繁中沒有空白（八目鰻之戒指）。
+// 以函式本體結構定位 translateMagic 內的 .filter(Boolean).join(` `)，改為 join(``)；找不到或多處則失敗。
+const MAGIC_JOIN_RE = /(\[[\w$]+\([\w$]+\),[\w$]+\([\w$]+\),this\.translateAs\(`item`,[\w$]+\)\]\.filter\(Boolean\)\.join\()` `(\))/g;
+export function patchMagicNameJoin(assetsDir) {
+  const files = fs.readdirSync(assetsDir).filter((f) => /^lang-[\w-]+\.js$/.test(f));
+  const hits = [];
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(assetsDir, f), "utf8");
+    for (const m of src.matchAll(MAGIC_JOIN_RE)) hits.push({ file: f, src, m });
+  }
+  if (hits.length !== 1) throw new Error(`魔法物品名稱串接特徵比對應剛好 1 處，實際 ${hits.length} 處；官方可能已更新，未套用任何修補`);
+  const { file, src, m } = hits[0];
+  fs.writeFileSync(path.join(assetsDir, file), src.slice(0, m.index) + m[1] + "``" + m[2] + src.slice(m.index + m[0].length), "utf8");
+  return { file };
+}
+
+// 字型：遊戲只把 D2R 字型（fonts-ko/*.woff2，FontFace unicodeRange 寫死為韓文）載入給 Hangul。
+// 套用時（1）把玩家自己的 D2R 繁中字型放進 web/fonts-ko/ 內遊戲預期的檔名，（2）把 unicodeRange 字串擴大到漢字／全形符號。
+const FONT_FILES_RE = /\bD=\[\[[\w$]+,`([\w.-]+)`\],\[[\w$]+,`([\w.-]+)`\]\]/;
+const FONT_RANGE_OLD = "unicodeRange:`U+1100-11FF, U+3130-318F, U+AC00-D7A3`";
+const FONT_RANGE_NEW = "unicodeRange:`U+1100-11FF, U+3130-318F, U+AC00-D7A3, U+3000-303F, U+4E00-9FFF, U+FF00-FFEF`";
+export function patchFontLoading(assetsDir, webDir, fontBytes) {
+  const files = fs.readdirSync(assetsDir).filter((f) => /^lang-[\w-]+\.js$/.test(f));
+  const hits = [];
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(assetsDir, f), "utf8");
+    const names = FONT_FILES_RE.exec(src);
+    if (names && src.split(FONT_RANGE_OLD).length === 2) hits.push({ file: f, src, names });
+  }
+  if (hits.length !== 1) throw new Error(`字型載入特徵比對應剛好 1 處，實際 ${hits.length} 處；官方可能已更新，未套用字型修補`);
+  const { file, src, names } = hits[0];
+  fs.writeFileSync(path.join(assetsDir, file), src.replace(FONT_RANGE_OLD, FONT_RANGE_NEW), "utf8");
+  const dir = path.join(webDir, "fonts-ko");
+  fs.mkdirSync(dir, { recursive: true });
+  for (const n of [names[1], names[2]]) fs.writeFileSync(path.join(dir, n), fontBytes);
+  return { file, fonts: [names[1], names[2]] };
+}
+
 export function status({ gameDir = DEFAULT_GAME_DIR } = {}) {
   const paths = resolvePaths(gameDir);
   if (!fs.existsSync(paths.target)) {
@@ -273,13 +311,15 @@ export async function apply({
 
     // 外文判斷函式修補：不改變其他程式碼；找不到或多處則整個 apply 失敗（尚未動到 asar）
     const cjkPatch = patchForeignCharCheck(assetsDir);
+    const magicJoinPatch = patchMagicNameJoin(assetsDir);
 
-    let font = false;
+    let font = false, fontPatch = null;
     let fontWarning = null;
     if (d2rDir && fs.existsSync(d2rDir)) {
       try {
         const { extractD2rFont } = await import(new URL("./d2rfont.js", import.meta.url));
-        await extractD2rFont(dirHandle(d2rDir));
+        const fontBytes = await extractD2rFont(dirHandle(d2rDir));
+        fontPatch = patchFontLoading(assetsDir, path.dirname(assetsDir), Buffer.from(fontBytes));
         font = true;
       } catch (e) {
         fontWarning = e.message;
@@ -311,6 +351,8 @@ export async function apply({
         totalCount,
         addedCount,
         cjkPatch,
+        magicJoinPatch,
+        fontPatch,
         appliedAt: new Date().toISOString(),
       });
     }
@@ -326,6 +368,8 @@ export async function apply({
       totalCount,
       addedCount,
       cjkPatch,
+      magicJoinPatch,
+      fontPatch,
       font,
       fontWarning,
       d2sLangAction: { set: "ko" },

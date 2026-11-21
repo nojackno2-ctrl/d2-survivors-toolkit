@@ -73,6 +73,12 @@ function profile() {
     const on = await gl.evaluate(`(()=>{const g=window.__d2autobotGame,P=Object.getPrototypeOf(g),a=window.__d2autobot,d=a.diagnostics(),pl=g.world&&g.world.player,desc=pl&&Object.getOwnPropertyDescriptor(pl,"life");return JSON.stringify({hooks:d.hooks,tickWrapped:P.tick!==window.__hk0.tick,steerSame:P.steer===window.__hk0.steer,lifeGuard:!!(desc&&desc.get)})})()`);
     const onJ = JSON.parse(on);
     check("例外開關開啟後才安裝掛接（無敵／停止關卡時間／經驗倍率）", ["invincible", "stageTime", "xp"].every((n) => onJ.hooks.includes(n)) && onJ.tickWrapped && onJ.lifeGuard && onJ.steerSame, on);
+    // 作弊效果（真實遊戲）：無敵開啟時，嘗試扣血不生效；經驗倍率包住 gainXp 後仍可正常呼叫
+    const eff = JSON.parse(await gl.evaluate(`(()=>{const g=window.__d2autobotGame,p=g.world.player,before=p.life;p.life=before-40;const afterHit=p.life;return JSON.stringify({before,afterHit})})()`));
+    check("無敵實效：嘗試扣血 40 點後生命不變", eff.afterHit >= eff.before, JSON.stringify(eff));
+    const q = await gl.readSnapshot("(g)=>{const d=window.__d2autobot.diagnostics();return d.quests?{total:d.quests.total,line:String(d.quests.line).slice(0,40)}:null}");
+    check("任務模式：任務狀態可讀（總數>0）", q && q.total > 0, JSON.stringify(q));
+    check("自動淬鍊面板腳本已載入（__d2autoforgeUI）", await gl.evaluate("typeof window.__d2autoforgeUI!==\"undefined\"||!!document.getElementById(\"d2autoforge-panel\")||typeof window.__d2autoforge!==\"undefined\""), "");
     for (const p of ["cheat.invincible", "cheat.pauseStageTime", "cheat.maxXp", "cheat.enabled"]) await gl.helperSet(p, false);
     await sleep(2500);
     const off = JSON.parse(await gl.evaluate(`(()=>{const g=window.__d2autobotGame,P=Object.getPrototypeOf(g),a=window.__d2autobot,d=a.diagnostics(),pl=g.world&&g.world.player,desc=pl&&Object.getOwnPropertyDescriptor(pl,"life");return JSON.stringify({hooks:d.hooks,tickSame:P.tick===window.__hk0.tick,steerSame:P.steer===window.__hk0.steer,sortSame:Array.prototype.sort===window.__hk0.sort,pushSame:Array.prototype.push===window.__hk0.push,lifeData:!!(desc&&"value" in desc)})})()`));

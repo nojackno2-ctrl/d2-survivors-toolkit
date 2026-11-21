@@ -13,7 +13,7 @@ const DEFAULT_EXE_PATH = path.join(
 const DEFAULT_USER_DATA = () =>
   process.env.D2S_USER_DATA ? path.resolve(process.env.D2S_USER_DATA) : path.join(process.env.APPDATA || "", "D2 Survivors"); // D2S_USER_DATA 是官方遊戲自己的環境變數，同樣決定 DevToolsActivePort 位置
 
-const HELPER_FILES = ["input.js", "hooks.js", "autobot.js"];
+const HELPER_FILES = ["input.js", "hooks.js", "autobot.js", "stash-sort.js", "forge-local.js", "autoforge.js", "autoforge-ui.js"]; // 倉庫整理、本地淬鍊、自動淬鍊（舊 d2edit.js 的模組清單）
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

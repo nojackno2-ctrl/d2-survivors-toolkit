@@ -23,6 +23,7 @@ console.log("=== 開始執行桌面版中文化測試 ===");
   console.log(`  -> 通過（共 ${keys.length} 筆）`);
 }
 
+const LANG_JS = "var D=[[T,`kodia.woff2`],[E,`irisl.woff2`]];x=new FontFace(n,u,{unicodeRange:`U+1100-11FF, U+3130-318F, U+AC00-D7A3`});class Z{translateMagic(e,t){return[a(i),a(r),this.translateAs(`item`,t)].filter(Boolean).join(` `)}}";
 const FOREIGN_FN =
   "function M_(e){let t=e.charCodeAt(0);return t>=44032&&t<=55203||t>=12592&&t<=12687||t>=4352&&t<=4607}";
 
@@ -41,6 +42,7 @@ async function createFakeGame(
   if (saveTransferContent !== null) {
     fs.writeFileSync(path.join(assetsDir, "saveTransfer-TEST1234.js"), saveTransferContent, "utf8");
   }
+  if (saveTransferContent !== null) fs.writeFileSync(path.join(assetsDir, "lang-TEST1234.js"), LANG_JS, "utf8");
   const asarPath = path.join(resDir, "app.asar");
   await asar.createPackage(srcDir, asarPath);
   fs.rmSync(srcDir, { recursive: true, force: true });
@@ -142,6 +144,8 @@ const readAsar = (asarPath, name) => {
     const res = await apply({ gameDir, d2rDir: "" });
     assert.equal(res.replacedCount, res.totalCount, "全部替換");
     assert.equal(res.cjkPatch.file, "saveTransfer-TEST1234.js");
+    assert.equal(res.magicJoinPatch.file, "lang-TEST1234.js");
+    assert.ok(readAsar(asarPath, "lang-TEST1234.js").includes(".filter(Boolean).join(``)"), "魔法名稱應改為無空白串接");
     const st = readAsar(asarPath, "saveTransfer-TEST1234.js");
     assert.ok(st.includes(FOREIGN_FN.slice(0, -1) + "||t>=12288&&t<=12351||t>=19968&&t<=40959||t>=65280&&t<=65519}"));
     // 除修補處外，其餘程式碼不變
