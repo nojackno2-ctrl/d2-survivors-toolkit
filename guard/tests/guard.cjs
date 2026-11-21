@@ -1,4 +1,4 @@
-// 防護模組（guard/guard.js）單元測試（桌面版：封印、leaderboard.off 資料寫入原則與不包裝原生 API）
+// 防護模組（guard/guard.js）單元測試（桌面版：封印與不包裝原生 API）
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -29,20 +29,15 @@ global.window.fetch = baseFetch;
   // 1. 匯出與 window.__d2guard 結構檢查（不包裝原生 API）
   assert.ok(window.__d2guard, "應掛載 window.__d2guard");
   assert.equal(window.__d2guard.version, 1);
-  for (const k of ["MODES", "mode", "sealText", "sealState", "lockLeaderboard", "status"]) {
+  for (const k of ["MODES", "mode", "sealText", "sealState", "status"]) {
     assert.ok(k in window.__d2guard, `window.__d2guard 缺少 ${k}`);
     assert.ok(k in guard, `ES exports 缺少 ${k}`);
   }
   assert.equal(window.fetch, baseFetch, "不得包裝 window.fetch");
   assert.equal(Storage.prototype.setItem, origSetItem, "不得包裝 Storage.prototype.setItem");
 
-  // 2. leaderboard.off 純資料寫入（不使用 Object.defineProperty 鎖）
-  const saveObj = { version: 11, leaderboard: { off: false, hasId: true } };
-  guard.lockLeaderboard(saveObj);
-  assert.equal(saveObj.leaderboard.off, true);
-  const desc = Object.getOwnPropertyDescriptor(saveObj.leaderboard, "off");
-  assert.equal(desc.writable, true, "應為一般可寫資料屬性，不使用 defineProperty 鎖");
-  assert.equal(desc.configurable, true);
+  // 2. 排行榜相關攔截／鎖定已移除：guard 不再提供 lockLeaderboard
+  assert.equal(guard.lockLeaderboard, undefined);
 
   // 3. sealText → sealState 為 sealed，竄改後為 broken
   const rawSc = { version: 11, gold: 12345, heroes: {} };
@@ -61,13 +56,10 @@ global.window.fetch = baseFetch;
   assert.equal(await guard.sealState({ ...sealedHc, mode: undefined }), "broken", "跨模式金鑰不符應為 broken");
 
   // 4. status() 欄位與可 JSON 序列化檢查
-  window.__d2autobot = { game: { save: saveObj } };
   const st = guard.status();
   assert.equal(st.version, 1);
   assert.equal(st.saveMode, "local");
-  assert.equal(st.noUpload, true);
-  assert.equal(st.leaderboardOff, true);
-  assert.equal(st.queuePresent, false);
+  assert.equal(st.noUpload, undefined);
   assert.equal(st.d2zh, false);
   assert.equal(st.webdriver, false);
   assert.deepEqual(st.restrictedParams, ["god", "speed"]);

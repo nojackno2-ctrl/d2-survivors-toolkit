@@ -2406,7 +2406,7 @@ function freshSave(src, opts) {
   if (opts.gold && !unlocked()) s.gold = Math.min(s.gold, 1e10);
   if (opts.heroes) for (const h of Object.values(s.heroes ?? {})) delete h.unranked;
   for (const it of allItems(s)) { it.id = newId(); if (!unlocked() && riskyItem(it) && it.rarity !== "set") { it.rarity = "unique"; delete it.stats; } }
-  s.leaderboard = { off: true }; // 新 ID 由遊戲產生；預設不上傳排行榜
+  s.leaderboard = {}; // 新 ID 由遊戲產生
   return s;
 }
 
@@ -2500,8 +2500,6 @@ async function write() {
   const detectedIssues = sc.detect(save, { mode: $("#mode").value, seal: lastSeal, assets: A, sizeOf, nameZh }).filter(x => x.ok === false);
   void detectedIssues;
   if (!confirm("確定寫入？原存檔會先自動備份。")) return;
-  if (!save.leaderboard || typeof save.leaderboard !== "object") save.leaderboard = {};
-  save.leaderboard.off = true;
   status("寫入中…");
   const r = await window.api.save($("#mode").value, save);
   if (r.error) return status(r.error, "bad");

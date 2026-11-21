@@ -8,6 +8,8 @@ const { GameLink } = require(path.join(__dirname, "..", "..", "editor", "game-li
 const ROOT = path.resolve(__dirname, "..", "..");
 const OUT = process.env.H_OUT || path.join(__dirname, "out-desktop");
 const CLS = process.env.H_CLASS || "barbarian";
+// 測試隔離：排行榜／回報目的地指到不通的本機位址，避免測試局上傳到官方（僅測試用）
+process.env.D2S_LEADERBOARD_URL ||= "http://127.0.0.1:9"; process.env.D2S_REPORT_URL ||= "http://127.0.0.1:9/api/report";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => fs.appendFileSync(path.join(OUT, "log.txt"), new Date().toISOString().slice(11, 19) + " " + a.join(" ") + "\n");
 
@@ -68,12 +70,12 @@ function prepareProfile() {
     try {
       const st = await gl.readSnapshot(`(g)=>{const w=g.world,p=w&&w.player;return {state:g.state,cls:g.kit&&g.kit.id,level:p&&p.level,hp:p?Math.round(p.life)+"/"+Math.round(p.maxLife):null,x:p&&Math.round(p.x),y:p&&Math.round(p.y),enemies:w&&w.enemies&&w.enemies.length,diag:window.__d2autobot&&window.__d2autobot.diagnostics?window.__d2autobot.diagnostics():null}}`);
       if (st.state === "dead" && lastState !== "dead") deaths++; lastState = st.state; const hpf = st.hp ? Number(st.hp.split("/")[0]) / Number(st.hp.split("/")[1]) : null; if (hpf != null && st.state === "playing") { minHp = Math.min(minHp, hpf); hpSum += hpf; hpN++; }
-      fs.writeFileSync(path.join(OUT, "status.json"), JSON.stringify({ t: new Date().toISOString(), stubHits: gl.status().stubHits, deaths, minHpFrac: Number(minHp.toFixed(3)), avgHpFrac: hpN ? Number((hpSum / hpN).toFixed(3)) : null, samples: hpN, ...st }, null, 1));
+      fs.writeFileSync(path.join(OUT, "status.json"), JSON.stringify({ t: new Date().toISOString(), deaths, minHpFrac: Number(minHp.toFixed(3)), avgHpFrac: hpN ? Number((hpSum / hpN).toFixed(3)) : null, samples: hpN, ...st }, null, 1));
       if (n++ % 3 === 0) { const r = await gl.send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(path.join(OUT, "shot.png"), Buffer.from(r.data, "base64")); }
     } catch (e) { log("err", e.message); }
     await sleep(500);
   }
-  log("end; stubHits", gl.status().stubHits);
+  log("end");
   await gl.close();
   process.exit(0);
 })().catch((e) => { try { log("FATAL", e.stack || e.message); } catch {} console.error(e); process.exit(1); });

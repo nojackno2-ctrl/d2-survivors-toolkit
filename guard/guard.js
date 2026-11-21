@@ -1,13 +1,9 @@
 // D2 倖存者工具包 — 防護與存檔檢查核心模組（guard/guard.js）
 // 桌面版定位：
 // 1. 存檔 HMAC-SHA256 封印（sealText／sealState）
-// 2. 寫入存檔一律設 leaderboard.off = true（純資料寫入，不使用 Object.defineProperty 鎖）
-// 3. 排行榜上傳封鎖改由桌面應用啟動遊戲時的環境變數（D2S_LEADERBOARD_URL／D2S_REPORT_URL）＋本機空伺服器完成，
-//    不再於頁面層包裝 fetch／XMLHttpRequest／navigator.sendBeacon／Storage.setItem。
-// 4. 存檔合規檢查由 guard/save-check.js 提供（修改器寫入前亦會直接 import）。
+// 2. 存檔合規檢查由 guard/save-check.js 提供（修改器寫入前亦會直接 import）。
 
 const win = typeof window !== "undefined" ? window : globalThis;
-const QUEUE_KEY = "d2s:leaderboard-queue";
 
 export const MODES = {
   softcore: { key: "d2-survivors/save/v1", seal: "d2s/save-seal/1:Rakanishu-Bishibosh-Coldcrow-Griswold-Pindleskin", traces: ["d2-survivors/save/before-import"] },
@@ -52,22 +48,11 @@ export async function sealState(save) {
   return (await hmac(sealKey(save), JSON.stringify({ ...save, seal: undefined }))) === save.seal ? "sealed" : "broken";
 }
 
-/* ---------- 排行榜資料寫入原則（政策：修改器寫入的存檔一律 off: true） ---------- */
-export function lockLeaderboard(save) {
-  if (!save || typeof save !== "object") return;
-  if (!save.leaderboard || typeof save.leaderboard !== "object") save.leaderboard = {};
-  save.leaderboard.off = true;
-}
-
 function getLocalStorage() {
   try { return win.localStorage ?? globalThis.localStorage ?? null; } catch { return null; }
 }
 
 export function status() {
-  const memSave = win.__d2autobot?.game?.save;
-  const leaderboardOff = memSave && typeof memSave === "object" ? memSave.leaderboard?.off === true : null;
-  let queuePresent = false;
-  try { queuePresent = getLocalStorage()?.getItem(QUEUE_KEY) !== null && getLocalStorage()?.getItem(QUEUE_KEY) !== undefined; } catch {}
   const replacedNatives = NATIVE_CHECKS.filter(([, getter]) => {
     try { return !isNativeFn(getter(win)); } catch { return false; }
   }).map(([name]) => name);
@@ -83,9 +68,6 @@ export function status() {
     version: 1,
     saveMode: "local",
     saveModeSource: "default",
-    noUpload: true,
-    leaderboardOff,
-    queuePresent,
     replacedNatives,
     d2zh,
     webdriver,
@@ -99,6 +81,5 @@ win.__d2guard = {
   mode,
   sealText,
   sealState,
-  lockLeaderboard,
   status,
 };

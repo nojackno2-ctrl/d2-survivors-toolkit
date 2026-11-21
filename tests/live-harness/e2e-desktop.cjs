@@ -1,6 +1,5 @@
 // 桌面版端到端自動測試（官方桌面遊戲＋隔離 userData，純 node 執行，不碰使用者真實存檔）：
 //  1. 工具包啟動遊戲並以 CDP 連線、唯讀取得 Game（不包裝函式：tick／steer 與原版參照相同）
-//  2. 排行榜上傳封鎖：經遊戲 IPC 送 POST／GET，本機空伺服器收到並丟棄，沒有請求到官方
 //  3. 受信任輸入：按鍵選卡、方向鍵移動
 //  4. 輔助器注入（startHelper 流程）：自動戰鬥一段時間、等級上升、預設無例外掛接
 // 用法：node tests/live-harness/e2e-desktop.cjs     環境變數：H_OUT、H_SEED（D2S1 或 JSON）、H_EXE、H_SECONDS（輔助器秒數，預設 60）
@@ -9,6 +8,8 @@ const ROOT = path.resolve(__dirname, "..", "..");
 const { GameLink } = require(path.join(ROOT, "editor", "game-link.js"));
 const OUT = process.env.H_OUT || path.join(__dirname, "out-e2e");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// 測試隔離：把遊戲的排行榜／回報目的地指到不通的本機位址，避免測試局上傳到官方（僅測試用，非產品功能）
+process.env.D2S_LEADERBOARD_URL ||= "http://127.0.0.1:9"; process.env.D2S_REPORT_URL ||= "http://127.0.0.1:9/api/report";
 const results = [];
 const check = (name, ok, detail = "") => { results.push({ name, ok: !!ok, detail }); console.log((ok ? "✔ " : "✘ ") + name + (detail ? "  " + detail : "")); };
 
@@ -37,16 +38,6 @@ function profile() {
     if (seed) { await gl.evaluate(`localStorage.setItem("d2-survivors/save/v1", ${JSON.stringify(seed)}); location.reload(); 1`); await sleep(8000); }
     for (let i = 0; i < 30 && !(await gl.exposeGame().catch(() => false)); i++) await sleep(1000);
     check("唯讀取得 Game 實例", await gl.evaluate("!!window.__d2autobotGame"));
-
-    // 2. 排行榜封鎖
-    const probe = `(async()=>{const o=Object.values(window).find(v=>v&&typeof v==="object"&&typeof v.leaderboard==="function"); if(!o) return "no-bridge";
-      const a=await o.leaderboard("POST","/runs",JSON.stringify({test:"e2e"})).catch(e=>String(e)); const b=await o.leaderboard("GET","/boards/all").catch(e=>String(e)); return JSON.stringify({a,b});})()`;
-    const lb = await gl.evaluate(probe);
-    await sleep(500);
-    const st = gl.status();
-    check("遊戲上傳橋接存在", lb !== "no-bridge", String(lb).slice(0, 120));
-    check("POST 被本機空伺服器收到並回 204、GET 回 404（不連官方）", st.stubHits >= 1 && String(lb).includes('"status":204') && String(lb).includes('"status":404'), `stubHits=${st.stubHits}`);
-    check("本機空伺服器記錄到 POST 並丟棄", (gl.stub?.getHits?.() || []).some((h) => /POST/.test(JSON.stringify(h))));
 
     // 3. 輸入
     await gl.evaluate(`(async()=>{const s=ms=>new Promise(r=>setTimeout(r,ms));const g=window.__d2autobotGame;
@@ -82,7 +73,6 @@ function profile() {
     check("遊戲內設定面板與「輔助」按鈕已隱藏", await gl.evaluate(`(()=>{const l=document.getElementById("d2autobot-launcher"),p=document.getElementById("d2autobot-panel");return !!document.getElementById("d2autobot-external-style")&&(!l||getComputedStyle(l).display==="none")&&(!p||getComputedStyle(p).display==="none")})()`));
     const live = await gl.helperLive();
     check("狀態浮窗資料可取得（等級／血量／動作）", live && live.level >= 1 && typeof live.hp === "string", JSON.stringify(live).slice(0, 80));
-    check("全程沒有請求到官方網站（本機空伺服器之外）", true, "上傳只能經本機空伺服器");
   } catch (e) { failed = true; check("例外", false, e.stack || e.message); }
   finally { await gl.close().catch(() => {}); }
   const bad = results.filter((r) => !r.ok).length;

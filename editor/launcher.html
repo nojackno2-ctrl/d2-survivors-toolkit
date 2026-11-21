@@ -31,7 +31,6 @@
     <span class="k">遊戲</span><span id="sRun">—</span>
     <span class="k">除錯連線</span><span id="sAtt">—</span>
     <span class="k">遊戲版本（build）</span><span id="sBuild">—</span>
-    <span class="k">排行榜攔截計數</span><span id="sHits">—</span>
     <span class="k">輔助器</span><span id="sHelper">—</span>
   </div>
   <div class="bar">
@@ -39,8 +38,7 @@
     <button id="bLaunch">只啟動遊戲</button>
     <button id="bStop">停止輔助器</button>
   </div>
-  <p class="note">請一律從這裡啟動遊戲：工具包會把遊戲的排行榜／回報上傳導向本機空伺服器並丟棄（單機爽玩、不上榜，無關閉選項）。直接點官方捷徑啟動則沒有這層封鎖，也無法連線輔助器。</p>
-</section>
+  </section>
 
 <section>
   <h2>繁體中文化</h2>
@@ -52,7 +50,7 @@
     <button id="bRestore">還原原版</button>
   </div>
   <p>套用會修改遊戲的 app.asar（需管理員權限），可隨時還原；遊戲更新後須重新套用。</p>
-  <p class="bad">asar 已修改，遊戲會把成績標記為 patched，但排行榜上傳已被工具包封鎖。</p>
+  <p class="bad">asar 已修改，遊戲會把成績標記為 patched。</p>
   <p class="note">套用或還原前請先關閉遊戲；操作時會跳出 Windows 管理員授權視窗。</p>
 </section>
 
@@ -111,7 +109,6 @@ async function refresh(withLang = true) {
       set("sRun", g.running ? "執行中" : "未執行", g.running ? "ok" : "dim");
       set("sAtt", g.attached ? "已連線（埠 " + g.port + "）" : "未連線", g.attached ? "ok" : "dim");
       set("sBuild", g.build || "（讀不到）");
-      set("sHits", String(g.stubHits) + (g.stubHits ? "（上傳已被丟棄）" : ""));
       set("sHelper", g.helperInjected ? "已注入" : g.helper ? "注入中…" + (g.helperError ? "（" + g.helperError + "）" : "") : "未注入", g.helperInjected ? "ok" : "dim");
     }
   } catch (e) { set("sRun", e.message, "bad"); }
@@ -131,7 +128,7 @@ $("bLaunchHelper").onclick = () => act(() => bridge.launchGame({ withHelper: tru
 $("bLaunch").onclick = () => act(() => bridge.launchGame({ withHelper: false }), "遊戲已啟動（未注入輔助器）。");
 $("bStop").onclick = () => act(() => bridge.stopHelper(), "輔助器已停止。");
 $("bApply").onclick = () => {
-  if (!confirm("套用繁體中文會修改遊戲的 app.asar（需管理員權限）。\n套用後遊戲會把成績標記為 patched（排行榜上傳已被封鎖）。\n要繼續嗎？")) return;
+  if (!confirm("套用繁體中文會修改遊戲的 app.asar（需管理員權限）。\n套用後遊戲會把成績標記為 patched。\n要繼續嗎？")) return;
   act(() => bridge.langApply(), (r) => "已套用繁體中文（替換 " + r.replacedCount + "/" + r.totalCount + " 筆）。" + (r.warning ? "\n" + r.warning : ""));
 };
 $("bRestore").onclick = () => act(() => bridge.langRestore(), (r) => (r.restored ? "已還原原版。" : "遊戲已被官方更新覆蓋，已略過放回舊備份並清除中文化記錄。") + (r.warning ? "\n" + r.warning : ""));

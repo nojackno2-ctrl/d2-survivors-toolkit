@@ -64,7 +64,6 @@
     <div class="bar">
       <button id="scan">重新掃描</button>
       <button class="primary" id="fixAll">一鍵修正</button>
-      <button id="lbOff" hidden>關閉排行榜上傳</button>
     </div>
     <h3>問題明細</h3>
     <table><thead><tr><th style="width:28%">位置</th><th>問題</th><th style="width:26%">怎麼修正</th></tr></thead><tbody id="details"></tbody></table>
@@ -80,7 +79,7 @@
   <!-- (b) 防護狀態（反偵測） -->
   <section id="sec-guard-status">
     <h2>防護狀態（反偵測）</h2>
-    <p class="dim">顯示工具包目前的反偵測與上傳攔截狀態，並說明每一項「遊戲會不會看到、後果是什麼」。政策：修改器與本頁寫入的存檔一律設定 leaderboard.off = true；排行榜上傳封鎖由桌面應用啟動遊戲時的環境變數（D2S_LEADERBOARD_URL／D2S_REPORT_URL）與本機空伺服器完成，不包裝頁面原生函式。</p>
+    <p class="dim">顯示工具包目前的反偵測狀態，並說明每一項「遊戲會不會看到、後果是什麼」。</p>
     <div class="bar" style="margin-bottom:10px">
       <button type="button" id="refreshGuardStatus">重新整理狀態</button>
     </div>
@@ -265,11 +264,10 @@ function renderDetails(list) {
     itemLabel: safeNameZh,
   });
   $("#verdict").innerHTML = edited
-    ? `<span class="bad">✖ 已編輯／有問題，不會上傳排行榜</span>　共 ${rows.length} 項待處理（工具包單機模式，排行榜上傳一律關閉）`
+    ? `<span class="bad">✖ 已編輯／有問題</span>　共 ${rows.length} 項待處理`
     : unknown
     ? `<span class="dim">未驗證，無法確認存檔是否有問題</span>`
     : `<span class="ok">✔ 沒有發現問題</span>`;
-  $("#lbOff").hidden = true;
   const tr = (r, c = "") => `<tr class="${c}"><td>${esc(r.where)}</td><td>${esc(r.what)}</td><td class="dim">${esc(r.fix)}</td></tr>`;
   $("#details").innerHTML =
     (rows.length ? rows.map((r) => tr(r)).join("") : `<tr><td colspan="3" class="dim">${unknown ? "部分檢查未驗證" : "沒有問題"}</td></tr>`) +
@@ -281,7 +279,6 @@ function applySaveModeUI() {
   $("#scan").disabled = unavailable;
   $("#fixAll").disabled = unavailable;
   $("#newLbId").disabled = unavailable;
-  $("#lbOff").disabled = unavailable;
   for (const b of document.querySelectorAll("[data-fix]")) b.disabled = unavailable;
 }
 
@@ -291,8 +288,6 @@ async function saveAfterFix(actionLabel) {
     status("存檔槽已變更，請重新讀取", "bad");
     return false;
   }
-  if (!snapshot.leaderboard || typeof snapshot.leaderboard !== "object") snapshot.leaderboard = {};
-  snapshot.leaderboard.off = true;
   if (seq !== loadSequence || target !== $("#mode").value || snapshot !== save) { status("存檔槽已變更，請重新讀取", "bad"); return false; }
   const r = await backend.save(target, snapshot);
   if (r && !r.error && (r.ok || r.bytes !== undefined)) {
@@ -421,26 +416,6 @@ function renderGuardStatusTable(gs) {
   const localPage = gameSeesPage(window);
   const modeStatusHtml = '<span class="ok">本機存檔模式（desktop）</span><br><span class="dim">桌面應用直接讀寫電腦存檔</span>';
 
-  const noUploadHtml = gs
-    ? (gs.noUpload ? '<span class="ok">✔ 恆為開啟（不可關閉）</span>' : '<span class="bad">✖ 未開啟</span>')
-    : '<span class="dim">未確認（後端未提供 guardStatus）</span>';
-
-  const lbOffHtml = gs
-    ? (gs.leaderboardOff === true
-        ? '<span class="ok">✔ 存檔為 true（關閉上傳）</span>'
-        : gs.leaderboardOff === false
-        ? '<span class="bad">✖ 未關閉（false）</span>'
-        : '<span class="dim">尚未載入存檔或無此欄位</span>')
-    : (save?.leaderboard?.off ? '<span class="ok">✔ 存檔內為 true</span>' : '<span class="dim">未確認（後端未提供）</span>');
-
-  const queueHtml = gs
-    ? (gs.queuePresent ? '<span class="bad">✖ 存在待上傳佇列</span>' : '<span class="ok">✔ 已清空（無等待上傳紀錄）</span>')
-    : '<span class="dim">未確認（後端未提供）</span>';
-
-  const blockedHtml = gs && Number.isFinite(Number(gs.blockedUploads))
-    ? `<span class="ok">本機伺服器已攔截 ${Number(gs.blockedUploads)} 次</span>`
-    : '<span class="dim">由桌面應用本機空伺服器攔截（D2S_LEADERBOARD_URL）</span>';
-
   const scSeal = gs?.seals ? gs.seals.softcore : ($("#mode").value === "softcore" ? lastSeal : undefined);
   const hcSeal = gs?.seals ? gs.seals.hardcore : ($("#mode").value === "hardcore" ? lastSeal : undefined);
   const sealsHtml = `一般：${sealTextZh(scSeal)}<br>硬核：${sealTextZh(hcSeal)}`;
@@ -467,27 +442,7 @@ function renderGuardStatusTable(gs) {
     [
       "目前存檔模式",
       modeStatusHtml,
-      "【已確認】桌面版只讀寫電腦上的本機存檔。政策：修改器與本頁寫入存檔時，一律自動將 leaderboard.off 設為 true 並重簽章。",
-    ],
-    [
-      "排行榜上傳封鎖（恆為開、不可關）",
-      noUploadHtml,
-      "【已確認】從工具包啟動遊戲時，會設定官方環境變數 D2S_LEADERBOARD_URL／D2S_REPORT_URL 指向工具包本機空伺服器（只丟棄上傳請求），不包裝或修改任何遊戲函式。",
-    ],
-    [
-      "存檔 leaderboard.off",
-      lbOffHtml,
-      "【已確認】政策：修改器寫入的存檔一律設 leaderboard.off = true，遊戲結算函式會直接跳過上傳。",
-    ],
-    [
-      "等待上傳佇列（d2s:leaderboard-queue）",
-      queueHtml,
-      "【已確認】檢查遊戲本機存放區是否遺留待上傳紀錄；由工具包啟動的遊戲不會將上傳送到官方伺服器。",
-    ],
-    [
-      "已擋下上傳次數",
-      blockedHtml,
-      "【已確認】桌面應用本機空伺服器攔截到的排行榜上傳次數。",
+      "【已確認】桌面版只讀寫電腦上的本機存檔。寫入存檔時會重新簽章。",
     ],
     [
       "存檔封印狀態（HMAC-SHA256）",
@@ -596,7 +551,7 @@ async function loadModule() {
   }
 }
 document.querySelector("#retryModule").onclick = loadModule;
-for (const id of ["scan", "fixAll", "newLbId", "lbOff"]) document.querySelector("#" + id).disabled = true;
+for (const id of ["scan", "fixAll", "newLbId"]) document.querySelector("#" + id).disabled = true;
 await loadModule();
 </script>
 </body>

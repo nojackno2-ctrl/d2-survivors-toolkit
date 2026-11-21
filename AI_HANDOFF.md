@@ -2,6 +2,7 @@
 
 ## 【2026-11-21 桌面版重構】獨立應用（分支 desktop-only，未合併 main、未發布）
 - **背景**：官方網頁版 d2survivors.lol 停用（`/play/` 回 404），桌面版仍可玩。使用者決定專案只針對桌面版，做成**獨立應用**，不替換官方函式（盡量），繁中可還原。
+- **【2026-11-21 使用者決定】移除排行榜上傳攔截**（使用者：「原有的上傳攔截功能沒作用」）：已刪除 `game-link.js` 的本機空伺服器與 `D2S_LEADERBOARD_URL`／`D2S_REPORT_URL` 設定、`guard/guard.js` 的 `lockLeaderboard`／佇列／`noUpload` 狀態、`guard.html` 與控制台／浮窗的攔截計數與說明、修改器寫入時強制 `leaderboard.off=true`（新建存檔改 `leaderboard = {}`）、e2e 的上傳封鎖檢查。**下方與舊章節所有「上傳封鎖一律開啟、無關閉入口、政策不變」的敘述一律作廢。**現在遊戲的排行榜上傳不被工具包處理。測試腳本（`desktop.cjs`、`e2e-desktop.cjs`）仍把官方環境變數指到不通的本機位址，只為避免測試局上傳到官方，非產品功能。
 - **新架構（以本節為準，下方舊章節凡提到網頁版／書籤／GitHub Pages／`d2edit.js`／官方網址 `/play/` 者一律作廢）**：
   - `editor/`（Electron）為唯一入口：`game-link.js` 啟動官方 `D2 Survivors.exe`（`--remote-debugging-port=0`），以 CDP 連線；`launcher.html`＝遊戲控制台（啟動遊戲、輔助器、中文化套用／還原）；`launcher-api.js`／`lang-cli.cjs` 處理提權；`paths.js` 統一本機資源路徑（修改器頁面、字典、特徵碼等都隨 exe 打包，不再從遠端載入）。**發布方式改變：每次修正都要重出 exe，不再有熱重載。**
   - **取得 game 不掛接函式**：`import("app://game/assets/Game-xxx.js")` 取得 `Game` 類別，`Runtime.queryObjects(Game.prototype)` 取得唯一實例，`exposeGame()` 設為頁面全域 `window.__d2autobotGame`；讀快照約 0.3 ms。

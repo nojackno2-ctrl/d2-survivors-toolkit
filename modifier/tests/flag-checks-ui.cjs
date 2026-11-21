@@ -110,7 +110,7 @@ app.whenReady().then(async () => {
   assert.equal(safety.unknown, true);
   assert.equal(safety.hasFix, false);
   assert.equal(safety.unchanged, true);
-  assert.equal(safety.savedOff, true, '寫入時須維持 leaderboard.off = true');
+  assert.equal(safety.savedOff, false, '寫入不再強制 leaderboard.off');
 
   // 7. guard.html 防護狀態、一鍵修正寫回與遊戲診斷解析
   const guardUi = await win.webContents.executeJavaScript(`(async () => {
@@ -149,7 +149,7 @@ app.whenReady().then(async () => {
   })()`);
   assert.equal(guardUi.fixDisabled, false, '桌面模式應啟用一鍵修正');
   assert.match(guardUi.guardStatusHtml, /seed/);
-  assert.deepEqual(guardUi.savedData, { mode: 'softcore', gold: 1e10, off: true }, '一鍵修正後應透過 save 寫回並設 off: true');
+  assert.deepEqual(guardUi.savedData, { mode: 'softcore', gold: 1e10, off: undefined }, '一鍵修正後應透過 save 寫回，不強制 off');
   assert.match(guardUi.diagOutText, /leaderboard queue/);
   assert.ok(guardUi.diagRefCount >= 20, '應渲染診斷欄位對照表');
   assert.equal(guardUi.closedCount, 1, '右上關閉應呼叫 close()');
@@ -174,7 +174,7 @@ app.whenReady().then(async () => {
     await write();
     return written;
   })()`);
-  assert.equal(editorWrite?.off, true, '修改器寫入存檔須強制 leaderboard.off = true');
+  assert.notEqual(editorWrite?.off, true, '修改器寫入存檔不再強制 leaderboard.off');
 
   console.log('存檔檢查（旗標／模式）介面測試通過'); clearTimeout(watchdog); app.exit(0);
 }).catch(e => { console.error(e.stack); clearTimeout(watchdog); app.exit(1); });

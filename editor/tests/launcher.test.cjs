@@ -114,7 +114,7 @@ function apiWith(over = {}) {
   const gameLink = {
     running: false,
     status: () => ({ running: false }),
-    launch: async (o) => { calls.push(["launch", o]); return { pid: 1, port: 2, stubPort: 3 }; },
+    launch: async (o) => { calls.push(["launch", o]); return { pid: 1, port: 2 }; },
     startHelper: async (o) => { calls.push(["startHelper", o]); return { injected: true, build: o.build }; },
     stopHelper: async () => { calls.push(["stopHelper"]); return { stopped: true }; },
     ...over.gameLink,

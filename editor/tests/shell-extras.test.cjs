@@ -14,7 +14,7 @@ function fakes() {
   const settings = { enabled: true, progressEnabled: false };
   const sets = [], evals = [];
   const gameLink = {
-    status: () => ({ running: true, attached: true, stubHits: 2 }),
+    status: () => ({ running: true, attached: true,  }),
     helperSettings: async () => ({ ...settings }),
     helperSet: async (p, v) => { sets.push([p, v]); settings[p] = v; return true; },
     helperLive: async () => ({ state: "playing", level: 12, hp: "100/100", action: "全圖走位", enabled: true, auto: true }),
@@ -54,6 +54,6 @@ test("浮窗文字依狀態顯示，快捷鍵重複註冊失敗不崩潰", async
   const logs = []; const x = createShellExtras({ electron: f.electron, launcher: {}, gameLink: f.gameLink, showConsole() {}, quit() {}, log: (t) => logs.push(t) });
   assert.deepEqual(x.start().registered, []); assert.ok(logs.length >= 5);
   assert.equal(x.overlayText(null, { running: false }), "遊戲未執行");
-  assert.match(x.overlayText({ state: "playing", level: 3, hp: "1/2", enabled: true, auto: false, action: "走位" }, { running: true, attached: true, stubHits: 1 }), /Lv3[\s\S]*上傳攔截 1/);
+  assert.match(x.overlayText({ state: "playing", level: 3, hp: "1/2", enabled: true, auto: false, action: "走位" }, { running: true, attached: true }), /Lv3/);
   await x.refreshOverlay(); assert.match(f.windows[0].text, /全圖走位/); assert.equal(f.windows[0].visible, true);
 });

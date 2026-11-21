@@ -49,7 +49,7 @@ function createShellExtras({ electron, launcher, gameLink, showConsole, quit, lo
     if (!status.attached) return "遊戲執行中（未連線）";
     if (!live) return "已連線｜輔助器未注入";
     const on = (b) => (b ? "開" : "關");
-    return [`輔助 ${on(live.enabled)}｜自動戰鬥 ${on(live.auto)}｜${live.state || "?"}`, `Lv${live.level ?? "?"}　HP ${live.hp ?? "?"}`, live.action || "", `上傳攔截 ${status.stubHits}`].filter(Boolean).join("\n");
+    return [`輔助 ${on(live.enabled)}｜自動戰鬥 ${on(live.auto)}｜${live.state || "?"}`, `Lv${live.level ?? "?"}　HP ${live.hp ?? "?"}`, live.action || ""].filter(Boolean).join("\n");
   }
 
   async function refreshOverlay() {

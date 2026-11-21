@@ -30,68 +30,6 @@ function parseDevToolsActivePort(text) {
   return { port, wsPath: lines[1] || "" };
 }
 
-/**
- * 排行榜／回報本機空伺服器（127.0.0.1 隨機埠）：
- * - GET 一律回 404
- * - POST（及其他非 GET 請求）一律丟棄內容、回 204 並計數／記錄
- * 這是強制封鎖機制，不提供任何關閉入口。
- */
-function createLeaderboardStub() {
-  let hitCount = 0;
-  const hits = [];
-
-  const server = http.createServer((req, res) => {
-    let bytes = 0;
-    req.on("data", (chunk) => {
-      bytes += chunk.length;
-    });
-    req.on("end", () => {
-      if (req.method === "GET") {
-        res.statusCode = 404;
-        res.end();
-        return;
-      }
-      hitCount += 1;
-      hits.push({
-        method: req.method,
-        url: req.url,
-        bytes,
-        at: Date.now(),
-      });
-      if (hits.length > 200) hits.shift();
-      res.statusCode = 204;
-      res.end();
-    });
-  });
-
-  return {
-    start() {
-      return new Promise((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", () => {
-          server.removeListener("error", reject);
-          resolve(server.address().port);
-        });
-      });
-    },
-    stop() {
-      return new Promise((resolve) => {
-        if (!server.listening) return resolve();
-        server.close(() => resolve());
-      });
-    },
-    get port() {
-      return server.listening ? server.address().port : 0;
-    },
-    get hitCount() {
-      return hitCount;
-    },
-    getHits() {
-      return hits.slice();
-    },
-  };
-}
-
 const KEY_CODE_MAP = {
   ArrowRight: { key: "ArrowRight", vk: 39 },
   ArrowLeft: { key: "ArrowLeft", vk: 37 },
@@ -119,7 +57,6 @@ function resolveKeyInfo(code) {
 class GameLink {
   constructor() {
     this.child = null;
-    this.stub = null;
     this.ws = null;
     this.port = 0;
     this.userDataDir = "";
@@ -168,17 +105,10 @@ class GameLink {
     const userDataDir = opts.userDataDir || DEFAULT_USER_DATA();
     this.userDataDir = userDataDir;
 
-    this.stub = createLeaderboardStub();
-    const stubPort = await this.stub.start();
-
     const activePortFile = path.join(userDataDir, "DevToolsActivePort");
     try { fs.unlinkSync(activePortFile); } catch { /* 檔案不存在時忽略 */ }
 
-    const env = {
-      ...process.env,
-      D2S_LEADERBOARD_URL: `http://127.0.0.1:${stubPort}`,
-      D2S_REPORT_URL: `http://127.0.0.1:${stubPort}/api/report`,
-    };
+    const env = { ...process.env };
     if (opts.userDataDir) {
       env.D2S_USER_DATA = opts.userDataDir;
     }
@@ -197,9 +127,6 @@ class GameLink {
       if (this.ws) {
         try { this.ws.close(); } catch {}
         this.ws = null;
-      }
-      if (this.stub) {
-        this.stub.stop().catch(() => {});
       }
       this._notifyExit({ code, signal });
     });
@@ -226,7 +153,7 @@ class GameLink {
 
     this.port = parsed.port;
     await this.attach(this.port);
-    return { pid: child.pid, port: this.port, stubPort };
+    return { pid: child.pid, port: this.port };
   }
 
   async attach(port = this.port) {
@@ -620,8 +547,6 @@ class GameLink {
       running: this.running,
       attached: this.attached,
       port: this.port,
-      stubPort: this.stub ? this.stub.port : 0,
-      stubHits: this.stub ? this.stub.hitCount : 0,
       helper: Boolean(this._helper),
       helperInjected: Boolean(this._helper && this._helper.injected),
       helperError: this._helper ? this._helper.lastError : "",
@@ -636,15 +561,11 @@ class GameLink {
     if (this.running) {
       try { this.child.kill(); } catch {}
     }
-    if (this.stub) {
-      await this.stub.stop();
-    }
   }
 }
 
 module.exports = {
   DEFAULT_EXE_PATH,
   parseDevToolsActivePort,
-  createLeaderboardStub,
   GameLink,
 };
