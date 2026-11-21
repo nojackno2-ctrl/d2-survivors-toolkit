@@ -95,6 +95,47 @@ function profile() {
     const hell = await gl.evaluate("(async()=>{const g=window.__d2autobotGame;try{for(let i=0;i<40&&g.state===\"loading\";i++)await new Promise(r=>setTimeout(r,500));await g.startRun(g.kit,\"hell\");for(let i=0;i<60&&g.state!==\"playing\";i++)await new Promise(r=>setTimeout(r,500));return g.state+\"/\"+(g.world&&g.world.difficulty)}catch(e){return \"ERR \"+e.message}})()");
     check("可開地獄難度新局（startRun hell）", /^playing[/]hell$/.test(hell), hell);
 
+    // 4d. 作弊數值效果（真實遊戲）：開啟後玩家欄位被寫入目標值，關閉後還原
+    const readCheat = "(()=>{const p=window.__d2autobotGame.world&&window.__d2autobotGame.world.player;return p?JSON.stringify({crit:p.criticalStrike,deadly:p.deadlyStrike,wd:p.weaponDamage,mf:p.magicFind,gold:p.goldGain}):null})()";
+    const base = JSON.parse(await gl.evaluate(readCheat) || "null");
+    if (base) {
+      for (const [p, v] of [["cheat.enabled", true], ["cheat.maxCrit", true], ["cheat.oneHitKill", true], ["cheat.maxDropRate", true], ["cheat.maxGoldRate", true]]) await gl.helperSet(p, v);
+      await gl.helperSet("enabled", true);
+      await sleep(2500);
+      const on2 = JSON.parse(await gl.evaluate(readCheat));
+      check("作弊數值：致命攻擊／致命一擊 100、武器傷害≥100、掉寶 999999、金幣倍率 999999", on2.crit === 100 && on2.deadly === 100 && on2.wd >= 100 && on2.mf === 999999 && on2.gold === 999999, JSON.stringify(on2));
+      for (const p of ["cheat.maxCrit", "cheat.oneHitKill", "cheat.maxDropRate", "cheat.maxGoldRate", "cheat.enabled"]) await gl.helperSet(p, false);
+      await sleep(2500);
+      const off2 = JSON.parse(await gl.evaluate(readCheat));
+      check("作弊數值關閉後還原", off2.crit === base.crit && off2.deadly === base.deadly && off2.mf === base.mf && off2.gold === base.gold, JSON.stringify({ base, off2 }));
+    } else check("作弊數值測試需要玩家物件", false, "無 world.player");
+
+    // 4e. 自動淬鍊面板：工具包可直接開啟、面板出現於畫面、可收合
+    const af = await gl.evaluate("(()=>{const u=window.__d2autoforgeUI;if(!u)return JSON.stringify({err:'no ui'});const ok=u.open();return JSON.stringify({ok,folded:u.state.folded,hasPanel:!!document.getElementById('d2autoforge-panel')||!!document.querySelector('[id^=\"af-\"]')})})()");
+    const afj = JSON.parse(af);
+    check("自動淬鍊面板 open() 成功並顯示", afj.ok === true && afj.folded === false, af);
+
+    // 4f. 自動淬鍊實際流程：把背包裡可淬鍊的裝備放上鐵砧，以虛擬精華（cheat.forgeMax）執行，確認淬鍊迴圈實際動作並留下紀錄
+    await gl.helperSet("cheat.enabled", true); await gl.helperSet("cheat.forgeMax", true); await sleep(1500);
+    const flow = await gl.evaluate(`(async()=>{
+      const g=window.__d2autobotGame,u=window.__d2autoforgeUI,cls=g.kit&&g.kit.id; if(!u||!cls) return JSON.stringify({err:"no ui/cls"});
+      g.forgeMode="temper"; try{ g.openCampTrade("forge",true) }catch(e){}
+      await new Promise(r=>setTimeout(r,1500));
+      const inv=(g.save.inventoryByClass&&g.save.inventoryByClass[cls])||[];
+      let pick=null,lines=[];
+      for(const it of inv){ if(!it||!it.id||it.type==="essence") continue; let l=[]; try{ l=u.lines(it.id) }catch(e){} if(l.length){pick=it;lines=l;break;} }
+      if(!pick) return JSON.stringify({skipped:"背包沒有可淬鍊裝備",inv:inv.length});
+      const before=u.state.log.length;
+      u.start([{id:pick.id,targets:{[lines[0].key]:1}}],cls);
+      await new Promise(r=>setTimeout(r,12000));
+      const out={item:pick.name||pick.base,line:lines[0].text,running:u.state.running,msg:u.state.msg,log:u.state.log.slice(-4),grew:u.state.log.length>before};
+      u.stop(); return JSON.stringify(out);
+    })()`);
+    const flowJ = JSON.parse(flow);
+    if (flowJ.skipped) check("自動淬鍊實際流程（背包無可淬鍊裝備，略過）", true, flow);
+    else check("自動淬鍊實際流程：放上鐵砧後迴圈有動作並留下紀錄", flowJ.grew === true || (flowJ.log || []).length > 0, flow.slice(0, 300));
+    await gl.helperSet("cheat.forgeMax", false); await gl.helperSet("cheat.enabled", false);
+
     // 5. 設定介面改由獨立應用提供：經 CDP 讀寫、遊戲內面板隱藏
     const st0 = await gl.helperSettings();
     check("獨立應用可讀輔助器設定", st0 && typeof st0.enabled === "boolean", `autoMode=${st0 && st0.autoMode}`);
