@@ -3,7 +3,8 @@
 const fs = require("fs"), path = require("path"), zlib = require("zlib");
 const ROOT = path.resolve(__dirname, "..", "..");
 const { GameLink } = require(path.join(ROOT, "editor", "game-link.js"));
-process.env.D2S_LEADERBOARD_URL ||= "http://127.0.0.1:9"; process.env.D2S_REPORT_URL ||= "http://127.0.0.1:9/api/report";
+if (process.env.H_REAL_SERVER !== "1") process.env.D2S_LEADERBOARD_URL ||= "http://127.0.0.1:9";
+process.env.D2S_REPORT_URL ||= "http://127.0.0.1:9/api/report";
 const OUT = process.env.H_OUT || path.join(__dirname, "out-forge"), CLS = process.env.H_CLASS || "sorceress";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 if (!process.env.H_SEED) { console.error("需要 H_SEED（D2S1 或 JSON 存檔）"); process.exit(2); }
