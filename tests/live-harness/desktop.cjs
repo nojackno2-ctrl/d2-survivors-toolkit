@@ -67,6 +67,25 @@ function prepareProfile() {
   const end = Date.now() + Number(process.env.H_SECONDS || 120) * 1000;
   const census = new Map(); // H_CENSUS=1：統計世界／HUD 內出現過的文字，找出仍為英文的字串
   const CENSUS_JS = `(g)=>{if(!window.__census){window.__census=new Map();const seen=new Set();let found=null;const walk=(o,d)=>{if(found||!o||typeof o!=="object"||d>6||seen.has(o))return;seen.add(o);let adv;try{adv=o.advanceOf}catch{}if(typeof adv==="function"&&typeof o.measure==="function"){found=o;return;}let ks;try{ks=Object.keys(o).slice(0,80)}catch{return}for(const k of ks){let v;try{v=o[k]}catch{continue}if(v&&typeof v==="object")walk(v,d+1);}};walk(g,0);if(!found)return ["__no_font_instance__"];const P=Object.getPrototypeOf(found);window.__censusInstalled=true;for(const name of ["measure","wrapLines"]){const orig=P[name];if(typeof orig!=="function")continue;P[name]=function(e,...r){try{if(typeof e==="string")window.__census.set(e,(window.__census.get(e)||0)+1)}catch{}return orig.call(this,e,...r)}}}const out=[...window.__census.keys()];window.__census.clear();return out;}`;
+  // H_SCREENS=逗號分隔的遊戲方法名（測試專用）：依序開啟營地各畫面（技能樹、商店、倉庫…），每個畫面各存一張截圖並收集文字
+  if (process.env.H_SCREENS) {
+    const out = [];
+    await gl.evaluate("(()=>{const g=window.__d2autobotGame; try{ if(g.state!=='camp') g.enterCamp(); }catch(e){} return g.state})()").catch(() => {});
+    await sleep(4000);
+    await gl.readSnapshot(CENSUS_JS).catch(() => []); // 先安裝字串收集儀器
+    for (const m of process.env.H_SCREENS.split(",")) {
+      const r = await gl.evaluate(`(()=>{const g=window.__d2autobotGame;try{const r=g[${JSON.stringify(m)}];if(typeof r!=="function")return "no-method";g[${JSON.stringify(m)}]();return "called:"+g.state}catch(e){return "ERR "+e.message}})()`).catch((e) => "EVAL " + e.message);
+      await sleep(2500);
+      const texts = await gl.readSnapshot(CENSUS_JS).catch(() => []);
+      const texts2 = await gl.readSnapshot(CENSUS_JS).catch(() => []);
+      const shot = await gl.send("Page.captureScreenshot", { format: "png" }).catch(() => null);
+      if (shot) fs.writeFileSync(path.join(OUT, "screen-" + m + ".png"), Buffer.from(shot.data, "base64"));
+      out.push({ method: m, result: r, texts: [...new Set([...texts, ...texts2])] });
+      await gl.key("Escape", "press", 80).catch(() => {}); await sleep(800);
+    }
+    fs.writeFileSync(path.join(OUT, "screens.json"), JSON.stringify(out, null, 1));
+    await gl.close(); process.exit(0);
+  }
   let n = 0, deaths = 0, lastState = "", minHp = 1, hpSum = 0, hpN = 0;
   while (Date.now() < end && gl.running) {
     try {
