@@ -66,8 +66,6 @@ function buildGuardStatus(sources = {}) {
     desktop: true,
   };
 }
-const saveMode = () => "local";
-const setSaveMode = () => ({ error: "桌面版只處理本機存檔" });
 
 // Chromium localStorage 值：0x01 + latin1，或 0x00 + UTF-16LE
 const decodeLs = (v) => (v[0] === 1 ? v.subarray(1).toString("latin1") : v.subarray(1).toString("utf16le"));
@@ -312,5 +310,5 @@ const load = queued(loadDb), store = queued(storeDb), traces = queued(tracesDb),
 module.exports = {
   getLocalStorageKey, setLocalStorageKey, getLocalStorageKeyAt, setLocalStorageKeyAt,
   load, store, assets, traces, diag, listBackups, readBackup, deleteBackup, snapshot, readFile, writeFile,
-  sealText, sealState, sealOf, computeSeals, buildGuardStatus, guardStatus, saveMode, setSaveMode, BACKUP_DIR,
+  sealText, sealState, sealOf, computeSeals, buildGuardStatus, guardStatus, BACKUP_DIR,
 };

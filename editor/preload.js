@@ -2,8 +2,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 const call = (ch) => (...args) => ipcRenderer.invoke(ch, ...args);
 contextBridge.exposeInMainWorld("api", {
-  // 啟動器協定版本：IPC 不相容時頁面可提示使用者下載新版 exe
-  launcher: { protocol: 1 },
   load: call("load"),
   save: call("save"),
   assets: call("assets"),
@@ -19,8 +17,6 @@ contextBridge.exposeInMainWorld("api", {
   exportSave: call("exportSave"),
   importSave: call("importSave"),
   guardStatus: call("guardStatus"),
-  saveMode: call("saveMode"),
-  setSaveMode: call("setSaveMode"),
   close: call("close"),
   openGuard: call("openGuard"),
   launchGame: call("launchGame"),

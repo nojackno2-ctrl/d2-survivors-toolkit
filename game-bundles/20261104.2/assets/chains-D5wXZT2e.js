@@ -1,2 +1,0 @@
-import{T as e}from"./record-Ds9IRtoY.js";function t(e,t=` `){return e.endless?.extra?`${e.rank}${t}+${t}${e.endless.extra}`:`${e.rank}${t}/${t}${e.maxRank}`}function n(e){let t=e=>e?e.split(`
-`):[];return{whole:t(e.endless?.whole),total:t(e.endless?.total),next:t(e.endless?.next)}}function r(e){return String(Number(e.toFixed(e<1?2:+(e<10))))}var i=e=>!e.item&&e.rank>=e.maxRank&&!e.endless?.next,a=`Other items to gamble on, free`,o=`/api/leaderboard`,s=t=>t.base.n+e(t);export{i as a,n as i,o as n,t as o,a as r,r as s,s as t};

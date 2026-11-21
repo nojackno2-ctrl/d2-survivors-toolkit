@@ -23,7 +23,4 @@ module.exports = [
   { id: "craft-affix-ui",     tier: "integration", kind: "electron", file: "modifier/tests/craft-affix-ui.cjs", timeout: 120 },
   { id: "craft-companion-ui", tier: "integration", kind: "electron", file: "modifier/tests/craft-companion-ui.cjs", timeout: 120 },
   { id: "autobot",            tier: "integration", kind: "electron", file: "helper/tests/autobot.cjs",         timeout: 180 },
-  // 舊測試：遊戲版本封鎖已移除（見 AI_HANDOFF），斷言已不成立。檔案已從 editor/ 移除，不再執行。
-  { id: "version-gate",       stale: "版本封鎖已移除，斷言過時", file: "（已移除）version-gate.cjs" },
-  { id: "version-gate-web",   stale: "需要手動提供新舊版目錄參數，且封鎖已移除", file: "modifier/tests/version-gate-web.cjs" },
 ];

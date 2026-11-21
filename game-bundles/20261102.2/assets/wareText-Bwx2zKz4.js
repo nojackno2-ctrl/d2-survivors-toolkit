@@ -1,2 +1,0 @@
-function e(e,t=` `){return e.endless?.extra?`${e.rank}${t}+${t}${e.endless.extra}`:`${e.rank}${t}/${t}${e.maxRank}`}function t(e){let t=e=>e?e.split(`
-`):[];return{whole:t(e.endless?.whole),total:t(e.endless?.total),next:t(e.endless?.next)}}function n(e){return String(Number(e.toFixed(e<1?2:+(e<10))))}var r=e=>!e.item&&e.rank>=e.maxRank&&!e.endless?.next,i=`Other items to gamble on, free`;export{n as a,e as i,t as n,r,i as t};

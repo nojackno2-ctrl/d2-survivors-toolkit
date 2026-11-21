@@ -72,8 +72,6 @@ ipcMain.handle("importSave", wrap(async () => {
   return { save, path: r.filePaths[0] };
 }));
 ipcMain.handle("guardStatus", wrap(() => core.guardStatus()));
-ipcMain.handle("saveMode", wrap(() => core.saveMode()));
-ipcMain.handle("setSaveMode", wrap(() => core.setSaveMode()));
 ipcMain.handle("close", wrap(() => {
   void loadPage("editor");
   return { ok: true };

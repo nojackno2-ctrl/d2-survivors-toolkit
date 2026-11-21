@@ -38,7 +38,8 @@ const seed = t.startsWith("D2S1:") ? zlib.inflateSync(Buffer.from(t.slice(5).rep
       const out={cls,item:pick.name||pick.base,line:lines[0].text,msg:u.state.msg,log:u.state.log.slice(-5),grew:u.state.log.length>before};
       u.stop(); return JSON.stringify(out); })()`));
     detail = JSON.stringify(r).slice(0, 500); ok = !r.err && !r.skipped && r.grew === true;
-    console.log(ok ? "✔ 自動淬鍊實際流程通過" : "✘ 自動淬鍊實際流程未通過", detail);
+    const rejected = /拒絕|異常|locked|錯誤|失敗/.test(String(r.msg || ""));
+    console.log(ok ? "✔ 流程有執行（迴圈動作並留下紀錄）" + (rejected ? "；⚠ 但遊戲或伺服器拒絕了淬鍊，不代表淬鍊成功" : "") : "✘ 自動淬鍊流程未執行", detail);
   } catch (e) { console.log("✘ 例外", e.message); }
   await gl.close().catch(() => {}); process.exit(ok ? 0 : 1);
 })();
