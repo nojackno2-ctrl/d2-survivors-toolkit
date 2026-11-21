@@ -65,17 +65,21 @@ function prepareProfile() {
     log("helper injected");
   }
   const end = Date.now() + Number(process.env.H_SECONDS || 120) * 1000;
+  const census = new Map(); // H_CENSUS=1：統計世界／HUD 內出現過的文字，找出仍為英文的字串
+  const CENSUS_JS = `(g)=>{const out=[];const seen=new Set();const walk=(o,d)=>{if(!o||typeof o!=="object"||d>4||seen.has(o))return;seen.add(o);if(Array.isArray(o)){for(const x of o.slice(0,200))walk(x,d+1);return;}for(const k of Object.keys(o).slice(0,60)){const v=o[k];if(typeof v==="string"&&(k==="text"||k==="label"||k==="name"||k==="title")&&v.length<120)out.push(k+":"+v);else if(v&&typeof v==="object")walk(v,d+1);}};walk(g.world,0);walk(g.hud,0);return out;}`;
   let n = 0, deaths = 0, lastState = "", minHp = 1, hpSum = 0, hpN = 0;
   while (Date.now() < end && gl.running) {
     try {
       const st = await gl.readSnapshot(`(g)=>{const w=g.world,p=w&&w.player;return {state:g.state,cls:g.kit&&g.kit.id,level:p&&p.level,hp:p?Math.round(p.life)+"/"+Math.round(p.maxLife):null,x:p&&Math.round(p.x),y:p&&Math.round(p.y),enemies:w&&w.enemies&&w.enemies.length,diag:window.__d2autobot&&window.__d2autobot.diagnostics?window.__d2autobot.diagnostics():null}}`);
       if (st.state === "dead" && lastState !== "dead") deaths++; lastState = st.state; const hpf = st.hp ? Number(st.hp.split("/")[0]) / Number(st.hp.split("/")[1]) : null; if (hpf != null && st.state === "playing") { minHp = Math.min(minHp, hpf); hpSum += hpf; hpN++; }
       fs.writeFileSync(path.join(OUT, "status.json"), JSON.stringify({ t: new Date().toISOString(), deaths, minHpFrac: Number(minHp.toFixed(3)), avgHpFrac: hpN ? Number((hpSum / hpN).toFixed(3)) : null, samples: hpN, ...st }, null, 1));
-      if (n++ % 3 === 0) { const r = await gl.send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(path.join(OUT, "shot.png"), Buffer.from(r.data, "base64")); }
+      if (process.env.H_CENSUS) { try { for (const t of await gl.readSnapshot(CENSUS_JS)) census.set(t, (census.get(t) || 0) + 1); } catch {} }
+      if (n++ % 3 === 0) { const r = await gl.send("Page.captureScreenshot", { format: "png" }); const buf = Buffer.from(r.data, "base64"); fs.writeFileSync(path.join(OUT, "shot.png"), buf); if (process.env.H_SHOTS) fs.writeFileSync(path.join(OUT, `shot-${String(n).padStart(4, "0")}.png`), buf); }
     } catch (e) { log("err", e.message); }
     await sleep(500);
   }
   log("end");
+  if (process.env.H_CENSUS) fs.writeFileSync(path.join(OUT, "census.json"), JSON.stringify([...census.entries()].map(([t, c]) => ({ t, c })), null, 1));
   await gl.close();
   process.exit(0);
 })().catch((e) => { try { log("FATAL", e.stack || e.message); } catch {} console.error(e); process.exit(1); });

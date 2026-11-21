@@ -66,6 +66,18 @@ function profile() {
     check("預設無例外掛接（開關全關）", Array.isArray(d?.diag?.hooks) && d.diag.hooks.every((n) => ["levelPool", "camp"].includes(n)), JSON.stringify(d?.diag?.hooks));
     const h1 = await gl.readSnapshot("(g)=>({t:String(Object.getPrototypeOf(g).tick).length,s:String(Object.getPrototypeOf(g).steer).length})");
     check("Game.prototype.tick／steer 與原版相同（未被包裝）", JSON.stringify(h0) === JSON.stringify(h1), JSON.stringify(h1));
+    // 4b. 使用者核可的例外掛接：開關開啟才安裝、關閉即還原到原參照（真實遊戲）
+    await gl.evaluate("(()=>{const g=window.__d2autobotGame;const P=Object.getPrototypeOf(g);window.__hk0={tick:P.tick,steer:P.steer,sort:Array.prototype.sort,push:Array.prototype.push};return 1})()");
+    for (const [p, v] of [["cheat.enabled", true], ["cheat.invincible", true], ["cheat.pauseStageTime", true], ["cheat.maxXp", true]]) await gl.helperSet(p, v);
+    await sleep(2500);
+    const on = await gl.evaluate(`(()=>{const g=window.__d2autobotGame,P=Object.getPrototypeOf(g),a=window.__d2autobot,d=a.diagnostics(),pl=g.world&&g.world.player,desc=pl&&Object.getOwnPropertyDescriptor(pl,"life");return JSON.stringify({hooks:d.hooks,tickWrapped:P.tick!==window.__hk0.tick,steerSame:P.steer===window.__hk0.steer,lifeGuard:!!(desc&&desc.get)})})()`);
+    const onJ = JSON.parse(on);
+    check("例外開關開啟後才安裝掛接（無敵／停止關卡時間／經驗倍率）", ["invincible", "stageTime", "xp"].every((n) => onJ.hooks.includes(n)) && onJ.tickWrapped && onJ.lifeGuard && onJ.steerSame, on);
+    for (const p of ["cheat.invincible", "cheat.pauseStageTime", "cheat.maxXp", "cheat.enabled"]) await gl.helperSet(p, false);
+    await sleep(2500);
+    const off = JSON.parse(await gl.evaluate(`(()=>{const g=window.__d2autobotGame,P=Object.getPrototypeOf(g),a=window.__d2autobot,d=a.diagnostics(),pl=g.world&&g.world.player,desc=pl&&Object.getOwnPropertyDescriptor(pl,"life");return JSON.stringify({hooks:d.hooks,tickSame:P.tick===window.__hk0.tick,steerSame:P.steer===window.__hk0.steer,sortSame:Array.prototype.sort===window.__hk0.sort,pushSame:Array.prototype.push===window.__hk0.push,lifeData:!!(desc&&"value" in desc)})})()`));
+    check("例外開關關閉後函式與屬性還原為原參照", !off.hooks.some((n) => ["invincible", "stageTime", "xp"].includes(n)) && off.tickSame && off.steerSame && off.sortSame && off.pushSame && off.lifeData, JSON.stringify(off));
+
     // 5. 設定介面改由獨立應用提供：經 CDP 讀寫、遊戲內面板隱藏
     const st0 = await gl.helperSettings();
     check("獨立應用可讀輔助器設定", st0 && typeof st0.enabled === "boolean", `autoMode=${st0 && st0.autoMode}`);
