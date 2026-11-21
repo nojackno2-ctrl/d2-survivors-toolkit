@@ -143,10 +143,8 @@
   <select id="mode"><option value="softcore">一般模式</option><option value="hardcore">硬核模式</option></select>
   <button id="reload">重新讀取</button>
   <button id="write" class="primary">寫入存檔</button>
-  <button id="closeWeb" hidden>關閉</button>
   <span id="status">請先關閉遊戲</span>
   <div id="versionWarn" class="version-warn" hidden><span id="versionMsg"></span><button type="button" id="versionDismiss" aria-label="關閉提示">×</button></div>
-  <div id="onlineModeBanner" class="version-warn" hidden>線上存檔模式：修改器只修改單機存檔，目前僅供檢視</div>
   <div id="moduleError" class="version-warn" hidden>檢查模組載入失敗 <button id="retryModule">重試</button></div>
 </header>
 <nav>
@@ -666,8 +664,7 @@
 <datalist id="statList"></datalist>
 
 <script>
-// 依診斷（iPhone 一直用快取的舊 webapi.js）：用本頁網址的 ?v=（書籤每次開啟修改器都帶新值）載入這三個腳本，避免手機快取舊版；document.write 保持載入順序。
-(() => { const v = new URLSearchParams(location.search).get("v") || String(Date.now()); for (const f of ["webapi.js", "zh.js"]) document.write('<script src="' + f + "?v=" + encodeURIComponent(v) + '"><' + '/script>'); })();
+(() => { const v = new URLSearchParams(location.search).get("v") || String(Date.now()); document.write('<script src="zh.js?v=' + encodeURIComponent(v) + '"><' + '/script>'); })();
 </script>
 
 
@@ -675,9 +672,7 @@
 const LOCALE = "zh-TW";
 const TESTED_GAME_BUILD = "20261105.3"; // 每次確認新版遊戲相容後更新此值
 const BUILD_KEY = "d2edit:gameBuild";
-const TOOLKIT_VERSION = "1.0.13"; // 與 package.json 的 version 一致；發布前由 build-web.js 檢查
-const TOOLKIT_SITE = "https://nojackno2-ctrl.github.io/d2-survivors-toolkit/";
-const TOOLKIT_RELEASES = "https://github.com/nojackno2-ctrl/d2-survivors-toolkit/releases/latest";
+const TOOLKIT_VERSION = "1.0.13"; // 與 package.json 的 version 一致
 const CLASSES = ["amazon","sorceress","necromancer","paladin","barbarian","druid","assassin"];
 const CLASS_ZH = ZH_CLASS;
 const DIFFS = ["", "normal", "nightmare", "hell"];
@@ -718,12 +713,6 @@ function findGameScript() {
       if (m) return m[1];
     }
   } catch {}
-  try {
-    for (const e of window.parent?.performance?.getEntriesByType?.("resource") || []) {
-      const m = String(e.name || "").match(/\/(Game-[\w-]+\.js)(?:\?.*)?$/i);
-      if (m) return m[1];
-    }
-  } catch {}
   return "";
 }
 function refreshVersionNotice() {
@@ -732,25 +721,6 @@ function refreshVersionNotice() {
   const msg = [compatibilityNotice, toolkitNotice, versionNotice].filter(Boolean).join("；");
   if (msg && !versionDismissed) { m.textContent = msg; w.hidden = false; }
   else { w.hidden = true; }
-}
-// 檢查 GitHub Pages 上的 version.json，有新版就提醒（網頁版重新點書籤，桌面版到 Releases 下載）
-let toolkitTimer = 0;
-async function checkToolkitVersion() {
-  try {
-    const r = await fetch(TOOLKIT_SITE + "version.json?t=" + Date.now(), { cache: "no-store" });
-    if (!r.ok) return;
-    const v = await r.json();
-    if (!v?.version || !isBuildNewer(v.version, TOOLKIT_VERSION)) return;
-    const what = `工具包有新版 v${v.version}${v.note ? `（${v.note}）` : ""}`;
-    // 網頁版：關掉重新點書籤；桌面啟動器：介面從網站載入，重新開啟工具包即可
-    const notice = window.api?.web ? `${what}，請關閉修改器後重新點一次書籤` : window.api?.launcher ? `${what}，請關閉工具包後重新開啟` : `${what}，請到 ${TOOLKIT_RELEASES} 下載`;
-    if (notice !== toolkitNotice) { toolkitNotice = notice; versionDismissed = false; refreshVersionNotice(); }
-  } catch {}
-}
-function startToolkitCheck() {
-  if (toolkitTimer) return;
-  void checkToolkitVersion();
-  toolkitTimer = setInterval(checkToolkitVersion, 10 * 60 * 1000);
 }
 async function checkGameVersion() {
   if (checkedGameBuild) return;
@@ -762,19 +732,7 @@ async function checkGameVersion() {
     const prevJs = prev?.gameJs || "";
     const gameChanged = !!(gameJs && prevJs && gameJs !== prevJs);
     let latestBuild = "", latestDate = "";
-    // 網頁版：由遊戲頁面代讀（跨網站直接讀會被瀏覽器擋）。
     if (window.api?.gameBuild) { try { const gb = await window.api.gameBuild(); if (gb?.build) { latestBuild = gb.build; latestDate = gb.date || ""; } } catch {} }
-    if (!latestBuild) {
-      const ctrl = new AbortController(), tid = setTimeout(() => ctrl.abort(), 5000);
-      try {
-        const res = await fetch("https://d2survivors.lol/changelog.json", { signal: ctrl.signal, cache: "no-cache" }).catch(() => fetch("/changelog.json", { signal: ctrl.signal, cache: "no-cache" }));
-        if (res && res.ok) {
-          const list = await res.json();
-          const first = Array.isArray(list) ? list[0] : null;
-          if (first?.build) { latestBuild = String(first.build); latestDate = String(first.date || ""); }
-        }
-      } catch {} finally { clearTimeout(tid); }
-    }
     const compareBuild = latestBuild || prev?.build || "";
     const compareDate = latestDate || prev?.date || "";
     const isNewer = compareBuild ? isBuildNewer(compareBuild, TESTED_GAME_BUILD) : false;
@@ -1167,7 +1125,7 @@ async function makeDiag() {
     faults = Array.isArray(f) ? { checked: items.length, notLegit: items.filter((_, i) => f[i]).map(nameZh).slice(0, 10) } : f;
   } catch (e) { faults = { error: e.message }; }
   const lines = {
-    修改器: { build: EDITOR_BUILD, web: !!window.api.web, mode: $("#mode").value, unlocked: unlocked(), seal: lastSeal, chineseEntries: Object.keys(DICT).length, gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() },
+    修改器: { build: EDITOR_BUILD, mode: $("#mode").value, unlocked: unlocked(), seal: lastSeal, chineseEntries: Object.keys(DICT).length, gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() },
     遊戲端: host,
     目前編輯中的存檔: saveSummary(save),
     物品合法性: faults,
@@ -2421,54 +2379,8 @@ function attributeChecks(s) { return saveCheckMod.attributeChecks(s); }
 function flagChecks(s, mode = $("#mode").value) { return saveCheckMod.flagChecks(s, mode); }
 function detect() { return saveCheckMod.detect(save, { mode: $("#mode").value, seal: lastSeal, assets: A, sizeOf, nameZh }); }
 
-let onlineSaveMode = true, saveModeSequence = 0;
-function updateWriteAvailability() { $("#write").disabled = onlineSaveMode || !saveCheckMod; }
-function queryBackendSaveMode() {
-  if (typeof window.api?.saveMode === "function") return Promise.resolve().then(() => window.api.saveMode()).catch(() => null);
-  if (!window.api?.web || !window.parent || window.parent === window) return Promise.resolve({ error: "不支援的操作：saveMode" });
-  const target = new URLSearchParams(location.search).get("origin") || "https://d2survivors.lol";
-  return new Promise((resolve) => {
-    const id = "sm_" + Math.random().toString(36).slice(2);
-    const timer = setTimeout(() => { window.removeEventListener("message", onMsg); resolve(null); }, 3000);
-    function onMsg(e) {
-      if (e.source !== window.parent || e.origin !== target || e.data?.d2edit !== "reply" || e.data.id !== id) return;
-      clearTimeout(timer);
-      window.removeEventListener("message", onMsg);
-      resolve(e.data.result);
-    }
-    window.addEventListener("message", onMsg);
-    window.parent.postMessage({ d2edit: "call", id, fn: "saveMode", args: [] }, target);
-  });
-}
-// 舊桌面啟動器與舊網頁後端沒有線上存檔概念；僅明確不支援時回退單機，逾時或其他錯誤仍拒絕寫入。
-async function resolveSaveMode(query) {
-  try {
-    const result = await Promise.race([Promise.resolve().then(query), new Promise(resolve => setTimeout(() => resolve(null), 3000))]);
-    if (typeof result?.error === "string" && /^不支援的操作[：:]\s*saveMode\s*$/.test(result.error)) return "local";
-    const mode = typeof result === "string" ? result : !result?.error ? result?.saveMode ?? result?.mode : null;
-    return mode === "local" || mode === "online" ? mode : "unknown";
-  } catch { return "unknown"; }
-}
-// 並行呼叫（視窗聚焦、寫入前檢查）共用同一次查詢；否則後發的查詢會讓先發者因序號過期而誤報「無法確認」
-let saveModeInflight = null;
-function checkSaveMode() {
-  return saveModeInflight ??= runSaveModeCheck().finally(() => { saveModeInflight = null; });
-}
-async function runSaveModeCheck() {
-  const seq = ++saveModeSequence;
-  onlineSaveMode = true; updateWriteAvailability();
-  const mode = await resolveSaveMode(queryBackendSaveMode);
-  if (seq !== saveModeSequence) return !onlineSaveMode;
-  onlineSaveMode = mode !== "local";
-  const banner = $("#onlineModeBanner"), writeBtn = $("#write");
-  if (banner) banner.hidden = !onlineSaveMode;
-  if (banner) banner.textContent = mode === "online" ? "線上存檔模式：修改器只修改單機存檔，目前僅供檢視" : "無法確認存檔模式，請重試";
-  if (writeBtn) updateWriteAvailability();
-  return !onlineSaveMode;
-}
+function updateWriteAvailability() { $("#write").disabled = !saveCheckMod; }
 $("#retryModule").onclick = loadSaveCheck;
-window.addEventListener("focus", () => { void checkSaveMode(); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden) void checkSaveMode(); });
 loadSaveCheck();
 
 /* ---------- 全新存檔 ---------- */
@@ -2546,7 +2458,7 @@ function renderAll() {
 }
 let zhMissing = false;
 async function load() {
-  versionDismissed = false; refreshVersionNotice(); void checkGameVersion(); startToolkitCheck(); void checkSaveMode();
+  versionDismissed = false; refreshVersionNotice(); void checkGameVersion();
   supportsWeaponSets = null;
   gameSupported = null;
   compatibilityNotice = ""; refreshVersionNotice();
@@ -2587,13 +2499,14 @@ async function write() {
   }
   const detectedIssues = sc.detect(save, { mode: $("#mode").value, seal: lastSeal, assets: A, sizeOf, nameZh }).filter(x => x.ok === false);
   void detectedIssues;
-  if (!confirm(window.api.web ? "確定寫入？原存檔會先自動備份至瀏覽器 localStorage；一般與硬核模式各只保留一份，後續寫入會覆蓋該模式的備份。" : "確定寫入？原存檔會先自動備份。")) return;
-  if (!await checkSaveMode()) return status($("#onlineModeBanner").textContent, "bad");
+  if (!confirm("確定寫入？原存檔會先自動備份。")) return;
+  if (!save.leaderboard || typeof save.leaderboard !== "object") save.leaderboard = {};
+  save.leaderboard.off = true;
   status("寫入中…");
   const r = await window.api.save($("#mode").value, save);
   if (r.error) return status(r.error, "bad");
   lastSeal = "sealed";
-  status(window.api.web ? "寫入完成並重新簽章。按「關閉」後遊戲會重新載入。" : "寫入完成並重新簽章，可以開啟遊戲了。", "ok");
+  status("寫入完成並重新簽章，可以開啟遊戲了。", "ok");
 }
 for (const b of document.querySelectorAll("nav button")) b.onclick = () => showPage(b.dataset.page);
 $("#reload").onclick = load;
@@ -2630,14 +2543,6 @@ for (const b of document.querySelectorAll("[data-fill]")) b.onclick = () => {
   }
   if (id === "ranks") syncExtra();
 };
-if (window.api.web) {
-  $("#closeWeb").hidden = false;
-  $("#closeWeb").onclick = () => window.api.close();
-  const m = new URLSearchParams(location.search).get("mode");
-  if (m) $("#mode").value = m;
-  $("#backups").hidden = true;
-  $("#status").textContent = "寫入後按「關閉」，遊戲會重新載入並套用修改";
-}
 $("#diagMake").onclick = makeDiag;
 $("#diagCopy").onclick = async () => {
   const t = $("#diagText");

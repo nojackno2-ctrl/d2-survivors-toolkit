@@ -4,10 +4,10 @@ if (!TESTED) throw new Error("找不到 helper/selfcheck.js 的 TESTED_GAME_BUIL
 const assert = require("node:assert/strict"), path = require("node:path"), { pathToFileURL } = require("node:url");
 const store = {};
 global.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); } };
-global.performance = { getEntriesByType: () => [{ name: "https://d2survivors.lol/assets/Game-abc.js" }] };
+global.performance = { getEntriesByType: () => [{ name: "app://game/assets/Game-abc.js" }] };
 global.window = {};
-let changelog = [{ build: TESTED }];
-global.fetch = async () => ({ ok: !!changelog, json: async () => changelog });
+const setBuild = (b) => { if (b === null) delete window.__d2gameBuild; else window.__d2gameBuild = b; };
+Object.defineProperty(global, "fetch", { configurable: true, value: async () => { throw new Error("版本檢查不得連網"); } });
 const goodGame = () => Object.fromEntries([...["leaveRun", "continueRun", "startRun", "toMenu", "gainXp", "startTerror", "spendStatPoints", "inventoryOf", "equippedOf", "useQuest", "heroNumbers"].map((k) => [k, () => {}]), ...["state", "camp", "save", "build", "difficulty", "director", "trade", "gearActions", "world", "kit"].map((k) => [k, {}]), ["director", { cloneComes() {} }], ["hud", { showTown() {}, closeLevelUp() {} }]]);
 const goodCtx = () => ({
   dict: async () => ({ length: 0, ...Object.fromEntries(Array.from({ length: 6000 }, (_, i) => ["k" + i, "v"])) }),
@@ -20,11 +20,12 @@ const goodCtx = () => ({
   const { runSelfCheck } = await import(pathToFileURL(path.join(__dirname, "..", "selfcheck.js")).href);
   const find = (r, area, level) => r.issues.find((i) => i.area === area && (!level || i.level === level));
   window.__d2autobot = { game: goodGame(), diagnostics: () => ({}) }; window.__d2lang = { debug: () => ({ gameHooked: true }) };
+  setBuild(TESTED);
   let r = await runSelfCheck(goodCtx());
   assert.deepEqual(r.issues, [], "全部正常時不應有問題：" + JSON.stringify(r.issues)); assert.equal(r.ok, true);
-  changelog = [{ build: "20261201.1" }];
+  setBuild("2026.1201.1"); // 桌面版 build 格式，轉成 20261201.1
   r = await runSelfCheck(goodCtx()); assert.ok(find(r, "遊戲版本", "warn"), "新版遊戲要警告"); assert.equal(r.ok, false);
-  changelog = null; r = await runSelfCheck(goodCtx()); assert.ok(find(r, "遊戲版本", "info"), "抓不到版本只提示"); changelog = [{ build: TESTED }];
+  setBuild(null); r = await runSelfCheck(goodCtx()); assert.ok(find(r, "遊戲版本", "info"), "沒有 __d2gameBuild 時只提示（未知）"); setBuild({ build: TESTED });
   let c = goodCtx(); c.engine = async () => { throw new Error("遊戲版本不相容：找不到 makeUnique"); }; c.engineInfo = { missing: ["makeUnique"] };
   r = await runSelfCheck(c); assert.ok(/makeUnique/.test(find(r, "物品引擎", "error").msg), "引擎失敗要列出缺少的特徵");
   c = goodCtx(); c.dict = async () => ({ a: 1 }); r = await runSelfCheck(c); assert.ok(find(r, "字典", "warn"));
@@ -134,7 +135,8 @@ const goodCtx = () => ({
 {
   const source = require("node:fs").readFileSync(path.join(__dirname, "..", "autobot.js"), "utf8");
   const region = source.slice(source.indexOf("  function restoreAllSkills() {"), source.indexOf("  // 原版選卡畫面可能讓遊戲迴圈完全停住"));
-  const harnessFor = (settings, isOnline = () => false) => new Function("settings", "onlineSave", "document", "save", "refreshControls", "ALL_SKILLS_BONUS", "let goldOverride = null, allSkillsOverride = null, lastAction = \"\";" + region + "return { applyCheats, restoreAllCheats, get invinciblePlayer() { return invinciblePlayer; } };")(settings, isOnline, { querySelector: () => null }, () => {}, () => {}, 20);
+  // hooks：例外掛接登錄表（預設視為已安裝，另有一組測試驗證「未安裝時不包裝」）。
+  const harnessFor = (settings, isOnline = () => false, hooks = { has: () => true }) => new Function("settings", "onlineSave", "document", "save", "refreshControls", "ALL_SKILLS_BONUS", "hooks", "let goldOverride = null, allSkillsOverride = null, lastAction = \"\";" + region + "return { applyCheats, restoreAllCheats, get invinciblePlayer() { return invinciblePlayer; } };")(settings, isOnline, { querySelector: () => null }, () => {}, () => {}, 20, hooks);
   const mkSettings = (cheat) => ({ cheat: { enabled: true, ...cheat } });
   // E. 怪物數量：改用原版 director.spawnPack 生怪（2026-11-13）。不再寫入遊戲不讀取的 world.monsterDensity／spawnRate，
   //    也不改導演計數；開、關前後這些欄位都必須維持原值。生怪行為本身由 helper/tests/autobot.cjs 的模擬案例驗證。
@@ -225,6 +227,20 @@ const goodCtx = () => ({
     const settings = mkSettings({ maxMonsterDensity: true }); const h = harnessFor(settings);
     const first = { owed: 0, batchTimer: 5 }, second = { owed: 1, batchTimer: 6 }; const g = { world: {}, director: first };
     h.applyCheats(g); g.director = second; h.applyCheats(g); assert.equal(first.owed, 0); assert.equal(first.batchTimer, 5);
+  }
+  // I. 例外掛接未安裝（預設狀態）：開關即使開啟也不包裝 gainXp、不替換 life 描述子；安裝後才生效
+  {
+    const names = new Set(); const hooks = { has: (n) => names.has(n) };
+    const settings = mkSettings({ maxXp: true, invincible: true }); const h = harnessFor(settings, () => false, hooks);
+    const orig = function (a) { return a; }; const p = { life: 50, maxLife: 100, damageTaken: 0 }; const g = { gainXp: orig, world: { player: p }, save: {} };
+    const before = Object.getOwnPropertyDescriptor(p, "life");
+    h.applyCheats(g);
+    assert.equal(g.gainXp, orig, "未安裝 xp 掛接時不得包裝 gainXp");
+    assert.deepEqual(Object.getOwnPropertyDescriptor(p, "life"), before, "未安裝 invincible 掛接時不得改 life 描述子");
+    names.add("xp"); names.add("invincible"); h.applyCheats(g);
+    assert.notEqual(g.gainXp, orig); assert.ok(!("value" in Object.getOwnPropertyDescriptor(p, "life")));
+    names.clear(); h.applyCheats(g);
+    assert.equal(g.gainXp, orig, "掛接被卸載後放回原函式"); assert.ok("value" in Object.getOwnPropertyDescriptor(p, "life"), "掛接被卸載後還原 life 描述子");
   }
   console.log("怪物數量／全精英／經驗值加成／無敵還原測試通過");
 }

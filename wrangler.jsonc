@@ -1,7 +1,0 @@
-{
-  "name": "d2-survivors-toolkit",
-  "compatibility_date": "2026-11-02",
-  "assets": { "directory": "./site" },
-  // 非 main 分支由 Cloudflare 執行 `npx wrangler preview` 建立預覽，需有 previews 區塊（可為空）
-  "previews": {}
-}

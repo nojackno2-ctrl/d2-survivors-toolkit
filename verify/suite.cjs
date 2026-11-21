@@ -3,7 +3,6 @@
 // file：以根目錄為基準的測試檔路徑（測試跟著它測的模組放，不再集中在 editor/）。
 // stale：已確認過時、不納入（原因記在這裡，避免日後再被當成工具包壞掉）。
 module.exports = [
-  { id: "build-web",          tier: "static",      kind: "node",     file: "tools/tests/build-web.cjs",        timeout: 60 },
   { id: "lang",               tier: "static",      kind: "node",     file: "lang/tests/test_lang.cjs",         timeout: 60 },
   { id: "runeword-class-base",tier: "static",      kind: "node",     file: "modifier/tests/runeword-class-base.cjs", timeout: 60 },
   // 裝備資料庫完整檢查：每次更新必跑（always），逐件驗證一鍵解鎖與製作裝備
@@ -19,13 +18,10 @@ module.exports = [
   { id: "memory-only",        tier: "static",      kind: "node",     file: "helper/tests/memory-only.cjs",     timeout: 60 },
   { id: "guard",              tier: "static",      kind: "node",     file: "guard/tests/guard.cjs",            timeout: 60 },
   { id: "save-check",         tier: "static",      kind: "node",     file: "guard/tests/save-check.cjs",       timeout: 60 },
-  { id: "guard-iframe-ui",    tier: "static",      kind: "electron", file: "guard/tests/guard-iframe-ui.cjs", timeout: 90 },
   { id: "weapon-sets-ui",     tier: "integration", kind: "electron", file: "modifier/tests/weapon-sets-ui.cjs", timeout: 120 },
   { id: "save-faults-ui",     tier: "integration", kind: "electron", file: "modifier/tests/save-faults-ui.cjs", timeout: 120 },
   { id: "craft-affix-ui",     tier: "integration", kind: "electron", file: "modifier/tests/craft-affix-ui.cjs", timeout: 120 },
   { id: "craft-companion-ui", tier: "integration", kind: "electron", file: "modifier/tests/craft-companion-ui.cjs", timeout: 120 },
-  { id: "backup-record",     tier: "static", kind: "node", file: "modifier/tests/backup-record.cjs", timeout: 60 },
-  { id: "write-confirm",       tier: "static", kind: "node", file: "modifier/tests/write-confirm.cjs", timeout: 60 },
   { id: "autobot",            tier: "integration", kind: "electron", file: "helper/tests/autobot.cjs",         timeout: 180 },
   // 舊測試：遊戲版本封鎖已移除（見 AI_HANDOFF），斷言已不成立。檔案已從 editor/ 移除，不再執行。
   { id: "version-gate",       stale: "版本封鎖已移除，斷言過時", file: "（已移除）version-gate.cjs" },

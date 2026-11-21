@@ -1,5 +1,6 @@
-// 工具包自檢：在 d2edit.js 的載入進度條跑的時候同時執行，檢查「工具包」與「當前遊戲」是否相符。
-// 有問題只輸出（進度條下方列表、主控台、window.__d2editSelfCheck），不阻擋遊玩、不拋錯。
+// 工具包自檢：由桌面應用（editor/）在遊戲連線後呼叫 runSelfCheck(ctx)，檢查「工具包」與「當前遊戲」是否相符；不依賴舊網頁載入器，不連任何網址。
+// ctx 由呼叫端提供（dict／gamedata／engine／backend 皆可省略，省略的項目略過）；遊戲版本讀 window.__d2gameBuild（editor/ 以 CDP 設定）。
+// 有問題只回傳結果清單，不阻擋遊玩、不拋錯。
 // 每筆問題 { level: "error" | "warn" | "info", area, msg }：
 //   error＝某項功能一定壞；warn＝可能失效；info＝提示（例如遊戲還在選角畫面，尚無法檢查掛接）。
 const TESTED_GAME_BUILD = "20261105.3"; // 每次確認新版遊戲相容後更新此值（verify 腳本會自動改）
@@ -35,7 +36,7 @@ export async function checkGameHook(waitMs = 3500) {
   if (!window.__d2autobot) { issues.push({ level: "warn", area: "輔助器", msg: "輔助器尚未載入" }); return issues; }
   if (!game) {
     const note = window.__d2autobot.diagnostics?.().hookNote || "";
-    issues.push({ level: "info", area: "輔助器", msg: "尚未掛接遊戲物件（進入遊戲後才會接上）" + (note ? "：" + note : "") });
+    issues.push({ level: "info", area: "輔助器", msg: "尚未連線遊戲物件（等待應用程式連線；進入遊戲後才會接上）" + (note ? "：" + note : "") });
     return issues;
   }
   const missing = [
@@ -62,17 +63,17 @@ export async function runSelfCheck(ctx) {
     // 1. 遊戲版本與主程式檔
     guard("遊戲版本", async () => {
       result.gameJs = performance.getEntriesByType("resource").map((e) => e.name.match(/\/(Game-[\w-]+\.js)/)?.[1]).find(Boolean) || "";
-      let list = null;
-      try { list = await withTimeout(window.__d2changelogPromise || fetch("/changelog.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)), 5000, "讀取官方版本"); } catch {}
-      const build = list?.[0]?.build ? String(list[0].build) : "";
+      // 版本來源：window.__d2gameBuild（字串或 {build}，桌面版 "2026.1105.3" 會轉成 "20261105.3"）；沒有就略過比對，不再連官方網址。
+      const info = window.__d2gameBuild, raw = typeof info === "string" ? info : info?.build, m = String(raw || "").trim().match(/^(\d{4})\.(\d{4})\.(\d+)$/);
+      const build = m ? m[1] + m[2] + "." + m[3] : String(raw || "").trim();
       result.build = build;
-      if (!build) add("info", "遊戲版本", "無法取得官方版本資訊，略過版本比對");
+      if (!build) add("info", "遊戲版本", "遊戲版本未知（應用程式尚未提供 __d2gameBuild），略過版本比對");
       else if (isNewer(build, TESTED_GAME_BUILD)) add("warn", "遊戲版本", `遊戲已更新到 ${build}，工具包只驗證到 ${TESTED_GAME_BUILD}，部分功能可能失效，請等工具包更新`);
-      else if (build !== TESTED_GAME_BUILD) add("info", "遊戲版本", `遊戲版本 ${build} 比工具包驗證版本 ${TESTED_GAME_BUILD} 舊（遊戲頁可能是快取）`);
+      else if (build !== TESTED_GAME_BUILD) add("info", "遊戲版本", `遊戲版本 ${build} 比工具包驗證版本 ${TESTED_GAME_BUILD} 舊`);
       let prev = null;
-      try { prev = JSON.parse(localStorage.getItem("d2edit:selfcheckGameJs") || "null"); } catch {}
+      try { prev = JSON.parse(localStorage.getItem("d2helper:selfcheckGameJs") || "null"); } catch {}
       if (result.gameJs && prev?.gameJs && prev.gameJs !== result.gameJs && prev.build === build) add("warn", "遊戲版本", `遊戲程式檔已變更（${prev.gameJs} → ${result.gameJs}）但版本號沒變，請留意功能是否正常`);
-      try { if (result.gameJs) localStorage.setItem("d2edit:selfcheckGameJs", JSON.stringify({ gameJs: result.gameJs, build })); } catch {}
+      try { if (result.gameJs) localStorage.setItem("d2helper:selfcheckGameJs", JSON.stringify({ gameJs: result.gameJs, build })); } catch {}
     }),
 
     // 2. 工具包自己的資料：字典、遊戲資料

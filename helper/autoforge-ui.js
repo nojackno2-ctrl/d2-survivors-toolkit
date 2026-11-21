@@ -59,21 +59,9 @@ function lineList(g, cls, level, id) {
 // ---- 記憶：同稀有度＋名稱＋底材共用目標設定 ----
 const itemKey = (it) => [it.rarity, it.name, it.base].join("|");
 
-// 名稱繁中化（序列、背包列表、狀態標題）：沿用共用字典 zh-TW.json。
-// 字典尚未載入時顯示英文原名；字典載入後會自動重繪。
-let zhDictAF = null, zhDictReq = false;
-function ensureZhDict() {
-  if (zhDictAF || zhDictReq || !window.__d2zhUrl) return;
-  zhDictReq = true;
-  const p = (window.__d2zhPromise ??= fetch(window.__d2zhUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null));
-  Promise.resolve(p).then((d) => { if (d && typeof d === "object") { zhDictAF = d; render(); } }, () => { /* 讀取失敗就維持英文 */ });
-}
-function zhItemName(it) {
-  const name = String(it?.name || ""), base = String(it?.base || "");
-  if (!zhDictAF) return `${name}（${base}）`;
-  const zt = (s) => zhDictAF[s] || s;
-  return `${zt(name)}（${zt(base)}）`;
-}
+// 名稱顯示：遊戲本身已由中文化資料檔翻譯，面板直接顯示遊戲內名稱；不再載入字典、不連任何網址。
+function ensureZhDict() { /* 已移除字典相依，保留空函式供呼叫端使用 */ }
+function zhItemName(it) { return `${String(it?.name || "")}（${String(it?.base || "")}）`; }
 function loadMemory() { try { return JSON.parse(localStorage.getItem(MEM_KEY) || "{}") || {}; } catch (e) { return {}; } }
 function saveMemory(m) { try { localStorage.setItem(MEM_KEY, JSON.stringify(m)); } catch (e) { /* 無法寫入時仍可用，只是不會記住 */ } }
 function rememberTargets(key, targets) { const m = loadMemory(); m[key] = { ...targets }; saveMemory(m); }
@@ -268,8 +256,10 @@ function pauseCountdownText() {
 // 會被遊戲的 whileForgeIdle 直接丟棄（實測淬鍊時 forgeBusy 約佔 75%～90%）。
 // 這裡把「丟棄」改成「等到空檔再執行」（步驟之間有間隔，約幾毫秒內就會執行）。
 // 只對之後新開的商店／倉庫選單生效；已開著的選單需關掉重開一次。
+const FORGE_IDLE_HOOK = false;
 function patchForgeIdle(g) {
-  if (!g || g.__d2idlePatched || typeof g.whileForgeIdle !== "function") return;
+  // 暫時停用（去掛接）：原本永久覆寫官方的 g.whileForgeIdle，不在使用者核可的四組例外內；淬鍊中若操作被遊戲丟棄，請等淬鍊步驟之間再操作。
+  if (!FORGE_IDLE_HOOK || !g || g.__d2idlePatched || typeof g.whileForgeIdle !== "function") return;
   g.__d2idlePatched = true;
   g.whileForgeIdle = function (actions) {
     const self = this;

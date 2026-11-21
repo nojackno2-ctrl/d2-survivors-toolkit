@@ -9,7 +9,9 @@
     "dist": "electron-builder --win portable"
   },
   "dependencies": {
-    "classic-level": "1.4.1"
+    "classic-level": "1.4.1",
+    "ws": "^8.23.0",
+    "@electron/asar": "^3.2.0"
   },
   "devDependencies": {
     "electron": "33.2.1",
@@ -22,8 +24,38 @@
       "preload.js",
       "core.js",
       "engine.js",
-      "remote.js",
+      "paths.js",
+      "game-link.js",
+      "launcher-api.js",
+      "launcher.html",
+      "lang-cli.cjs",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../modifier",
+        "to": "modifier"
+      },
+      {
+        "from": "../guard",
+        "to": "guard"
+      },
+      {
+        "from": "../helper",
+        "to": "helper"
+      },
+      {
+        "from": "../lang/zh-TW.json",
+        "to": "lang/zh-TW.json"
+      },
+      {
+        "from": "../lang/desktop-lang-core.mjs",
+        "to": "lang/desktop-lang-core.mjs"
+      },
+      {
+        "from": "../lang/d2rfont.js",
+        "to": "lang/d2rfont.js"
+      }
     ],
     "asarUnpack": [
       "node_modules/classic-level/**"

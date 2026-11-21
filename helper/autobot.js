@@ -176,8 +176,14 @@
   // 遊戲修改總開關（cheat.enabled）同樣：重新整理後預設關閉，同頁重新點書籤沿用。
   { const live = window.__d2autobotSwitches; settings.enabled = !!live?.enabled; settings.progressEnabled = !!live?.progressEnabled; settings.cheat.enabled = !!live?.cheat; }
   const abort = new AbortController(), restores = [], blockedLoot = new WeakMap();
+  // 使用者核可的例外掛接（見 hooks.js）：預設全部未安裝，對應開關開啟才 install、關閉即 uninstall 還原為原參照。
+  // 缺少 hooks.js 時，這些功能一律停用（install 回傳 false），不退回直接包裝。
+  const hookKit = () => window.__d2hooksKit || null;
+  const hooks = hookKit()?.createRegistry?.() ?? { define() {}, install: () => false, uninstall: () => true, uninstallAll: () => true, installed: () => [], has: () => false };
+  const wrapMethod = (object, name, factory) => hookKit()?.wrapMethod?.(object, name, factory) ?? null;
+  const campHandles = [];
   let alive = true, game = priorGame, lastStep = -Infinity, lastHp = -Infinity;
-  let manualUntil = 0, lootTarget = null, lootSince = 0, ownWalk = null, ownReach = null;
+  let manualUntil = 0, lootTarget = null, lootSince = 0;
   let smooth = { x: 0, y: 0 }, stuck = null, stuckCount = 0, clearAt = 0, clearWorld = null, transition = false;
   let errors = 0, lastAction = "待命", hookNote = "正在定位遊戲模組", hookUrl = "", actionAt = 0, cardActionAt = -Infinity, gameplayCompatible = false;
   let retreat = null, protectedWorld = null;
@@ -188,10 +194,11 @@
   // 新版暫停選單可能繪於 Canvas；已取得實例時以 Game.state 為準。
   const paused = () => game ? game.state === "paused" : visible(document.getElementById("paused")) || document.body.classList.contains("frontend-over-run");
   const toolsMenuOpen = () => paused() || document.body.classList.contains("frontend-open");
+  // 朝目標點移動：方向向量交給 input.js 量化成按鍵（只在方向改變時送 down／up）。
+  function moveToward(from, target) { inputKit()?.setMoveDir(target.x - from.x, target.y - from.y, { smooth: 1 }); }
   function release() {
-    if (game?.walkTarget === ownWalk) game.walkTarget = null;
-    if (ownReach && game?.world?.reaching === ownReach) game.world.reaching = null;
-    ownWalk = ownReach = lootTarget = stuck = null; stuckCount = 0;
+    inputKit()?.releaseAll();
+    lootTarget = stuck = null; stuckCount = 0;
     smooth = { x: 0, y: 0 };
   }
   // 只儲存使用者在面板上選的設定；停止輔助、死亡保護、錯誤停機等自動關閉只在本次有效，下次開啟仍是上次選的設定。
@@ -207,31 +214,18 @@
   // 自動停機（如離場失敗）不改寫使用者儲存的設定；使用者按「停止輔助」才存成關閉（依使用者回報：舊版按停止後下次載入又是開的）。
   function stop(reason = "輔助已停止", byUser = false) { settings.enabled = false; settings.progressEnabled = false; setPickupRadius(pickupOwner, false); release(); lastAction = reason; save(byUser); }
   function manual(e) {
-    if (!e.isTrusted || host.contains(e.target) || e.target === launcher || e.target === stopButton) return;
+    // CDP 送出的輸入事件 isTrusted 也是 true：自己送的鍵（input.js 記錄）不算玩家操作。
+    if (!e.isTrusted || inputKit()?.isOwn?.(e) || host.contains(e.target) || e.target === launcher || e.target === stopButton) return;
     manualUntil = performance.now() + 1200;
     release();
   }
   // 物品名稱繁中化（狀態列用）：沿用修改器的字典與 zh.js 規則——整句查字典；魔法物品拆成字尾＋字首＋底材；稀有兩個字分開翻。
-  let zhDict = null;
-  if (window.__d2zhPromise || window.__d2zhUrl) (window.__d2zhPromise ??= fetch(window.__d2zhUrl).then((r) => r.ok ? r.json() : null).catch(() => null)).then((d) => { zhDict = d; });
-  const zt = (en) => zhDict?.[en] || en;
-  function itemZh(item) {
-    if (!item) return "";
-    const name = String(item.name || ""), base = String(item.base || "");
-    if (!zhDict) return name || base;
-    if (!name) return zt(base);
-    if (zhDict[name]) return zhDict[name];
-    const i = base ? name.indexOf(base) : -1;
-    if (i >= 0) { const pre = name.slice(0, i).trim(), suf = name.slice(i + base.length).trim(); return (suf ? zt(suf) : "") + (pre ? zt(pre) : "") + zt(base); }
-    const words = name.split(" ");
-    if (words.length === 2 && words.every((w) => zhDict[w])) return words.map(zt).join("");
-    return name;
-  }
-  function keyPulse(code, key) {
-    const target = document.activeElement || document.body, init = { key, code, bubbles: true, cancelable: true, composed: true };
-    target.dispatchEvent(new KeyboardEvent("keydown", init));
-    target.dispatchEvent(new KeyboardEvent("keyup", init));
-  }
+  // 面板直接用繁中，不再載入字典：物品名稱以遊戲內顯示的名稱為準。
+  const zt = (en) => en;
+  function itemZh(item) { return item ? String(item.name || item.base || "") : ""; }
+  // 所有按鍵走 input.js（__d2input → CDP 受信任事件；沒有時退回合成事件並在 diagnostics 標明非受信任）。
+  const inputKit = () => window.__d2inputKit || null;
+  function keyPulse(code) { return !!inputKit()?.press(code, 60); }
   function hudPool(id) {
     const el = document.getElementById(id);
     if (!el) return null;
@@ -311,7 +305,7 @@
       if (columns[slot].length >= count) return false;
     } else {
       const slot = settings.potion.fallbackHpSlot;
-      keyPulse("Digit" + slot, String(slot));
+      keyPulse("Digit" + slot);
     }
     lastHp = now;
     lastAction = lethal ? "預估致命傷害，已喝水" : "已喝生命藥水";
@@ -407,7 +401,7 @@
         await g.leaveRun();
       } else {
         // 相容舊版 DOM 選單；Canvas 選單無內部函式時無法可靠代按。
-        if (g.state === "playing") keyPulse("Escape", "Escape");
+        if (g.state === "playing") keyPulse("Escape");
         let clicked = false;
         for (let attempt = 0; attempt < 2 && alive && retreat; attempt++) {
           const menus = document.querySelectorAll("#paused,#pause-menu,[data-pause-menu]");
@@ -838,15 +832,13 @@
     if (!u.x && !u.y) { if (m.enabled) lastAction = "沒有威脅，站在原地"; stuck = null; release(); return; }
     const mix = dodging || plan ? 1 : m.smoothingFactor;
     u = unit(smooth.x * (1 - mix) + u.x * mix, smooth.y * (1 - mix) + u.y * mix); smooth = u;
-    // 使用原版 walkTarget -> walls.route/slide，不直接改座標或穿牆。
+    // 只送方向鍵，不直接改座標或穿牆（鍵盤移動沒有 walls.route 規劃，繞牆靠卡住偵測換方向）。
     const direct = goal && !plan && !dodging && !pre && !crowded && (pursue || !closeEnemy);
     const target = plan ? { ...plan.target } : direct ? { x: goal.x, y: goal.y } : { x: s.p.x + u.x * 100, y: s.p.y + u.y * 100 };
     if (typeof s.w.walls?.nearestOpen === "function") Object.assign(target, s.w.walls.nearestOpen(target.x, target.y));
     if (!point(target)) { release(); return; }
-    if (ownReach && s.w.reaching === ownReach) s.w.reaching = null;
-    ownReach = goal?.kind === "loot" && direct ? goal.target : null;
-    if (ownReach) s.w.reaching = ownReach;
-    ownWalk = target; g.walkTarget = target;
+    // 移動只走鍵盤：朝目標方向量化成 8 方向（input.js），不再寫 walkTarget／reaching。
+    moveToward(s.p, target);
     const label = goal?.kind === "loot" ? "拾取物品" : goal?.kind === "kick" ? "踢罐子" : goal?.kind || "安全位置";
     lastAction = plan ? "全圖走位（威脅 " + plan.danger.toFixed(1) + "）" + (goal ? "：" + label : "") : through ? "被包圍無路可閃，穿過怪群遠離最強敵人" : pursue ? "朝目標前進：" + label + (dodging ? "（閃避飛彈）" : "") : dodging ? "閃避敵方飛彈" : closeEnemy ? "保持敵人距離" : "前往" + label;
     // 以遊戲內時間判斷卡住（畫面凍結不算）；為了完全自主運作，卡住只換方向繞路，不停機。
@@ -859,7 +851,7 @@
         lootTarget = null;
         const turn = stuckCount >= 3 ? Math.random() * Math.PI * 2 : Math.PI / 2;
         const v = { x: u.x * Math.cos(turn) - u.y * Math.sin(turn), y: u.x * Math.sin(turn) + u.y * Math.cos(turn) };
-        ownWalk = { x: s.p.x + v.x * (stuckCount >= 3 ? 240 : 120), y: s.p.y + v.y * (stuckCount >= 3 ? 240 : 120) }; g.walkTarget = ownWalk;
+        inputKit()?.setMoveDir(v.x, v.y, { smooth: 1 });
         lastAction = "卡住，換方向繞路"; strafeSide = -strafeSide;
       }
       stuck = { x: s.p.x, y: s.p.y, at: clock };
@@ -1209,10 +1201,11 @@
   }
   // 暫時攔下 hud.showNpcMenu 取得凱莎的選單項目（原版以 run 回呼執行）；用完立即還原。
   function npcMenu(g, open) {
-    const hud = g.hud; if (!hud || typeof hud.showNpcMenu !== "function") return null;
-    let got = null; const own = Object.prototype.hasOwnProperty.call(hud, "showNpcMenu"), orig = hud.showNpcMenu;
-    hud.showNpcMenu = function (pos, items, cb) { got = { items, cb }; return Reflect.apply(orig, this, arguments); };
-    try { open(); } finally { if (own) hud.showNpcMenu = orig; else delete hud.showNpcMenu; }
+    const hud = g.hud; if (!hud || typeof hud.showNpcMenu !== "function" || !hooks.has("camp")) return null;
+    let got = null;
+    const handle = wrapMethod(hud, "showNpcMenu", (orig) => function (pos, items, cb) { got = { items, cb }; return Reflect.apply(orig, this, arguments); });
+    if (!handle) return null;
+    try { open(); } finally { handle.restore(); }
     return got;
   }
   function closeNpcMenu(g, menu) { try { g.hud?.hideNpcMenu?.(); menu?.cb?.(); } catch { /* 原版已關閉 */ } if (g.state === "town" && g.camp && !g.trade) g.state = "camp"; }
@@ -1326,13 +1319,13 @@
   function hookTown(g) {
     const hud = g.hud;
     if (!hud || typeof hud.showTown !== "function") return false;
+    if (!hooks.has("camp")) return false; // 第 4 組例外：營地整備開啟才包裝
     if (hud.__d2autobotTown === api) return true;
-    const own = Object.prototype.hasOwnProperty.call(hud, "showTown"), original = hud.showTown;
-    const wrapper = keepFunctionName(original, function (...args) { if (alive) trade = { gold: args[0], wares: args[1] || [], acts: args[2] || {}, gear: args[3] || null }; return Reflect.apply(original, this, args); });
-    hud.showTown = wrapper;
+    const handle = wrapMethod(hud, "showTown", (original) => function (...args) { if (alive) trade = { gold: args[0], wares: args[1] || [], acts: args[2] || {}, gear: args[3] || null }; return Reflect.apply(original, this, args); });
+    if (!handle) return false;
     hud.__d2autobotTown = api;
-    // 只有在目前仍是自己的包裝時才還原；若其他工具之後又包了一層，保留它（還原會把別人的包裝一起刪掉）。包裝本身只記錄狀態並原樣轉交，殘留無副作用。
-    restores.push(() => { if (hud.showTown !== wrapper) return; if (own) hud.showTown = original; else delete hud.showTown; delete hud.__d2autobotTown; });
+    // 只有在目前仍是自己的包裝時才還原；若其他工具之後又包了一層，保留它。包裝本身只記錄狀態並原樣轉交。
+    campHandles.push(handle, { restore() { if (hud.__d2autobotTown === api) delete hud.__d2autobotTown; return true; } });
     return true;
   }
   // 實測：倉庫（only=stash）以角色畫面顯示，leave 後畫面仍留著，需再用原版 closeCharacter 關閉。
@@ -1549,21 +1542,14 @@
   let levelCards = null, levelHandlers = null, levelOfferKind = null, levelRerollCount = 0, campMenu = null, statsAt = 0, redraft = null, redraftVisits = 0, treeReset = null, h4RetryAt = 0, h4Tries = 0, lockRerolls = 0;
   function hookBuild(g) {
     const hud = g.hud;
-    if (!hud || hud.__d2autobotBuild === api) return;
-    const wrapOwn = (object, name, factory) => {
-      if (typeof object?.[name] !== "function") return;
-      const own = Object.prototype.hasOwnProperty.call(object, name), original = object[name];
-      const wrapper = factory(original);
-      object[name] = wrapper;
-      // 同上：只還原仍是自己包裝的值，避免覆蓋其他工具後來安裝的包裝。
-      restores.push(() => { if (object[name] !== wrapper) return; if (own) object[name] = original; else delete object[name]; });
-    };
+    if (!hud || hud.__d2autobotBuild === api || !hooks.has("camp")) return; // 第 4 組例外：沒安裝時選卡改走按鍵、營地選單不讀取
+    const wrapOwn = (object, name, factory) => { const handle = wrapMethod(object, name, factory); if (handle) campHandles.push(handle); };
     // 實測原版 hud.showLevelUp(cards, build, handlers)：cards 為 {title, subtitle, text, rarity}；showCampMenu(npc, items) 為 {label, disabled, run}。
     wrapOwn(g, "offerLevelUp", (original) => function (...args) { if (alive) levelOfferKind = this.slotPicks?.[0] ?? null; return Reflect.apply(original, this, args); });
     wrapOwn(hud, "showLevelUp", (original) => function (...args) { if (alive) { levelCards = Array.isArray(args[0]) ? args[0] : null; levelHandlers = args[2] && typeof args[2] === "object" ? args[2] : null; } return Reflect.apply(original, this, args); });
     wrapOwn(g, "showCampMenu", (original) => function (...args) { if (alive) campMenu = { npc: args[0], items: Array.isArray(args[1]) ? args[1] : [] }; return Reflect.apply(original, this, args); });
     hud.__d2autobotBuild = api;
-    restores.push(() => { delete hud.__d2autobotBuild; });
+    campHandles.push({ restore() { if (hud.__d2autobotBuild === api) delete hud.__d2autobotBuild; return true; } });
   }
   const ladderOf = (g) => settings.build.ladder ? LADDER.classes[g?.kit?.id || g?.world?.player?.cls] : null;
   for (const c of Object.values(LADDER.classes)) {
@@ -1682,9 +1668,9 @@
     return { best, score, upgrade, evolution };
   }
   function availableLevelChoices(g) {
-    if (!nativeLevelChoices || !nativeWeapon || !g?.build?.kit || !g.world?.player || !Array.isArray(g.build.skills) || !g.build.passives || !g.build.banished?.has || levelHandlers?.redraft || (!g.build.skills.length || levelOfferKind === "first")) return null;
+    if (!hooks.has("levelPool") || !nativeLevelChoices || !nativeWeapon || !g?.build?.kit || !g.world?.player || !Array.isArray(g.build.skills) || !g.build.passives || !g.build.banished?.has || levelHandlers?.redraft || (!g.build.skills.length || levelOfferKind === "first")) return null;
     // 原版產生器在抽樣前排序可用候選，短暫擷取排序輸入；同步執行並立即還原，不修改角色或消耗重抽。
-    const originalSort = Array.prototype.sort, originalPush = Array.prototype.push, pools = [], replacements = [];
+    const originalSort = Array.prototype.sort, originalPush = Array.prototype.push, pools = [], replacements = []; // 第 3 組例外：同步暫改、finally 立即還原原參照
     try {
       // 20261102.1 的原版先產生所有合法替換技能，再隨機挑一個加入候選池。
       Array.prototype.push = keepFunctionName(originalPush, function (...items) {
@@ -1747,7 +1733,7 @@
     } catch { return false; }
     if (!code) return false;
     const key = /^Key[A-Z]$/.test(code) ? code.slice(3).toLowerCase() : /^Digit[0-9]$/.test(code) ? code.slice(5) : /^Numpad[0-9]$/.test(code) ? code.slice(6) : code;
-    keyPulse(code, key); return true;
+    keyPulse(code); return true;
   }
   function triggerCardPick(index) {
     if (typeof levelHandlers?.pick === "function" && typeof game?.hud?.closeLevelUp === "function") {
@@ -1783,7 +1769,8 @@
     // 依使用者要求：任務獎品要會使用。原版 useQuest 依種類分流：可直接使用的（+1 全技能卷軸等）當場生效；
     // 依使用者要求：交付物品走原版任務流程；其他獎品在角色畫面使用，失敗五分鐘內不重試。
     const quest = (g.inventoryOf?.(cls) || []).find((x) => x?.type === "quest" && !["hcx", "bks", "bkd", "hdm"].includes(x.base) && now - (questTried.get(x) ?? -Infinity) > 300000);
-    if (quest && typeof g.useQuest === "function" && typeof g.openCharacter === "function" && g.world?.player?.cls === cls) {
+    // 暫時停用（去掛接）：此流程需暫時包裝 hud.chooseTree，不在使用者核可的四組例外內；改由玩家手動使用任務獎品。
+    if (QUEST_PRIZE_HOOK && quest && typeof g.useQuest === "function" && typeof g.openCharacter === "function" && g.world?.player?.cls === cls) {
       const hud = g.hud, previous = g.state, original = hud?.chooseTree, own = Object.prototype.hasOwnProperty.call(hud || {}, "chooseTree");
       if (!hud || typeof hud.closeCharacter !== "function" || typeof original !== "function") return;
       questTried.set(quest, now);
@@ -2069,7 +2056,7 @@
     if (now - clearAt >= settings.terror.postClearWaitSec * 1000) fire(advance(g), "推進關卡");
     return true;
   }
-  function blocked() { return (!settings.enabled && !settings.progressEnabled) || document.hidden || !panel.hidden || window.__d2editIsOpen?.() || performance.now() < manualUntil || paused(); }
+  function blocked() { return (!settings.enabled && !settings.progressEnabled) || document.hidden || !panel.hidden || window.__d2helperPaused?.() || performance.now() < manualUntil || paused(); }
   let goldOverride = null;
   function restoreAllSkills() {
     const o = allSkillsOverride;
@@ -2172,7 +2159,7 @@
     xpWrap = null;
   }
   function applyXpWrap(g) {
-    const on = settings.cheat?.enabled && settings.cheat.maxXp;
+    const on = settings.cheat?.enabled && settings.cheat.maxXp && hooks.has("xp");
     if (xpWrap && (xpWrap.owner !== g || g.gainXp !== xpWrap.wrapped)) xpWrap = null; // 新的一局或已被其他程式改寫：舊紀錄作廢，不覆蓋
     if (!on) { restoreXpWrap(); return; }
     if (xpWrap || typeof g.gainXp !== "function") return;
@@ -2231,8 +2218,11 @@
   const uberGuardStats = { tracked: 0, actClearedSeen: 0, suppressed: 0, lastPending: null };
   window.__d2uberGuard = uberGuardStats;
   const pendingOf = (w) => { let list = uberPendingBy.get(w); if (!list) { list = []; uberPendingBy.set(w, list); } return list; };
+  const QUEST_PRIZE_HOOK = false, UBER_EVENT_HOOK = false; // 未核可的掛接：預設停用，列入交接報告
   const guardedEvents = new WeakSet();
+  // 暫時停用（去掛接）：原本在 world.events.push 上攔截 actCleared，不在使用者核可的四組例外內；召喚輪序後關卡會依原版流程結束。
   function guardActCleared(w) {
+    if (!UBER_EVENT_HOOK) return;
     const events = w?.events;
     if (!Array.isArray(events) || guardedEvents.has(events)) return;
     guardedEvents.add(events);
@@ -2315,7 +2305,7 @@
       if (r && typeof r === "object" && virtualEssenceOn()) r.essences = () => 99;
       return r;
     };
-    virtualEss.restore = () => { if (g.forgeTry !== origTry) g.forgeTry = origTry; if (origActions && g.forgeActions !== origActions) g.forgeActions = origActions; };
+    virtualEss.restore = () => { if (g.forgeTry !== origTry) g.forgeTry = origTry; if (origActions && g.forgeActions !== origActions) g.forgeActions = origActions; virtualEss.patched.delete(g); virtualEss.restore = null; };
   }
   function applyCheats(g) {
     if (!g || !settings.cheat?.enabled) { cleanupVirtualEssence(g); restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); return; }
@@ -2323,7 +2313,7 @@
     // 燃燒的恐懼精華：預設走「虛擬精華」（不產生實體物品，見 installVirtualForgeEssence）；實體寫入保留為備援，把 PHYSICAL_FORGE_ESSENCE 改 true 即啟用。
     // 拉蘇克精華仍為實體物品（遊戲內沒有找到可攔截的消耗點）。線上存檔模式下兩項皆停用，不注入虛擬或實體精華。
     cleanupVirtualEssence(g);
-    if (!isOnline && settings.cheat.forgeMax && !PHYSICAL_FORGE_ESSENCE) installVirtualForgeEssence(g);
+    if (!isOnline && settings.cheat.forgeMax && !PHYSICAL_FORGE_ESSENCE && hooks.has("forgeEssence")) installVirtualForgeEssence(g);
     // 補充精華到目前角色的個人倉庫；關閉後保留已寫入的物品。遊戲鍛造會合併計算背包與倉庫的精華。
     // 遊戲的精華格式：type 為 "essence"、base 為名稱，數量存在 count（單疊上限 99）。
     const essenceCheats = isOnline ? [] : [["forgeMax", "Burning Essence of Terror"], ["larzukMax", "Larzuk's Essence"]];
@@ -2363,8 +2353,8 @@
 
     // 1. 無敵：攔截所有生命值下降（見 lifeGuard）；關閉時還原為一般數值。
     const p0 = g.world?.player;
-    if (invinciblePlayer && (invinciblePlayer !== p0 || !settings.cheat.invincible)) restoreInvincible();
-    if (settings.cheat.invincible) {
+    if (invinciblePlayer && (invinciblePlayer !== p0 || !settings.cheat.invincible || !hooks.has("invincible"))) restoreInvincible();
+    if (settings.cheat.invincible && hooks.has("invincible")) {
       const p = p0;
       if (p) {
         if ((!invinciblePlayer || invinciblePlayer === p) && lifeGuard(p, true)) {
@@ -2499,7 +2489,7 @@
   }
   // 原版選卡畫面可能讓遊戲迴圈完全停住，恢復邏輯也須從獨立計時器執行。
   function recoverOrphanLevelUp(g) {
-    if (settings.progressEnabled && panel.hidden && visible(document.getElementById("level-up")) && ["playing", "camp", "town"].includes(g?.state) && !document.body.classList.contains("frontend-open") && !window.__d2editIsOpen?.() && typeof g.hud?.closeLevelUp === "function") {
+    if (settings.progressEnabled && panel.hidden && visible(document.getElementById("level-up")) && ["playing", "camp", "town"].includes(g?.state) && !document.body.classList.contains("frontend-open") && !window.__d2helperPaused?.() && typeof g.hud?.closeLevelUp === "function") {
       g.hud.closeLevelUp(); lastAction = "關閉已完成選卡的殘留畫面";
     }
   }
@@ -2507,10 +2497,42 @@
   let tickerRetryAt = -Infinity;
   function recoverStalledTicker(g, now) {
     const ticker = g?.app?.ticker, gl = g?.app?.renderer?.gl;
-    if (!gameplayCompatible || !settings.progressEnabled || !panel.hidden || document.hidden || g?.state !== "playing" || visible(document.getElementById("level-up")) || document.body.classList.contains("frontend-open") || window.__d2editIsOpen?.() || !ticker?.started || typeof ticker.stop !== "function" || typeof ticker.start !== "function" || !finite(ticker.lastTime) || now - ticker.lastTime < 15000 || now - tickerRetryAt < 60000 || typeof gl?.isContextLost !== "function" || gl.isContextLost()) return;
+    if (!gameplayCompatible || !settings.progressEnabled || !panel.hidden || document.hidden || g?.state !== "playing" || visible(document.getElementById("level-up")) || document.body.classList.contains("frontend-open") || window.__d2helperPaused?.() || !ticker?.started || typeof ticker.stop !== "function" || typeof ticker.start !== "function" || !finite(ticker.lastTime) || now - ticker.lastTime < 15000 || now - tickerRetryAt < 60000 || typeof gl?.isContextLost !== "function" || gl.isContextLost()) return;
     tickerRetryAt = now; ticker.stop(); ticker.start(); lastAction = "恢復停滯的畫面計時器";
   }
+  // ── 例外掛接登錄（第 1～4 組）。install／uninstall 只負責「允許＋還原」；實際寫入仍在各功能內，且都以 hooks.has(name) 為前提。
+  hooks.define("invincible", { install: () => true, uninstall: () => { restoreInvincible(); return !invinciblePlayer; } }); // 第 1 組：p.life 存取器
+  let stageHandle = null;
+  hooks.define("stageTime", { // 第 1 組：停止關卡時間——原版 tick 結束後再對齊 actStart（波次邏輯會在 tick 中改寫它）
+    install: () => {
+      const proto = game ? Object.getPrototypeOf(game) : null;
+      stageHandle = wrapMethod(proto, "tick", (original) => function (...args) { const out = Reflect.apply(original, this, args); if (alive && settings.cheat?.enabled && settings.cheat.pauseStageTime && this.world && finite(this.world.time) && finite(this.world.actStart)) this.world.actStart = this.world.time; return out; });
+      return !!stageHandle;
+    },
+    uninstall: () => { const ok = stageHandle?.restore() ?? true; if (ok) stageHandle = null; return ok; },
+  });
+  hooks.define("xp", { install: () => true, uninstall: () => { restoreXpWrap(); return !xpWrap; } }); // 第 2 組：gainXp 經驗倍率
+  hooks.define("forgeEssence", { install: () => true, uninstall: () => { virtualEss.restore?.(); cleanupVirtualEssence(game); return !virtualEss.restore; } }); // 第 2 組：虛擬淬鍊精華
+  hooks.define("levelPool", { install: () => true, uninstall: () => true }); // 第 3 組：選卡候選池預判（Array.prototype.sort/push 只在預判呼叫期間暫改）
+  hooks.define("camp", { // 第 4 組：hud.showNpcMenu／showTown、offerLevelUp／showLevelUp／showCampMenu
+    install: () => true,
+    uninstall: () => { let ok = true; for (const h of campHandles.splice(0).reverse()) ok = (h.restore() !== false) && ok; return ok; },
+  });
+  // 依設定同步安裝狀態：開關開啟才裝，關閉就還原；預設（全部關閉）不包裝任何官方函式。
+  function syncHooks() {
+    const c = settings.cheat, cheatOn = !!c?.enabled, online = onlineSave();
+    const want = {
+      invincible: cheatOn && !!c.invincible,
+      stageTime: cheatOn && !!c.pauseStageTime,
+      xp: cheatOn && !!c.maxXp,
+      forgeEssence: cheatOn && !!c.forgeMax && !online && !PHYSICAL_FORGE_ESSENCE,
+      levelPool: !!settings.progressEnabled && !!settings.build?.autoReroll,
+      camp: !!settings.progressEnabled,
+    };
+    for (const name of Object.keys(want)) { if (want[name]) { if (!hooks.has(name) && gameplayCompatible) hooks.install(name); } else if (hooks.has(name)) hooks.uninstall(name); }
+  }
   function step(g, now) {
+    syncHooks();
     applyCheats(g);
     autoSummonClone(g);
     checkRetreat(now);
@@ -2593,10 +2615,15 @@
     try { step(g, now); errors = 0; }
     catch (err) { release(); if (++errors >= 3) stop("連續執行錯誤，已停機：" + String(err.message || err)); }
   }
-  function wrap(object, name, factory) {
-    const original = object[name], wrapped = factory(original); object[name] = wrapped;
-    restores.push(() => { if (object[name] === wrapped) object[name] = original; });
+  // 取得 game：只讀 window.__d2autobotGame（由 editor/game-link.js 的 exposeGame() 唯讀取得並設定，不包裝任何函式）。
+  const gameReady = (g) => g && typeof g.tick === "function" && typeof g.drinkFrom === "function";
+  function adoptGame() {
+    const g = window.__d2autobotGame;
+    if (!gameReady(g)) { if (game && !gameReady(game)) { game = null; gameplayCompatible = false; } if (!game) hookNote = "等待應用程式連線"; return false; }
+    if (game !== g || !gameplayCompatible) { game = g; gameplayCompatible = true; hookNote = "已連線原版 Game（唯讀，未包裝函式）"; }
+    return true;
   }
+  // 後備：以 import() 取得頁面已載入的 Game 模組（同一個模組實例），只用來載入技能表與選卡產生器；不再 wrap 任何函式，game 實例仍由 __d2autobotGame 提供。
   async function connect() {
     const base = new URL("/assets/", location.origin);
     const urls = [...performance.getEntriesByType("resource").map((e) => e.name), ...document.querySelectorAll("script[src],link[rel=modulepreload]")].map((e) => typeof e === "string" ? e : e.src || e.href);
@@ -2612,17 +2639,14 @@
       const module = await import(url); if (!alive) return;
       fire(loadSkillTables(url, source), "技能表");
       const proto = module.Game?.prototype;
-      if (typeof proto?.tick !== "function" || typeof proto.drinkFrom !== "function" || typeof proto.steer !== "function") continue;
-      // 遊戲的波次邏輯會在 tick 中以擊殺數改寫 actStart（world.actStart = time - ps(…)），所以時間暫停也要在原版 tick 結束後再對齊一次，否則在恐懼階會失效。
-      wrap(proto, "tick", (original) => function (...args) { if (alive) { game = this; guarded(this, performance.now()); } const out = Reflect.apply(original, this, args); if (alive && settings.cheat?.enabled && settings.cheat.pauseStageTime && this.world && Number.isFinite(this.world.time) && Number.isFinite(this.world.actStart)) this.world.actStart = this.world.time; return out; });
-      // 原版 steer 會為拾取目標重建 walkTarget，記住該參照才能在停止時完全放手。
-      wrap(proto, "steer", (original) => function (...args) { const result = Reflect.apply(original, this, args); if (alive && this === game && ownReach && this.world?.reaching === ownReach) ownWalk = this.walkTarget; return result; });
-      gameplayCompatible = true; hookUrl = url; hookNote = "已掛接原版 Game，等待下一幀"; fire(checkGameVersion(url), "版本檢查"); return;
+      if (typeof proto?.tick !== "function" || typeof proto.drinkFrom !== "function") continue;
+      hookUrl = url; adoptGame(); return;
     }
-    hookNote = "找不到可掛接的遊戲程式，請重新開啟遊戲";
-    fire(checkGameVersion(""), "版本檢查");
+    if (!game) hookNote = "等待應用程式連線";
   }
   let versionNotice = "", versionDismissed = false, checkedGameBuild = false;
+  // 桌面版 build 為 "2026.1105.3"，TESTED_GAME_BUILD 用 "20261105.3"：統一成後者。
+  function normalizeBuild(v) { const t = String(v || "").trim(), m = t.match(/^(\d{4})\.(\d{4})\.(\d+)$/); return m ? m[1] + m[2] + "." + m[3] : t; }
   function parseBuild(s) { return String(s || "").trim().split(".").map((n) => Number(n) || 0); }
   function isBuildNewer(latest, tested) {
     const p1 = parseBuild(latest), p2 = parseBuild(tested);
@@ -2644,8 +2668,11 @@
     } catch {}
     return "";
   }
+  let versionTries = 0;
   async function checkGameVersion(currentUrl) {
     if (checkedGameBuild) return;
+    // __d2gameBuild 由 editor/ 稍後設定：還沒有時最多等 10 次（每次由取得 game 的輪詢觸發），之後顯示未知。
+    if (!window.__d2gameBuild && ++versionTries < 10) return;
     checkedGameBuild = true;
     try {
       const gameJs = findGameScript(currentUrl);
@@ -2653,19 +2680,15 @@
       try { prev = JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch {}
       const prevJs = prev?.gameJs || "";
       const gameChanged = !!(gameJs && prevJs && gameJs !== prevJs);
+      // 版本來源：editor/ 以 CDP 設定 window.__d2gameBuild（字串或 {build,date}，例如 "2026.1105.3"）；沒有就顯示未知，不連任何網址。
       let latestBuild = "", latestDate = "";
-      const ctrl = new AbortController(), tid = setTimeout(() => ctrl.abort(), 5000);
       try {
-        let list = window.__d2changelogPromise ? await window.__d2changelogPromise : null;
-        if (!list) {
-          const res = await fetch("/changelog.json", { signal: ctrl.signal, cache: "no-cache" }).catch(() => fetch("https://d2survivors.lol/changelog.json", { signal: ctrl.signal, cache: "no-cache" }));
-          if (res && res.ok) list = await res.json();
-        }
-        const first = Array.isArray(list) ? list[0] : null;
-        if (first?.build) { latestBuild = String(first.build); latestDate = String(first.date || ""); }
-      } catch {} finally { clearTimeout(tid); }
-      const compareBuild = latestBuild || prev?.build || "";
-      const compareDate = latestDate || prev?.date || "";
+        const info = window.__d2gameBuild;
+        if (typeof info === "string") latestBuild = normalizeBuild(info);
+        else if (info && typeof info === "object") { latestBuild = normalizeBuild(info.build); latestDate = String(info.date || ""); }
+      } catch {}
+      const compareBuild = latestBuild || "";
+      const compareDate = latestDate || "";
       const isNewer = compareBuild ? isBuildNewer(compareBuild, TESTED_GAME_BUILD) : false;
       if (isNewer) {
         versionNotice = `遊戲已更新到 ${compareBuild}${compareDate ? `（${compareDate}）` : ""}，輔助器只驗證到 ${TESTED_GAME_BUILD}，請更新輔助器；部分功能可能失效${gameChanged ? "；遊戲程式已變更" : ""}`;
@@ -2840,11 +2863,21 @@
   const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
   const setDisplay = (el, show) => { const v = show ? "block" : "none"; if (el.style.display !== v) el.style.display = v; };
   let lastSaveMode = saveMode();
+  // 決策迴圈：不再掛在遊戲 tick 上，改由自己的 requestAnimationFrame 驅動；頁面隱藏（rAF 暫停）時由 setInterval 保底。
+  let rafId = 0, rafAt = 0, adoptAt = -Infinity;
+  function frame(now) {
+    if (!alive) return;
+    if (!game || !gameplayCompatible || now - adoptAt >= 1000) { adoptAt = now; if (adoptGame() && !checkedGameBuild) fire(checkGameVersion(hookUrl), "版本檢查"); }
+    guarded(game, now);
+  }
+  const loop = () => { rafId = 0; if (!alive) return; rafAt = performance.now(); frame(rafAt); if (alive) rafId = requestAnimationFrame(loop); };
+  rafId = requestAnimationFrame(loop);
+  const fallbackTimer = setInterval(() => { if (alive && (document.hidden || performance.now() - rafAt > 250)) frame(performance.now()); }, 100);
   const timer = setInterval(() => {
     if (!alive) return;
     checkRetreat(performance.now());
     if (gameplayCompatible) { recoverOrphanLevelUp(game); recoverStalledTicker(game, performance.now()); }
-    const editorOpen = !!window.__d2editIsOpen?.(), menuOpen = toolsMenuOpen();
+    const editorOpen = !!window.__d2helperPaused?.(), menuOpen = toolsMenuOpen();
     // 每 200 毫秒執行：只在內容不同時才寫入 DOM，避免無謂觸發語言模組的 MutationObserver 與重排。
     setText(launcher, "輔助");
     setText(stopButton, "停止自動戰鬥");
@@ -2856,17 +2889,19 @@
     // 依使用者要求：狀態列顯示目前自動戰鬥模式。
     setText(statusLine, ((settings.progressEnabled ? "【" + modeLabel() + "】" : "") + lastAction));
     if (!menuOpen || editorOpen) panel.hidden = true;
-    if (!game) guarded(null, performance.now());
     const curSaveMode = saveMode();
     if (curSaveMode !== lastSaveMode) { lastSaveMode = curSaveMode; refreshControls(); }
     if (panel.hidden) return;
     const s = readState(game);
-    setText(status, (["戰鬥輔助：" + (settings.enabled ? "啟用" : "關閉") + "／自動戰鬥：" + (settings.progressEnabled ? "啟用（" + modeLabel() + "）" : "關閉"), game ? questLine(game) : "", game ? "掛鉤：原版 Game／" + game.state : hookNote, s.hp ? `生命：${Math.ceil(s.hp.now)}／${Math.ceil(s.hp.max)}` : "生命：無法讀取", s.mp ? `魔力：${Math.ceil(s.mp.now)}／${Math.ceil(s.mp.max)}` : "魔力：未啟用或無法讀取", game?.kit?.id ? "職業：" + ({ amazon: "亞馬遜", assassin: "刺客", barbarian: "野蠻人", druid: "德魯伊", necromancer: "死靈法師", paladin: "聖騎士", sorceress: "法師" }[game.kit.id] || game.kit.id) + "（" + (isMelee() ? "近戰" : "遠程") + "）" : "", game?.world?.terror ? "恐怖層數：" + game.world.terror.tier : "", "最近動作：" + lastAction, storageNote].filter(Boolean).join("\n")));
+    setText(status, (["戰鬥輔助：" + (settings.enabled ? "啟用" : "關閉") + "／自動戰鬥：" + (settings.progressEnabled ? "啟用（" + modeLabel() + "）" : "關閉"), game ? questLine(game) : "", game ? "連線：原版 Game（唯讀）／" + game.state + (inputKit()?.diagnostics().trusted === false ? "／輸入：非受信任事件" : "") : hookNote, s.hp ? `生命：${Math.ceil(s.hp.now)}／${Math.ceil(s.hp.max)}` : "生命：無法讀取", s.mp ? `魔力：${Math.ceil(s.mp.now)}／${Math.ceil(s.mp.max)}` : "魔力：未啟用或無法讀取", game?.kit?.id ? "職業：" + ({ amazon: "亞馬遜", assassin: "刺客", barbarian: "野蠻人", druid: "德魯伊", necromancer: "死靈法師", paladin: "聖騎士", sorceress: "法師" }[game.kit.id] || game.kit.id) + "（" + (isMelee() ? "近戰" : "遠程") + "）" : "", game?.world?.terror ? "恐怖層數：" + game.world.terror.tier : "", "最近動作：" + lastAction, storageNote].filter(Boolean).join("\n")));
   }, 200);
   const api = {
-    destroy() { if (!alive) return; alive = false; virtualEss.restore?.(); cleanupVirtualEssence(game); restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); setPickupRadius(pickupOwner, false); release(); abort.abort(); clearInterval(timer); for (const restore of restores.reverse()) restore(); launcher.remove(); stopButton.remove(); statusLine.remove(); host.remove(); if (window.__d2autobot === api) delete window.__d2autobot; }, stop,
-    diagnostics: () => ({ hellClears, hellClearedSave: (() => { try { return savedHellClear(game); } catch { return null; } })(), h4: (() => { try { return h4Info(game); } catch { return null; } })(), hookUrl, hookNote, connected: !!game, state: game?.state ?? null, lastAction, storageNote, quests: (() => { try { const q = questSnapshot(game); return { line: questLine(game), done: q.done, total: q.total, pending: q.pending, cain: q.cain }; } catch { return null; } })(), gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() }),
+    destroy() { if (!alive) return; alive = false; virtualEss.restore?.(); cleanupVirtualEssence(game); restoreGoldRate(); restoreAllSkills(); restoreAllCheats(); setPickupRadius(pickupOwner, false); release(); abort.abort(); clearInterval(timer); clearInterval(fallbackTimer); if (rafId) cancelAnimationFrame(rafId); rafId = 0; inputKit()?.releaseAll(); hooks.uninstallAll(); for (const restore of restores.reverse()) restore(); launcher.remove(); stopButton.remove(); statusLine.remove(); host.remove(); if (window.__d2autobot === api) delete window.__d2autobot; }, stop,
+    diagnostics: () => ({ hellClears, hellClearedSave: (() => { try { return savedHellClear(game); } catch { return null; } })(), h4: (() => { try { return h4Info(game); } catch { return null; } })(), hookUrl, hookNote, connected: !!game, input: inputKit()?.diagnostics?.() ?? { trusted: false, note: "未載入 input.js" }, hooks: hooks.installed(), gameBuildText: (() => { const b = window.__d2gameBuild; return typeof b === "string" ? b : b?.build || "未知"; })(), state: game?.state ?? null, lastAction, storageNote, quests: (() => { try { const q = questSnapshot(game); return { line: questLine(game), done: q.done, total: q.total, pending: q.pending, cain: q.cain }; } catch { return null; } })(), gameBuild: (() => { try { return JSON.parse(localStorage.getItem(BUILD_KEY) || "null"); } catch { return null; } })() }),
     get game() { return game; },
+    // 測試／診斷：立即執行一次決策步驟（等同 rAF 迴圈的一格）。
+    pump(now = performance.now()) { frame(now); },
+    hooks,
     saveMode,
     onlineSave,
     virtualEssence: virtualEssenceOn,
@@ -2875,5 +2910,6 @@
     gearTools: { bestMercGear, mercItemValue, equipMerc, bestGear, gearScore, gearNumbers, charmValue, gearFates, sellList },
   };
   window.__d2autobot = api;
-  connect().catch((err) => { if (alive) hookNote = "無法掛接遊戲程式：" + String(err.message || err); fire(checkGameVersion(""), "版本檢查"); });
+  adoptGame();
+  connect().catch((err) => { if (alive) hookNote = "無法載入遊戲模組（技能表）：" + String(err.message || err); });
 })();

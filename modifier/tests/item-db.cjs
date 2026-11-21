@@ -24,7 +24,7 @@ function stubBrowser() {
   g.document ??= new Proxy(function () {}, h);
   if (!g.navigator?.language) Object.defineProperty(g, "navigator", { value: { userAgent: "node", language: "zh-TW", languages: ["zh-TW"], platform: "Win32", maxTouchPoints: 0 }, configurable: true });
   g.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
-  g.location ??= { href: "https://d2survivors.lol/play/", search: "", origin: "https://d2survivors.lol" };
+  g.location ??= { href: "app://game/play/index.html", search: "", origin: "app://game" };
   for (const n of ["HTMLElement", "HTMLCanvasElement", "Image", "Worker", "OffscreenCanvas", "WebGLRenderingContext", "WebGL2RenderingContext", "ImageBitmap"]) g[n] ??= class {};
   g.requestAnimationFrame ??= () => 0; g.devicePixelRatio ??= 1;
 }
@@ -33,15 +33,10 @@ function stubBrowser() {
 // 快取檔名含雜湊，資料更新就會重抓。
 async function itemstats() {
   if (process.env.D2_ITEMSTATS) return fs.readFileSync(process.env.D2_ITEMSTATS, "utf8");
-  const page = await (await fetch("https://d2survivors.lol/play/", { cache: "no-store" })).text();
-  const m = page.match(/<script[^>]*id="d2-files"[^>]*>([\s\S]*?)<\/script>/);
-  const h = m ? JSON.parse(m[1])?.hashes?.[""] : null;
-  if (!h) throw new Error("讀不到遊戲頁面的 d2-files 雜湊");
-  const own = path.join(BUNDLES, build, `itemstats-${h}.json`);
-  if (fs.existsSync(own)) return fs.readFileSync(own, "utf8");
-  const r = await fetch(`https://d2survivors.lol/d2/itemstats.json?h=${h}`);
-  if (!r.ok) throw new Error("讀不到官方 itemstats.json：" + r.status);
-  const t = await r.text(); fs.writeFileSync(own, t); return t;
+  // 桌面版：物品資料由遊戲從玩家自己的 D2 安裝解出，放在 %APPDATA%D2 Survivorsd2itemstats.json
+  const local = path.join(process.env.APPDATA || "", "D2 Survivors", "d2", "itemstats.json");
+  if (!fs.existsSync(local)) throw new Error("找不到本機 itemstats.json：" + local + "（請先啟動一次桌面版遊戲，或設定 D2_ITEMSTATS）");
+  return fs.readFileSync(local, "utf8");
 }
 
 // 讀快照的物品名稱清單（不執行程式，只看 unique/set 定義），用來列出新舊版增減

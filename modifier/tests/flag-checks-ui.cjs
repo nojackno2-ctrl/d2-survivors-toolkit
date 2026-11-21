@@ -78,11 +78,10 @@ app.whenReady().then(async () => {
   // 6. 切槽競態、識別碼跳脫，以及尺寸未知時禁止重排
   const safety = await win.webContents.executeJavaScript(`(async () => {
     const originalLoad = window.api.load, originalSave = window.api.save, originalStatus = window.api.guardStatus;
-    window.api.guardStatus = async () => ({ saveMode: 'local' });
-    window.api.saveMode = async () => 'local'; currentSaveMode = 'local';
+    window.api.guardStatus = async () => ({ saveMode: 'local', noUpload: true });
     const pending = {}, writes = [];
     window.api.load = mode => new Promise(resolve => { pending[mode] = resolve; });
-    window.api.save = async (mode, data) => { writes.push({ mode, gold: data.gold }); return { ok: true }; };
+    window.api.save = async (mode, data) => { writes.push({ mode, gold: data.gold, off: data?.leaderboard?.off }); return { ok: true }; };
     document.querySelector('#mode').value = 'hardcore'; const older = load();
     const disabled = document.querySelector('#fixAll').disabled && document.querySelector('#scan').disabled && save === null;
     await new Promise(resolve => setTimeout(resolve, 30));
@@ -99,12 +98,10 @@ app.whenReady().then(async () => {
     A = null; const before = JSON.stringify(save.stashTabs); const row = detectCurrent().find(x => /倉庫物品重疊檢查未驗證/.test(x.text));
     await fixAll();
     const unchanged = before === JSON.stringify(save.stashTabs);
-    window.api.saveMode = async () => { throw new Error('失敗'); };
-    const beforeWrites = writes.length; await saveAfterFix('測試');
-    const failedModeBlocked = writes.length === beforeWrites && document.querySelector('#fixAll').disabled && !document.querySelector('#onlineNotice').hidden;
+    const savedOff = writes[0]?.off === true;
     window.api.load = originalLoad; window.api.save = originalSave; window.api.guardStatus = originalStatus;
     A = { uniques: {}, sets: {}, bases: {}, quest: {}, runes: {}, gems: {} };
-    return { disabled, race, rejected, unknown: !!row?.unknown, hasFix: !!row?.fix, unchanged, failedModeBlocked };
+    return { disabled, race, rejected, unknown: !!row?.unknown, hasFix: !!row?.fix, unchanged, savedOff };
   })()`);
   assert.equal(safety.disabled, true);
   assert.deepEqual([safety.race.mode, safety.race.gold, safety.race.images], ['softcore', 12, 0]);
@@ -113,62 +110,34 @@ app.whenReady().then(async () => {
   assert.equal(safety.unknown, true);
   assert.equal(safety.hasFix, false);
   assert.equal(safety.unchanged, true);
-  assert.equal(safety.failedModeBlocked, true);
+  assert.equal(safety.savedOff, true, '寫入時須維持 leaderboard.off = true');
 
-  // 舊後端缺少模式查詢時可寫入；線上模式、錯誤及逾時必須拒絕。
-  const guardModes = await win.webContents.executeJavaScript(`(async () => {
-    let writes = 0; window.api.save = async () => { writes++; return { ok: true }; };
-    delete window.api.saveMode; delete window.api.guardStatus;
-    await refreshGuardStatus(); const legacyUi = currentSaveMode;
-    await saveAfterFix('測試'); const legacy = writes;
-    window.api.saveMode = async () => 'online'; await saveAfterFix('測試'); const online = writes;
-    window.api.saveMode = async () => { throw new Error('失敗'); }; await saveAfterFix('測試');
-    const error = { writes, text: document.querySelector('#status').textContent };
-    window.api.saveMode = () => new Promise(() => {}); await saveAfterFix('測試');
-    const timeout = { writes, text: document.querySelector('#status').textContent };
-    window.api.saveMode = async () => ({ error: '不支援的操作：saveMode' }); await saveAfterFix('測試');
-    return { legacyUi, legacy, online, error, timeout, unsupported: writes };
-  })()`);
-  assert.equal(guardModes.legacyUi, 'local');
-  assert.equal(guardModes.legacy, 1);
-  assert.equal(guardModes.online, 1);
-  assert.deepEqual(guardModes.error, { writes: 1, text: '無法確認存檔模式，請重試' });
-  assert.deepEqual(guardModes.timeout, { writes: 1, text: '無法確認存檔模式，請重試' });
-  assert.equal(guardModes.unsupported, 2);
-
-  // 7. guard.html 防護狀態、單機／線上模式切換、一鍵修正寫回與遊戲診斷解析
+  // 7. guard.html 防護狀態、一鍵修正寫回與遊戲診斷解析
   const guardUi = await win.webContents.executeJavaScript(`(async () => {
-    let savedData = null, closedCount = 0, modeState = 'online', modeSource = 'override';
+    let savedData = null, closedCount = 0;
     window.api.guardStatus = async () => ({
       version: '1.0.13',
-      saveMode: modeState,
-      saveModeSource: modeSource,
+      saveMode: 'local',
+      saveModeSource: 'default',
       noUpload: true,
       leaderboardOff: true,
       queuePresent: false,
       blockedUploads: 2,
-      replacedNatives: ['Storage.setItem'],
+      replacedNatives: [],
       d2zh: false,
       webdriver: false,
       restrictedParams: ['seed'],
       seals: { softcore: 'sealed', hardcore: 'sealed' }
     });
-    window.api.saveMode = async () => modeState;
-    window.api.setSaveMode = async (m) => { modeState = m || 'local'; modeSource = m ? 'override' : 'detected'; return { saveMode: modeState, saveModeSource: modeSource }; };
-    window.api.save = async (mode, s) => { savedData = { mode, gold: s.gold }; return { ok: true }; };
+    window.api.save = async (mode, s) => { savedData = { mode, gold: s.gold, off: s?.leaderboard?.off }; return { ok: true }; };
     window.api.close = async () => { closedCount++; return { ok: true }; };
 
     save.gold = 2e10;
     await refreshGuardStatus();
     await renderGuard();
-    const onlineBannerHidden = document.querySelector('#onlineNotice').hidden;
-    const onlineBannerText = document.querySelector('#onlineNotice').textContent;
-    const fixDisabledOnline = document.querySelector('#fixAll').disabled;
+    const fixDisabled = document.querySelector('#fixAll').disabled;
     const guardStatusHtml = document.querySelector('#guardStatusBody').textContent;
 
-    await switchSaveMode('local');
-    const localBannerHidden = document.querySelector('#onlineNotice').hidden;
-    const fixDisabledLocal = document.querySelector('#fixAll').disabled;
     await fixAll();
     document.querySelector('#diagIn').value = 'page: replaced Storage.setItem\\nleaderboard queue: 1 waiting, 1 refused (gear)';
     renderDiag();
@@ -176,60 +145,36 @@ app.whenReady().then(async () => {
     const diagRefCount = document.querySelectorAll('#diagRef tr').length;
     document.querySelector('#closeBtn').click();
 
-    return { onlineBannerHidden, onlineBannerText, fixDisabledOnline, guardStatusHtml, localBannerHidden, fixDisabledLocal, savedData, diagOutText, diagRefCount, closedCount };
+    return { fixDisabled, guardStatusHtml, savedData, diagOutText, diagRefCount, closedCount };
   })()`);
-  assert.equal(guardUi.onlineBannerHidden, false, '線上模式應顯示提示');
-  assert.match(guardUi.onlineBannerText, /線上存檔：只檢查、不寫入/);
-  assert.equal(guardUi.fixDisabledOnline, true, '線上模式應停用一鍵修正');
-  assert.match(guardUi.guardStatusHtml, /Storage\.setItem/);
+  assert.equal(guardUi.fixDisabled, false, '桌面模式應啟用一鍵修正');
   assert.match(guardUi.guardStatusHtml, /seed/);
-  assert.equal(guardUi.localBannerHidden, true, '單機模式應隱藏線上提示');
-  assert.equal(guardUi.fixDisabledLocal, false, '單機模式應啟用一鍵修正');
-  assert.deepEqual(guardUi.savedData, { mode: 'softcore', gold: 1e10 }, '單機模式一鍵修正後應透過 save 寫回');
+  assert.deepEqual(guardUi.savedData, { mode: 'softcore', gold: 1e10, off: true }, '一鍵修正後應透過 save 寫回並設 off: true');
   assert.match(guardUi.diagOutText, /leaderboard queue/);
   assert.ok(guardUi.diagRefCount >= 20, '應渲染診斷欄位對照表');
   assert.equal(guardUi.closedCount, 1, '右上關閉應呼叫 close()');
 
-  // 7. editor.html：存檔檢查分頁改為遷移說明；線上模式顯示頁首橫幅並停用寫入按鈕
+  // 8. editor.html：存檔檢查分頁改為遷移說明；寫入存檔維持 leaderboard.off = true
   await win.loadFile(path.join(__dirname, '..', 'editor.html'));
   const editorUi = await win.webContents.executeJavaScript(`(async () => {
-    window.api.saveMode = async () => 'online';
-    await checkSaveMode();
+    await saveCheckPromise;
     showPage('guard');
     return {
       guardText: document.querySelector('#guard').textContent.trim(),
-      bannerHidden: document.querySelector('#onlineModeBanner').hidden,
-      bannerText: document.querySelector('#onlineModeBanner').textContent.trim(),
       writeDisabled: document.querySelector('#write').disabled
     };
   })()`);
   assert.match(editorUi.guardText, /存檔檢查已移到工具包選單的「存檔檢查與防護」/);
-  assert.equal(editorUi.bannerHidden, false, '修改器線上模式應顯示頁首橫幅');
-  assert.equal(editorUi.bannerText, '線上存檔模式：修改器只修改單機存檔，目前僅供檢視');
-  assert.equal(editorUi.writeDisabled, true, '修改器線上模式應停用寫入按鈕');
+  assert.equal(editorUi.writeDisabled, false, '桌面版修改器載入模組後應可寫入');
 
-  const editorModes = await win.webContents.executeJavaScript(`(async () => {
-    await saveCheckPromise; window.confirm = () => true;
-    let writes = 0; window.api.save = async () => { writes++; return { ok: true }; };
-    delete window.api.saveMode; await write(); const legacy = writes;
-    window.api.saveMode = async () => 'online'; await write(); const online = writes;
-    window.api.saveMode = async () => { throw new Error('失敗'); }; await write();
-    const error = { writes, text: document.querySelector('#status').textContent };
-    window.api.saveMode = () => new Promise(() => {}); await write();
-    const timeout = { writes, text: document.querySelector('#status').textContent };
-    window.api.saveMode = async () => ({ error: '不支援的操作：saveMode' }); await write();
-    // 回歸：確認視窗關閉後的 focus 事件與寫入前檢查並行，不可誤報「無法確認存檔模式」
-    window.api.saveMode = async () => { await new Promise(r => setTimeout(r, 30)); return 'local'; };
-    const before = writes; window.confirm = () => { setTimeout(() => window.dispatchEvent(new Event('focus')), 0); return true; };
-    await write(); const raced = writes - before;
-    return { legacy, online, error, timeout, unsupported: writes - raced, raced };
+  const editorWrite = await win.webContents.executeJavaScript(`(async () => {
+    window.confirm = () => true;
+    let written = null;
+    window.api.save = async (mode, s) => { written = { mode, off: s?.leaderboard?.off }; return { ok: true }; };
+    await write();
+    return written;
   })()`);
-  assert.equal(editorModes.legacy, 1);
-  assert.equal(editorModes.online, 1);
-  assert.deepEqual(editorModes.error, { writes: 1, text: '無法確認存檔模式，請重試' });
-  assert.deepEqual(editorModes.timeout, { writes: 1, text: '無法確認存檔模式，請重試' });
-  assert.equal(editorModes.unsupported, 2);
-  assert.equal(editorModes.raced, 1, 'focus 與寫入前檢查並行時仍應寫入');
+  assert.equal(editorWrite?.off, true, '修改器寫入存檔須強制 leaderboard.off = true');
 
   console.log('存檔檢查（旗標／模式）介面測試通過'); clearTimeout(watchdog); app.exit(0);
 }).catch(e => { console.error(e.stack); clearTimeout(watchdog); app.exit(1); });

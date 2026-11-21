@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>遊戲控制台</title>
+<style>
+  :root { --bg:#14110d; --panel:#1f1a14; --line:#3a3026; --text:#e8dcc4; --dim:#9c8f78; --gold:#d4a84a; --bad:#e06050; --ok:#7fbf6a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.6 "Microsoft JhengHei", system-ui, sans-serif; padding:16px 20px; overflow:auto; }
+  h1 { font-size:18px; margin:0 0 12px; color:var(--gold); }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px 16px; margin-bottom:14px; max-width:860px; }
+  h2 { font-size:14px; margin:0 0 8px; color:var(--gold); }
+  .grid { display:grid; grid-template-columns:150px 1fr; gap:4px 12px; margin-bottom:10px; }
+  .k { color:var(--dim); }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .dim { color:var(--dim); }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  button { background:#2a2219; color:var(--text); border:1px solid var(--line); border-radius:4px; padding:6px 14px; font:inherit; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--gold); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:#5b4520; border-color:var(--gold); color:#fff3d6; }
+  p { margin:6px 0; } .note { color:var(--dim); font-size:12px; }
+  #msg { min-height:20px; max-width:860px; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<h1>D2倖存者　遊戲控制台</h1>
+
+<section>
+  <h2>遊戲狀態</h2>
+  <div class="grid">
+    <span class="k">遊戲</span><span id="sRun">—</span>
+    <span class="k">除錯連線</span><span id="sAtt">—</span>
+    <span class="k">遊戲版本（build）</span><span id="sBuild">—</span>
+    <span class="k">排行榜攔截計數</span><span id="sHits">—</span>
+    <span class="k">輔助器</span><span id="sHelper">—</span>
+  </div>
+  <div class="bar">
+    <button id="bLaunchHelper" class="primary">啟動遊戲（含輔助器）</button>
+    <button id="bLaunch">只啟動遊戲</button>
+    <button id="bStop">停止輔助器</button>
+  </div>
+  <p class="note">請一律從這裡啟動遊戲：工具包會把遊戲的排行榜／回報上傳導向本機空伺服器並丟棄（單機爽玩、不上榜，無關閉選項）。直接點官方捷徑啟動則沒有這層封鎖，也無法連線輔助器。</p>
+</section>
+
+<section>
+  <h2>繁體中文化</h2>
+  <div class="grid">
+    <span class="k">狀態</span><span id="lStatus">—</span>
+  </div>
+  <div class="bar">
+    <button id="bApply" class="primary">套用繁體中文</button>
+    <button id="bRestore">還原原版</button>
+  </div>
+  <p>套用會修改遊戲的 app.asar（需管理員權限），可隨時還原；遊戲更新後須重新套用。</p>
+  <p class="bad">asar 已修改，遊戲會把成績標記為 patched，但排行榜上傳已被工具包封鎖。</p>
+  <p class="note">套用或還原前請先關閉遊戲；操作時會跳出 Windows 管理員授權視窗。</p>
+</section>
+
+<section>
+  <h2>其他工具</h2>
+  <div class="bar">
+    <button id="bEditor">前往存檔修改器</button>
+    <button id="bGuard">前往存檔檢查與防護</button>
+  </div>
+</section>
+
+<div id="msg"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const api = window.api;
+const msg = (t, bad) => { const el = $("msg"); el.textContent = t || ""; el.className = bad ? "bad" : "ok"; };
+const set = (id, text, cls) => { const el = $(id); el.textContent = text; el.className = cls || ""; };
+let busy = false;
+
+async function act(fn, okText) {
+  if (busy) return;
+  busy = true; refreshButtons();
+  msg("處理中…");
+  try {
+    const r = await fn();
+    if (r && r.error) msg(r.error, true);
+    else msg(typeof okText === "function" ? okText(r) : okText);
+  } catch (e) { msg(e.message, true); }
+  busy = false;
+  await refresh();
+}
+
+let last = { game: null, lang: null };
+function refreshButtons() {
+  const g = last.game || {}, l = last.lang || {};
+  $("bLaunchHelper").disabled = busy || !!g.running;
+  $("bLaunch").disabled = busy || !!g.running;
+  $("bStop").disabled = busy || !g.helper;
+  $("bApply").disabled = busy || !!g.running || l.status === "missing";
+  $("bRestore").disabled = busy || !!g.running || (l.status !== "patched" && l.status !== "updated");
+}
+
+async function refresh(withLang = true) {
+  try {
+    const g = await api.gameStatus();
+    last.game = g.error ? null : g;
+    if (g.error) { set("sRun", g.error, "bad"); }
+    else {
+      set("sRun", g.running ? "執行中" : "未執行", g.running ? "ok" : "dim");
+      set("sAtt", g.attached ? "已連線（埠 " + g.port + "）" : "未連線", g.attached ? "ok" : "dim");
+      set("sBuild", g.build || "（讀不到）");
+      set("sHits", String(g.stubHits) + (g.stubHits ? "（上傳已被丟棄）" : ""));
+      set("sHelper", g.helperInjected ? "已注入" : g.helper ? "注入中…" + (g.helperError ? "（" + g.helperError + "）" : "") : "未注入", g.helperInjected ? "ok" : "dim");
+    }
+  } catch (e) { set("sRun", e.message, "bad"); }
+  if (withLang) try {
+    const l = await api.langStatus();
+    last.lang = l.error ? null : l;
+    if (l.error) set("lStatus", l.error, "bad");
+    else {
+      const t = { original: "原版", patched: "中文版", updated: "遊戲已更新（中文化已被覆蓋，請重新套用）", missing: "找不到遊戲檔案" }[l.status] || l.label;
+      set("lStatus", t, l.status === "patched" ? "ok" : l.status === "updated" ? "bad" : "");
+    }
+  } catch (e) { set("lStatus", e.message, "bad"); }
+  refreshButtons();
+}
+
+$("bLaunchHelper").onclick = () => act(() => api.launchGame({ withHelper: true }), (r) => r.helper ? "遊戲已啟動，輔助器已注入。" : "遊戲已啟動，但輔助器未注入：" + (r.helperError || "未知原因"));
+$("bLaunch").onclick = () => act(() => api.launchGame({ withHelper: false }), "遊戲已啟動（未注入輔助器）。");
+$("bStop").onclick = () => act(() => api.stopHelper(), "輔助器已停止。");
+$("bApply").onclick = () => {
+  if (!confirm("套用繁體中文會修改遊戲的 app.asar（需管理員權限）。\n套用後遊戲會把成績標記為 patched（排行榜上傳已被封鎖）。\n要繼續嗎？")) return;
+  act(() => api.langApply(), (r) => "已套用繁體中文（替換 " + r.replacedCount + "/" + r.totalCount + " 筆）。" + (r.warning ? "\n" + r.warning : ""));
+};
+$("bRestore").onclick = () => act(() => api.langRestore(), (r) => (r.restored ? "已還原原版。" : "遊戲已被官方更新覆蓋，已略過放回舊備份並清除中文化記錄。") + (r.warning ? "\n" + r.warning : ""));
+$("bEditor").onclick = () => api.openPage("editor");
+$("bGuard").onclick = () => api.openPage("guard");
+
+refresh();
+setInterval(() => { if (!busy) refresh(false); }, 2000); // 中文化狀態要算 asar 雜湊，只在載入與操作後更新
+</script>
+</body>
+</html>

@@ -23,6 +23,14 @@ contextBridge.exposeInMainWorld("api", {
   setSaveMode: call("setSaveMode"),
   close: call("close"),
   openGuard: call("openGuard"),
+  launchGame: call("launchGame"),
+  gameStatus: call("gameStatus"),
+  startHelper: call("startHelper"),
+  stopHelper: call("stopHelper"),
+  langStatus: call("langStatus"),
+  langApply: call("langApply"),
+  langRestore: call("langRestore"),
+  openPage: call("openPage"),
 });
 
 // 桌面版沒有遊戲內的工具包選單；在修改器的「存檔檢查」分頁補上前往防護頁的按鈕（視窗上方選單列亦可隨時切換）

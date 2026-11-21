@@ -3,6 +3,8 @@ const { app, BrowserWindow } = require('electron');
 app.disableHardwareAcceleration();
 const http = require('node:http'), fs = require('node:fs'), path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '..', 'autobot.js'), 'utf8');
+const inputSource = fs.readFileSync(path.join(__dirname, '..', 'input.js'), 'utf8');
+const hooksSource = fs.readFileSync(path.join(__dirname, '..', 'hooks.js'), 'utf8');
 const forgeSource = fs.readFileSync(path.join(__dirname, '..', 'forge-local.js'), 'utf8');
 const forgeUiSource = fs.readFileSync(path.join(__dirname, '..', 'autoforge-ui.js'), 'utf8');
 const fixture = `import{weaponOf as weapon}from"./itemArt-BPHOVK4V.js";import{options}from"./saveTransfer-BTsCILil.js"; class Fixture {
@@ -20,7 +22,7 @@ const fixture = `import{weaponOf as weapon}from"./itemArt-BPHOVK4V.js";import{op
 } export{Fixture as Game};`;
 const skillFixture = `export const skills={doubleSwing:{name:'Double Swing',maxLevel:8},magicArrow:{name:'Magic Arrow',maxLevel:8},coldArrow:{name:'Cold Arrow',maxLevel:8}};export const passives={innerSight:{name:'Inner Sight',maxLevel:5},criticalStrike:{name:'Critical Strike',maxLevel:5}};export function weaponOf(player){return player.weaponMarker;} export function Sa(){if(window.__fixtureKeys)return window.__fixtureKeys;let e=null;try{e=JSON.parse(localStorage.getItem('d2s:keys')??'null')}catch{}return Object.assign({pick1:['Digit1'],pick2:['Digit2'],pick3:['Digit3'],reroll:['KeyR']},e)} export const levels={magicArrow:1,coldArrow:6,lightningFury:30,doubleSwing:1,innerSight:1,criticalStrike:1};`;
 const choiceFixture = `export function options(build,world,mode,weapon){if(weapon!=="fixture-weapon")throw Error("武器來源錯誤");const eligible=build.pool.filter(card=>card.required<=build.level&&!build.banished.has(card.type+':'+card.id));const replacements=[];for(const card of build.hiddenRespec||[])if(!build.banished.has('skill:'+card.id))replacements.push(card);if(build.throwAfterCandidates)throw Error('模擬原版錯誤');if(replacements.length)eligible.push(replacements[0]);return eligible.filter(card=>world.difficulty||card.type!==\`attribute\`).sort(()=>0).slice(0,3);}`;
-const html = `<!doctype html><link rel="modulepreload" href="/assets/saveTransfer-BTsCILil.js"><style>.hidden{display:none}</style><body><div id="paused" class="hidden"></div><div id="level-up" class="hidden"><div id="choices"><button>普通卡</button><button class="evolves">進化卡</button></div></div><span id="life-text">100 / 100</span><script type="module">import {Game} from '/assets/Game-Ba9RuE4G.js';window.Game=Game;window.game=new Game();window.originalTick=Game.prototype.tick;window.originalSteer=Game.prototype.steer;</script>`;
+const html = `<!doctype html><link rel="modulepreload" href="/assets/saveTransfer-BTsCILil.js"><style>.hidden{display:none}</style><body><div id="paused" class="hidden"></div><div id="level-up" class="hidden"><div id="choices"><button>普通卡</button><button class="evolves">進化卡</button></div></div><span id="life-text">100 / 100</span><script type="module">import {Game} from '/assets/Game-Ba9RuE4G.js';window.Game=Game;window.game=new Game();window.originalTick=Game.prototype.tick;window.originalSteer=Game.prototype.steer;window.nativeSort=Array.prototype.sort;window.nativePush=Array.prototype.push;window.__d2autobotGame=window.game;</script>`;
 // 每次建立獨立 Chromium 設定資料夾，不碰遊戲或使用者瀏覽器資料。
 app.setPath('userData',fs.mkdtempSync(path.join(require('node:os').tmpdir(),'d2autobot-test-')));
 const watchdog=setTimeout(()=>{console.error('模擬測試啟動或執行逾時');app.exit(1)},180000);watchdog.unref();
@@ -36,15 +38,17 @@ let server, win;
  const results=await run(`(async()=>{
    Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
    let time=10000; Object.defineProperty(performance,'now',{configurable:true,value:()=>time});
-   const out=[], fails=[], check=(name,value)=>{if(!value){fails.push(name);return}out.push(name)}; window.__testFails=fails; // 失敗不中斷，跑完全部再列出（電腦負載高時部分時間相依項目偶發失敗，需要看全貌）
+   const out=[], fails=[], check=(name,value)=>{if(!value){fails.push(name+' ［最近動作：'+(window.__d2autobot?.diagnostics?.().lastAction||'')+'｜按住：'+(window.__d2inputKit?.held().join('+')||'無')+'｜最近移動向量：'+JSON.stringify(window.__d2inputKit?.diagnostics().lastVec)+'］');return}out.push(name)}; window.__testFails=fails; // 失敗不中斷，跑完全部再列出（電腦負載高時部分時間相依項目偶發失敗，需要看全貌）
    const wait=()=>new Promise(r=>setTimeout(r,260));
-   const install=async(settings={},fresh=false)=>{window.__d2autobot?.destroy();window.__d2autobotSwitches=fresh?undefined:{enabled:!!settings.enabled,progressEnabled:!!settings.progressEnabled,cheat:!!settings.cheat?.enabled};localStorage.setItem('d2autobot:settings',JSON.stringify({version:6,deathProtection:{enabled:false},...settings}));(0,eval)(${JSON.stringify(source)});await wait();game.tick(0.05);time+=70;};
-   const tick=()=>{time+=100;game.tick(0.1)};
+   const install=async(settings={},fresh=false)=>{window.__d2autobot?.destroy();window.__d2autobotSwitches=fresh?undefined:{enabled:!!settings.enabled,progressEnabled:!!settings.progressEnabled,cheat:!!settings.cheat?.enabled};localStorage.setItem('d2autobot:settings',JSON.stringify({version:6,deathProtection:{enabled:false},...settings}));if(!window.__d2inputKit)(0,eval)(${JSON.stringify(inputSource)});if(!window.__d2hooksKit)(0,eval)(${JSON.stringify(hooksSource)});(0,eval)(${JSON.stringify(source)});await wait();game.tick(0.05);__d2autobot.pump();time+=70;};
+   const hk=()=>window.__d2inputKit.held(), mv=()=>window.__d2inputKit.diagnostics().lastVec; // mv：送進 8 方向量化前的移動向量（目標點 − 玩家位置）
+   const tick=()=>{time+=100;game.tick(0.1);__d2autobot.pump()}; // 決策迴圈改由自己的 rAF 驅動：測試用 pump() 在每次遊戲 tick 後確定性地執行一格
    const reset=()=>{Object.assign(game,new Game());time+=6000;document.getElementById('paused').classList.add('hidden');};
    const enabled={enabled:true,progressEnabled:true,movement:{enabled:false},loot:{enabled:false},deathProtection:{enabled:false}};
    await install();
    check('預設總開關關閉',JSON.parse(localStorage.getItem('d2autobot:settings')).enabled!==true);
-   check('簽名掛接現有模組',__d2autobot.diagnostics().connected && __d2autobot.diagnostics().hookUrl.endsWith('Game-Ba9RuE4G.js'));
+   check('讀 __d2autobotGame 取得遊戲並以 import 後備載入技能表',__d2autobot.diagnostics().connected && __d2autobot.game===window.game && __d2autobot.diagnostics().hookUrl.endsWith('Game-Ba9RuE4G.js'));
+   check('預設狀態不包裝任何官方函式（tick/steer/sort/push 與原參照相同、無掛接已安裝）',Game.prototype.tick===window.originalTick&&Game.prototype.steer===window.originalSteer&&Array.prototype.sort===window.nativeSort&&Array.prototype.push===window.nativePush&&__d2autobot.hooks.installed().length===0&&!Object.hasOwn(game,'offerLevelUp')&&!Object.hasOwn(Game.prototype,'whileForgeIdle'));
    game.state='paused';await wait();check('暫停時左上按鈕',document.getElementById('d2autobot-launcher').style.display==='block');
    document.getElementById('d2autobot-launcher').click();const shadow=document.getElementById('d2autobot-panel').shadowRoot;
    check('設定面板可開啟',!shadow.querySelector('.backdrop').hidden);
@@ -122,32 +126,32 @@ let server, win;
    reset();await install(enabled);game.state='playing';game.world.player.life=10;game.world.terror={tier:1,affixes:['nobelt']};tick();check('遵守恐怖禁止藥帶詞綴',game.calls.length===0);
    reset();await install({...enabled});game.state='playing';game.world.mana.mana=10;tick();check('遊戲沒有魔力藥水：魔力低時不喝水',!game.calls.length);
    reset();await install({...enabled});game.state='playing';game.world.belt.columns=[['mana','potion'],[],[],[]];time+=1000;tick();check('自動喝生命藥開啟時以原版操作清出法力藥水並保留生命藥',game.calls.some(x=>x[0]==='drink')&&game.world.belt.columns[0][0]==='potion');
-   reset();await install({enabled:true,loot:{enabled:false}});game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:10,life:2}];tick();check('飛彈正面來襲側向閃避',Math.abs(game.walkTarget?.y)>0);
-   reset();await install({enabled:true,loot:{enabled:false}});game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:1,life:2}];tick();check('不痛不癢的飛彈不特別閃，沒有威脅就站在原地',!game.walkTarget&&__d2autobot.diagnostics().lastAction.indexOf('閃避')<0&&__d2autobot.diagnostics().lastAction.indexOf('站在原地')>=0);
+   reset();await install({enabled:true,loot:{enabled:false}});game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:10,life:2}];tick();check('飛彈正面來襲側向閃避（移動向量有側向分量且有按鍵）',hk().length>0&&Math.abs(mv().dy)>0);
+   reset();await install({enabled:true,loot:{enabled:false}});game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:1,life:2}];tick();check('不痛不癢的飛彈不特別閃，沒有威脅就站在原地（沒有按住任何方向鍵）',!hk().length&&__d2autobot.diagnostics().lastAction.indexOf('閃避')<0&&__d2autobot.diagnostics().lastAction.indexOf('站在原地')>=0);
    reset();await install({enabled:true,loot:{enabled:false}});game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:10,life:2}];tick();
-   __d2autobot.stop();check('停止釋放移動目標',game.walkTarget===null);
+   __d2autobot.stop();check('停止放開所有方向鍵',!hk().length);
    reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:false,vacuum:false,vacuumGold:true}});game.state='playing';game.world.pickups=[{kind:'gold',x:900,y:0}];tick();check('全圖吸金幣獨立於撿寶開關',game.world.pickups[0].magnet===true);
    reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:true,vacuumGold:false}});game.state='playing';game.world.pickups=[{kind:'gold',x:900,y:0}];tick();check('關閉全圖吸金幣時不吸取金幣',!game.world.pickups[0].magnet);
    reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:true,onlyUpgrades:true,qualityThreshold:{normal:false}}});game.state='playing';game.world.pickups=[{x:900,y:0,item:{base:'cap',rarity:'normal',filterDecision:'pick'}},{x:800,y:0,item:{base:'cap',rarity:'unique',filterDecision:'hide'}},{x:700,y:0,item:{base:'cap',rarity:'magic',filterDecision:'sell'}}];tick();check('全圖遵循原版保留隱藏及販售',game.world.pickups[0].x===game.world.player.x&&game.world.pickups[1].x===800&&game.world.pickups[2].x===game.world.player.x);
-   reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:false}});game.state='playing';game.world.pickups=[{x:20,y:0,item:{rarity:'magic',filterDecision:'hide'}},{x:70,y:0,item:{rarity:'rare',filterDecision:'pick'}}];tick();check('追蹤遵循原版過濾',game.walkTarget?.x===70 && game.world.reaching===game.world.pickups[1]);
-   __d2autobot.stop();check('釋放原版重建的拾取目標',game.walkTarget===null && game.world.reaching===null);
-   reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:false}});game.state='playing';game.world.pickups=[{x:900,y:0,item:{rarity:'rare',filterDecision:'pick'}}];tick();check('關閉全圖撿寶時超出撿取距離不去撿',!game.walkTarget);
+   reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:false}});game.state='playing';game.world.pickups=[{x:20,y:0,item:{rarity:'magic',filterDecision:'hide'}},{x:70,y:0,item:{rarity:'rare',filterDecision:'pick'}}];tick();check('追蹤遵循原版過濾（朝 x=70 的稀有物品按住右鍵）',hk().includes('ArrowRight')&&!hk().includes('ArrowLeft'));
+   __d2autobot.stop();check('停止後放開拾取移動的方向鍵且不留 reaching／walkTarget',!hk().length && !game.world.reaching && !game.walkTarget);
+   reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:false}});game.state='playing';game.world.pickups=[{x:900,y:0,item:{rarity:'rare',filterDecision:'pick'}}];tick();check('關閉全圖撿寶時超出撿取距離不去撿',!hk().length);
    reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:true}});game.state='playing';game.world.player.pickupRadius=70;game.world.pickups=[];tick();check('全圖撿寶時撿拾距離改為全圖',game.world.player.pickupRadius>=1e6);
    __d2autobot.stop();check('停止時還原撿拾距離',game.world.player.pickupRadius===70);
    reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:true}});game.state='playing';game.world.pickups=[{x:900,y:0,item:{rarity:'rare',filterDecision:'pick'}},{x:-900,y:0,item:{rarity:'magic',filterDecision:'hide'}}];tick();check('全圖撿寶把可撿裝備移到角色身上',game.world.pickups[0].x===game.world.player.x&&game.world.pickups[0].y===game.world.player.y);check('全圖撿寶不移動遊戲隱藏的裝備',game.world.pickups[1].x===-900);
    reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:false}});game.state='playing';game.world.player.pickupRadius=70;game.world.pickups=[];tick();check('關閉全圖撿寶時撿拾距離維持原值',game.world.player.pickupRadius===70);
-   reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:true}});game.state='playing';game.world.pickups=[{x:900,y:0,item:{rarity:'magic',filterDecision:'hide'}}];tick();check('全圖撿寶仍遵循遊戲過濾器隱藏的物品',!game.walkTarget);
-   reset();await install({...enabled,progressEnabled:true,quest:{autoProgress:true}});game.state='playing';game.world.pickups=[{x:200,y:0,item:{type:'quest',base:'bks',rarity:'normal'}}];game.clearing={portal:{x:-300,y:0}};tick();check('任務物品優先於通關傳送門會去撿',game.walkTarget&&game.walkTarget.x>0);delete game.clearing;
+   reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:true}});game.state='playing';game.world.pickups=[{x:900,y:0,item:{rarity:'magic',filterDecision:'hide'}}];tick();check('全圖撿寶仍遵循遊戲過濾器隱藏的物品',!hk().length);
+   reset();await install({...enabled,progressEnabled:true,quest:{autoProgress:true}});game.state='playing';game.world.pickups=[{x:200,y:0,item:{type:'quest',base:'bks',rarity:'normal'}}];game.clearing={portal:{x:-300,y:0}};tick();check('任務物品優先於通關傳送門會去撿',hk().includes('ArrowRight')&&mv().dx>0);delete game.clearing;
    reset();await install({...enabled,progressEnabled:true,loot:{enabled:true},quest:{autoProgress:false}});game.state='playing';game.world.pickups=[{x:200,y:0,item:{type:'quest',base:'pk1',rarity:'unique'}}];tick();check('關閉任務推進仍會去撿烏伯鑰匙',game.world.pickups[0].x===game.world.player.x);
   reset();await install({version:8,enabled:true,movement:{enabled:false},loot:{enabled:true,vacuum:true},quest:{autoProgress:false}});game.state='playing';game.world.pickups=[{x:900,y:0,item:{type:'quest',base:'hcx',rarity:'unique'}}];tick();check('全圖撿寶也會吸任務物品（不受任務推進開關限制）',game.world.pickups[0].x===game.world.player.x);
-   reset();await install({...enabled,progressEnabled:true,quest:{autoProgress:true}});game.state='playing';game.world.player.level=99;window.__d2autobotHellClearedSaves.set(game.save,new Set(['sorceress']));game.search={portalSpot:{x:150,y:0}};game.world.hostiles=[{x:150,y:0,vx:-300,vy:0,damage:30}];game.world.enemies=[{x:120,y:20,life:50,maxLife:50,radius:12}];tick();check('任務傳送門近在眼前時不閃避直接走進去',game.walkTarget&&game.walkTarget.x>game.world.player.x);delete game.search;
-   reset();await install({enabled:true,progressEnabled:true,movement:{enabled:false},loot:{enabled:false},quest:{autoProgress:true}});game.state='playing';game.world.player.level=99;window.__d2autobotHellClearedSaves.set(game.save,new Set(['sorceress']));game.search={stones:{logic:{spots:[{x:30,y:10},{x:50,y:20}],lit:[true,false],done:false}}};tick();check('任務石陣追蹤未觸碰位置',game.walkTarget?.x===50);
+   reset();await install({...enabled,progressEnabled:true,quest:{autoProgress:true}});game.state='playing';game.world.player.level=99;window.__d2autobotHellClearedSaves.set(game.save,new Set(['sorceress']));game.search={portalSpot:{x:150,y:0}};game.world.hostiles=[{x:150,y:0,vx:-300,vy:0,damage:30}];game.world.enemies=[{x:120,y:20,life:50,maxLife:50,radius:12}];tick();check('任務傳送門近在眼前時不閃避直接走進去（按住右鍵）',hk().includes('ArrowRight'));delete game.search;
+   reset();await install({enabled:true,progressEnabled:true,movement:{enabled:false},loot:{enabled:false},quest:{autoProgress:true}});game.state='playing';game.world.player.level=99;window.__d2autobotHellClearedSaves.set(game.save,new Set(['sorceress']));game.search={stones:{logic:{spots:[{x:30,y:10},{x:50,y:20}],lit:[true,false],done:false}}};tick();check('任務石陣追蹤未觸碰位置',hk().length>0&&mv().dx===50);
    reset();await install({...enabled,terror:{mode:'farm',targetFarmTier:2,postClearWaitSec:1}});game.world.terror={tier:2,affixes:[]};game.tierDone={tier:2};game.state='dead';tick();time+=1100;tick();await Promise.resolve();check('固定層數呼叫原版重刷',game.calls.some(x=>x[0]==='replay'&&x[1]===2));check('切關清除舊通關標記',game.tierDone===null);
    reset();await install({...enabled,terror:{mode:'farm',targetFarmTier:3,postClearWaitSec:1}});game.world.terror={tier:2,affixes:[]};game.tierDone={tier:2};game.state='dead';tick();time+=1100;tick();await Promise.resolve();check('不重刷未通關層數',!game.calls.length);check('自動停機不覆蓋使用者儲存的設定',JSON.parse(localStorage.getItem('d2autobot:settings')).enabled===true);
    reset();await install({...enabled,terror:{mode:'progress',postClearWaitSec:1}});game.world.terror={tier:2,affixes:[]};game.tierDone={tier:2};game.state='dead';tick();time+=1100;tick();await Promise.resolve();check('推層選擇可喝水關卡',game.calls.some(x=>x[0]==='terror'&&x[1]===1));
    reset();await install({...enabled,terror:{mode:'progress',postClearWaitSec:1}});game.world.terror={tier:2,affixes:[]};game.save.terror.sorceress.offers=[{affixes:[],uber:'matron'},{affixes:[]}];game.tierDone={tier:2};game.state='dead';tick();time+=1100;tick();await Promise.resolve();check('推層選擇避開超級首領選項',game.calls.some(x=>x[0]==='terror'&&x[1]===1)&&!game.calls.some(x=>x[0]==='terror'&&x[1]===0));
    reset();await install({...enabled,terror:{mode:'progress',postClearWaitSec:1}});game.world.terror={tier:2,affixes:[]};game.save.terror.sorceress.offers=[{affixes:[],uber:'matron'},{affixes:[],finale:true},{affixes:[]}];game.tierDone={tier:2};game.state='dead';tick();time+=1100;tick();await Promise.resolve();check('推層選擇避開最終戰選項',game.calls.some(x=>x[0]==='terror'&&x[1]===2)&&!game.calls.some(x=>x[0]==='terror'&&x[1]===1));
-   reset();await install(enabled);game.state='playing';game.world.player.life=10;window.__d2editIsOpen=()=>true;tick();check('修改器開啟時不動作',!game.calls.length);window.__d2editIsOpen=()=>false;
+   reset();await install(enabled);game.state='playing';game.world.player.life=10;window.__d2helperPaused=()=>true;tick();check('修改器開啟時不動作',!game.calls.length);window.__d2helperPaused=()=>false;
    window.dispatchEvent(new KeyboardEvent('keydown',{code:'F8',key:'F8'}));check('F8 不再切換總開關',JSON.parse(localStorage.getItem('d2autobot:settings')).enabled===true);
    await install(enabled);await install(enabled);check('重載不重複建立介面',document.querySelectorAll('#d2autobot-launcher').length===1);
    reset();await install({...enabled,terror:{mode:'farm',targetFarmTier:2}});game.state='camp';tick();await Promise.resolve();check('營地主動開始固定層數',game.calls.some(x=>x[0]==='replay'));
@@ -206,13 +210,13 @@ let server, win;
     reset();await install(enabled);worn={};inv=[boots];sold=[];configure();game.lastInventoryFull=performance.now();tick();check('背包滿仍先穿可用裝備而非賣掉',worn.boots===boots&&sold.length===0);}
    {reset();await install(enabled);game.state='playing';const strong={base:'Ring',type:'ring',name:'Strong'},weak={base:'Ring',type:'ring',name:'Weak'},better={base:'Ring',type:'ring',name:'Better'},worn={ring1:strong,ring2:weak};let slot=null;
     game.inventoryOf=()=>[better];game.equippedOf=()=>worn;game.previewGear=(p,b,f,i,s)=>s==='ring1'||s==='ring2'?{}:null;game.makePlayer=()=>({});game.heroNumbers=(p,b,w)=>({stats:[{label:'Damage',num:10+(w.ring1===strong?20:0)+(w.ring2===weak?0:20)+(w.ring1===better?20:0)},{label:'Life',num:100}]});game.ownGear=()=>({doll:{slotFor:()=> 'ring1',fits:(i,s)=>s==='ring1'||s==='ring2',canWear:()=>true,displaced:()=>[]}});game.gearActions=()=>({equip:(i,s)=>{slot=s;worn[s]=i}});tick();check('雙戒指欄比較後指定替換較差的第二格',slot==='ring2'&&worn.ring1===strong&&worn.ring2===better);}
-   reset();await install({enabled:true,movement:{enabled:true},loot:{enabled:true}});game.state='playing';game.world.enemies=[{x:30,y:0,rank:'breakable',radius:10}];tick();check('罐子不當敵人且前往踢破',game.walkTarget?.x===30);
-   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'sorceress'};game.state='playing';const thief={x:600,y:0,radius:14,damage:1,rank:'champion',name:'Thief'};game.world.enemies=[{x:-300,y:0,radius:12,damage:1,rank:'actBoss'},thief];game.thiefChase={e:thief};tick();check('盜賊出現優先追擊（朝盜賊方向逐步前進）',game.walkTarget?.x>0);delete game.thiefChase;
-   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'sorceress'};game.build={skills:[]};game.state='playing';game.world.enemies=[{x:600,y:0,radius:14,damage:20,rank:'champion',name:'Elite'}];tick();check('遠程面對射程外的精英往攻擊距離靠近，不越跑越遠',game.walkTarget?.x>0);
-   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'sorceress'};game.build={skills:[]};game.state='playing';game.world.enemies=[{x:300,y:0,radius:14,damage:20,rank:'champion',name:'Elite'}];tick();check('打不死且精英已在射程內，站在原地不走',!game.walkTarget&&__d2autobot.diagnostics().lastAction.indexOf('站在原地')>=0);
-   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'barbarian'};game.build={skills:[{id:'doubleSwing',level:1}]};game.state='playing';game.world.enemies=[{x:150,y:0,radius:12,damage:1}];tick();check('近戰技能（依攻擊距離）不放風箏，朝怪物靠近',game.walkTarget?.x>0);
-   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'sorceress'};game.build={skills:[]};game.state='playing';game.world.enemies=[{x:600,y:0,radius:12,damage:10}];tick();check('遠程職業站在近戰範圍外，不貼近怪物',game.walkTarget?.x>0&&game.walkTarget.x<600);
-   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.state='playing';game.world.enemies=[{x:-60,y:0,radius:12,damage:1},{x:700,y:0,radius:20,damage:1,rank:'actBoss'}];tick();check('追目標優先：小怪貼近仍朝射程外的頭目前進',game.walkTarget?.x>100);
+   reset();await install({enabled:true,movement:{enabled:true},loot:{enabled:true}});game.state='playing';game.world.enemies=[{x:30,y:0,rank:'breakable',radius:10}];tick();check('罐子不當敵人且前往踢破',hk().length>0&&mv().dx===30);
+   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'sorceress'};game.state='playing';const thief={x:600,y:0,radius:14,damage:1,rank:'champion',name:'Thief'};game.world.enemies=[{x:-300,y:0,radius:12,damage:1,rank:'actBoss'},thief];game.thiefChase={e:thief};tick();check('盜賊出現優先追擊（朝盜賊方向逐步前進）',hk().length>0&&mv().dx>0);delete game.thiefChase;
+   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'sorceress'};game.build={skills:[]};game.state='playing';game.world.enemies=[{x:600,y:0,radius:14,damage:20,rank:'champion',name:'Elite'}];tick();check('遠程面對射程外的精英往攻擊距離靠近，不越跑越遠',hk().length>0&&mv().dx>0);
+   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'sorceress'};game.build={skills:[]};game.state='playing';game.world.enemies=[{x:300,y:0,radius:14,damage:20,rank:'champion',name:'Elite'}];tick();check('打不死且精英已在射程內，站在原地不走',!hk().length&&__d2autobot.diagnostics().lastAction.indexOf('站在原地')>=0);
+   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'barbarian'};game.build={skills:[{id:'doubleSwing',level:1}]};game.state='playing';game.world.enemies=[{x:150,y:0,radius:12,damage:1}];tick();check('近戰技能（依攻擊距離）不放風箏，朝怪物靠近',hk().length>0&&mv().dx>0);
+   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.kit={id:'sorceress'};game.build={skills:[]};game.state='playing';game.world.enemies=[{x:600,y:0,radius:12,damage:10}];tick();check('遠程職業站在近戰範圍外，不貼近怪物',hk().length>0&&mv().dx>0&&mv().dx<600);
+   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},quest:{autoProgress:true}});delete game.search;game.state='playing';game.world.enemies=[{x:-60,y:0,radius:12,damage:1},{x:700,y:0,radius:20,damage:1,rank:'actBoss'}];tick();check('追目標優先：小怪貼近仍朝射程外的頭目前進',hk().length>0&&mv().dx>100);
    {reset();await install({...enabled,enabled:false,progressEnabled:true,quest:{autoProgress:false}});
     const invItem={base:'Cap',rarity:'unique',slot:'head'},kept={base:'Boots',rarity:'unique',slot:'boots'}, inv=[invItem], worn={}, events=[];
     game.state='camp';game.camp={};game.world.player.cls='sorceress';game.inventoryOf=()=>inv;game.equippedOf=()=>worn;game.previewGear=()=>({});game.makePlayer=()=>({});game.heroNumbers=()=>({stats:[{label:'Life',num:100},{label:'Damage',num:10}]});game.ownGear=()=>({doll:{slotFor:i=>i.slot,canWear:()=>true,displaced:()=>[]}});
@@ -287,8 +291,8 @@ let server, win;
     for(let i=0;i<80;i++){tick();time+=300;}
     check('同名獨特：較好的換進收藏庫，換出來的舊件賣掉',col.includes(better)&&sold.includes('old'));
     check('同名符文之語：較差的不收、賣掉；沒有同名的套裝收進收藏庫',sold.includes('worse')&&col.includes(keptRw)&&col.includes(fresh)&&!sold.includes('fresh')&&!sold.includes('better'));}
-   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},loot:{enabled:false}});game.state='playing';game.world.walls={slide:(x,y,dx,dy)=>({x:x+dx,y:y+dy})};game.world.player.life=40;game.world.enemies=Array.from({length:8},(_,i)=>({x:30*Math.cos(i*Math.PI/4),y:30*Math.sin(i*Math.PI/4),radius:12,damage:i===0?50:1}));tick();check('被包圍無路時穿過怪群遠離最強敵人',game.walkTarget?.x<0&&__d2autobot.diagnostics().lastAction.includes('穿過'));
-   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},loot:{enabled:false}});game.state='playing';game.world.enemies=[{x:500,y:0,radius:20,damage:5,rank:'champion'}];tick();check('精英怪超出攻擊範圍時拉回',game.walkTarget?.x>0);
+   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},loot:{enabled:false}});game.state='playing';game.world.walls={slide:(x,y,dx,dy)=>({x:x+dx,y:y+dy})};game.world.player.life=40;game.world.enemies=Array.from({length:8},(_,i)=>({x:30*Math.cos(i*Math.PI/4),y:30*Math.sin(i*Math.PI/4),radius:12,damage:i===0?50:1}));tick();check('被包圍無路時穿過怪群遠離最強敵人（按住左鍵）',hk().includes('ArrowLeft')&&__d2autobot.diagnostics().lastAction.includes('穿過'));
+   reset();await install({enabled:true,progressEnabled:false,movement:{enabled:true},loot:{enabled:false}});game.state='playing';game.world.enemies=[{x:500,y:0,radius:20,damage:5,rank:'champion'}];tick();check('精英怪超出攻擊範圍時拉回（按住右鍵）',hk().includes('ArrowRight'));
    reset();await install({...enabled});game.state='playing';game.kit={id:'sorceress'};game.build={unspent:10};const spent={};game.spendStatPoints=(a,n)=>{spent[a]=(spent[a]||0)+n;game.build.unspent-=n};tick();check('依排行榜比例配屬性點（法師主加能量）',spent.energy>=9&&game.build.unspent===0);
    {reset();game.hud={showLevelUp(){}};await install({...enabled,quest:{autoProgress:true}});game.kit={id:'sorceress'};game.state='playing';tick();game.hud.showLevelUp([{title:'Fire Bolt'},{title:'Static Field'}],{},{});game.state='levelUp';const box=document.getElementById('choices'),old=box.innerHTML;box.innerHTML='<button><strong>Fire Bolt</strong></button><button><strong>Static Field</strong></button>';document.getElementById('level-up').classList.remove('hidden');let key='';const kp=(e)=>{key=e.key};window.addEventListener('keydown',kp);time+=1000;tick();window.removeEventListener('keydown',kp);check('依排行榜高手權重選升級卡',key==='2');box.innerHTML=old;document.getElementById('level-up').classList.add('hidden');}
    {reset();let rerolled=false;game.hud={showLevelUp(){}};await install({...enabled,quest:{autoProgress:true},build:{ladder:true,autoReroll:true}});game.world.player.weaponMarker='fixture-weapon';game.kit={id:'sorceress'};game.world.player.level=6;game.build={kit:game.kit,level:6,skills:[{id:'coldArrow',level:1}],passives:{},banished:new Set(),pool:[{type:'skill',id:'coldArrow',required:7}],rerolls:2};game.world.difficulty='normal';game.state='playing';tick();game.hud.showLevelUp([{title:'Unranked Skill 1'},{title:'Unranked Skill 2'}],game.build,{reroll(){rerolled=true;}});game.state='levelUp';const box=document.getElementById('choices'),old=box.innerHTML;box.innerHTML='<button><strong>Unranked Skill 1</strong></button><button><strong>Unranked Skill 2</strong></button>';document.getElementById('level-up').classList.remove('hidden');let key='';const listener=(e)=>{key=e.key;};window.addEventListener('keydown',listener);time+=1000;tick();window.removeEventListener('keydown',listener);check('低等級選擇現有技能卡而不浪費重抽',!rerolled&&key==='1');box.innerHTML=old;document.getElementById('level-up').classList.add('hidden');}
@@ -347,9 +351,10 @@ let server, win;
    reset();await install({...enabled,cheat:{enabled:true,maxGoldRate:true}});game.state='playing';game.world.player.goldGain=1.5;tick();const lastPlayer=game.world.player;__d2autobot.destroy();check('卸載輔助器還原金幣倍率',lastPlayer.goldGain===1.5);
    reset();await install({...enabled,cheat:{enabled:true,maxGoldRate:true,maxDropRate:true}});game.state='playing';game.world.player.goldGain=1.5;game.world.player.magicFind=0;tick();game.world.player.goldGain+=0.32;game.world.player.magicFind+=25;tick();document.getElementById('d2autobot-panel').shadowRoot.querySelector('[data-setting="cheat.enabled"]').click();tick();check('作弊期間遊戲增量改動金幣倍率與掉寶率，關閉後仍正確還原原值加增量',Math.abs(game.world.player.goldGain-1.82)<1e-6 && game.world.player.magicFind===25);
    const entries=performance.getEntriesByType.bind(performance);performance.getEntriesByType=()=>[];document.getElementById('life-text').textContent='20 / 100';let pulses=[];const capture=e=>pulses.push([e.type,e.code]);window.addEventListener('keydown',capture);window.addEventListener('keyup',capture);
-   await install({...enabled,potion:{fallbackHpSlot:4}});await wait();check('版本未知時不觸發HUD藥水按鍵',pulses.length===0);check('找不到遊戲程式時顯示原因',!__d2autobot.diagnostics().connected && __d2autobot.diagnostics().hookNote.includes('找不到'));
-   __d2autobot.destroy();performance.getEntriesByType=()=>[{name:location.origin+'/assets/Game-old.js'}];reset();game.world.player.goldGain=1;game.world.gold=42;
-   await install({...enabled,cheat:{enabled:true,invincible:true,maxGoldRate:true}});game.state='playing';game.world.player.life=20;tick();await wait();check('不同檔名的遊戲程式仍可掛接',__d2autobot.diagnostics().hookUrl.endsWith('/assets/Game-old.js') && __d2autobot.diagnostics().hookNote.includes('已掛接'));
+   __d2autobot.destroy();window.__d2autobotGame=undefined; // 應用程式尚未連線：沒有 __d2autobotGame
+   await install({...enabled,potion:{fallbackHpSlot:4}});await wait();check('版本未知時不觸發HUD藥水按鍵',pulses.length===0);check('沒有 __d2autobotGame 時顯示「等待應用程式連線」',!__d2autobot.diagnostics().connected && __d2autobot.diagnostics().hookNote.includes('等待應用程式連線'));
+   __d2autobot.destroy();window.__d2autobotGame=window.game;performance.getEntriesByType=()=>[{name:location.origin+'/assets/Game-old.js'}];reset();game.world.player.goldGain=1;game.world.gold=42;
+   await install({...enabled,cheat:{enabled:true,invincible:true,maxGoldRate:true}});game.state='playing';game.world.player.life=20;tick();await wait();check('不同檔名的遊戲程式仍可連線（import 後備載入技能表）',__d2autobot.diagnostics().hookUrl.endsWith('/assets/Game-old.js') && __d2autobot.diagnostics().connected && __d2autobot.diagnostics().hookNote.includes('已連線'));
    window.removeEventListener('keydown',capture);window.removeEventListener('keyup',capture);performance.getEntriesByType=entries;
    __d2autobot.destroy();check('卸載還原遊戲原型',Game.prototype.tick===originalTick && Game.prototype.steer===originalSteer);check('卸載移除面板',!document.getElementById('d2autobot-panel'));
    { localStorage.removeItem('d2forgeLocal.settings'); localStorage.setItem('d2autobot:settings',JSON.stringify({cheat:{enabled:false,forgeLocal:true,forgeLocalSure:true}}));
@@ -363,6 +368,59 @@ let server, win;
      b.click();s.click();check('必定成功開關更新設定',!__d2forgeLocal.settings().sure&&s.getAttribute('aria-checked')==='false');s.click();
      online=true;await new Promise(r=>setTimeout(r,350));check('線上模式關閉並停用開關且保留設定',b.disabled&&s.disabled&&b.getAttribute('aria-checked')==='false'&&s.getAttribute('aria-checked')==='false'&&document.querySelector('#af-local-unavailable').textContent.includes('線上存檔不可用')&&__d2forgeLocal.settings().enabled&&__d2forgeLocal.settings().sure);
      online=false;await new Promise(r=>setTimeout(r,350));check('返回單機恢復開關',!b.disabled&&!s.disabled&&b.getAttribute('aria-checked')==='true'&&s.getAttribute('aria-checked')==='true'&&document.querySelector('#af-local-stats').textContent.includes('本機處理次數'));
+   }
+   // ── 去掛接後的新機制測試 ──
+   delete window.__d2autobot; // 前面的淬鍊介面測試放了替身物件
+   {
+     // 1. 迴圈自行驅動（不靠 pump）：自己的 rAF／計時器保底會執行決策；destroy 後停止並放開按鍵
+     reset();await install({enabled:true,loot:{enabled:false}});game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:10,life:2}];time+=100;await wait();await wait();
+     for(let i=0;i<30&&!hk().length;i++){time+=100;await wait();}
+     check('決策迴圈由自己的 rAF／計時器驅動（沒有呼叫 pump 也會閃避）',hk().length>0);
+     __d2autobot.destroy();const sentAfter=__d2inputKit.diagnostics().sent;
+     check('destroy 放開所有按鍵並停止迴圈',!hk().length);
+     time+=100;await wait();await wait();check('destroy 後迴圈不再送出輸入',!hk().length&&__d2inputKit.diagnostics().sent===sentAfter);
+   }
+   {
+     // 2. 輸入傳輸：有 __d2input 時走 CDP 受信任事件；沒有時退回合成事件並標明非受信任
+     const log=[];window.__d2input=(j)=>log.push(JSON.parse(j));
+     reset();await install({enabled:true,loot:{enabled:false}});__d2inputKit.press('Digit1',60);
+     check('按鍵改走 __d2input（受信任事件）：送出 Digit1 press 並帶按住毫秒',log.some(m=>m.t==='key'&&m.code==='Digit1'&&m.action==='press'&&m.hold===60)&&__d2autobot.diagnostics().input.trusted===true);
+     game.state='playing';game.world.hostiles=[{x:-30,y:0,vx:200,vy:0,radius:5,damage:10,life:2}];log.length=0;tick();
+     check('移動改走 __d2input：送出方向鍵 down',log.some(m=>m.action==='down'&&m.code.startsWith('Arrow')));
+     delete window.__d2input;
+     check('沒有 __d2input 時診斷標明非受信任事件',__d2inputKit.diagnostics().trusted===false&&__d2inputKit.diagnostics().note.includes('非受信任'));
+     // 受信任的自家按鍵不可被當成玩家手動操作（manual 會暫停輔助）
+     __d2inputKit.press('KeyQ',60);check('isOwn 辨識自己送出的按鍵',__d2inputKit.isOwn({code:'KeyQ'})&&!__d2inputKit.isOwn({code:'KeyW'}));
+   }
+   {
+     // 3. input.js：8 方向量化、死區、只送差異、releaseAll
+     const log=[];window.__d2input=(j)=>log.push(JSON.parse(j));const K=window.__d2inputKit;K.releaseAll();log.length=0;
+     const dir=(x,y)=>{K.releaseAll();log.length=0;K.setMoveDir(x,y,{smooth:1});return K.held().sort().join('+');};
+     check('量化：右',dir(1,0)==='ArrowRight');check('量化：左下（y 向下）',dir(-1,1)==='ArrowDown+ArrowLeft');check('量化：上',dir(0,-1)==='ArrowUp');check('量化：右上',dir(1,-1)==='ArrowRight+ArrowUp');
+     check('死區：零向量不按鍵',dir(0,0)==='');
+     K.releaseAll();log.length=0;K.setMoveDir(1,0,{smooth:1});K.setMoveDir(1,0.05,{smooth:1});K.setMoveDir(1,0.1,{smooth:1});
+     check('方向沒變就不重送按鍵（只送一次 down）',log.length===1&&log[0].action==='down'&&log[0].code==='ArrowRight');
+     K.setMoveDir(1,1,{smooth:1});check('方向改變只送差異（加按下鍵）',log.length===2&&log[1].code==='ArrowDown'&&log[1].action==='down');
+     K.setMoveDir(0,1,{smooth:1});check('方向改變只送差異（放開右鍵）',log.length===3&&log[2].code==='ArrowRight'&&log[2].action==='up'&&K.held().join()==='ArrowDown');
+     K.releaseAll();check('releaseAll 放開全部',!K.held().length&&log.filter(m=>m.action==='up').length===2);
+     delete window.__d2input;
+   }
+   {
+     // 4. 例外掛接：開關開啟才安裝、關閉即還原為原參照
+     reset();game.gainXp=function(a){return a};const xpOrig=game.gainXp;
+     await install({enabled:true,movement:{enabled:false},loot:{enabled:false},cheat:{enabled:true,maxXp:true,pauseStageTime:true}});game.state='playing';game.world.time=5;game.world.actStart=1;tick();
+     check('開啟經驗倍率與停止關卡時間 → xp、stageTime 掛接安裝',__d2autobot.hooks.has('xp')&&__d2autobot.hooks.has('stageTime')&&game.gainXp!==xpOrig&&Game.prototype.tick!==window.originalTick);
+     game.world.time=9;game.world.actStart=2;game.tick(0.1);check('停止關卡時間：原版 tick 之後對齊 actStart',game.world.actStart===game.world.time);
+     __d2autobot.settings.cheat.maxXp=false;__d2autobot.settings.cheat.pauseStageTime=false;tick();
+     check('關閉開關 → 還原為原參照',game.gainXp===xpOrig&&Game.prototype.tick===window.originalTick&&!__d2autobot.hooks.has('xp')&&!__d2autobot.hooks.has('stageTime'));
+     __d2autobot.settings.cheat.invincible=true;tick();const lifeDesc=Object.getOwnPropertyDescriptor(game.world.player,'life');check('無敵掛接安裝後 life 為存取器',__d2autobot.hooks.has('invincible')&&typeof lifeDesc.get==='function');
+     __d2autobot.settings.cheat.invincible=false;tick();check('無敵關閉後 life 還原為一般欄位',!__d2autobot.hooks.has('invincible')&&'value' in Object.getOwnPropertyDescriptor(game.world.player,'life'));
+     // 營地整備／選卡預判（第 3、4 組）：自動戰鬥開啟才安裝，停止即還原
+     game.hud={showTown(){},showLevelUp(){},closeLevelUp(){}};const townOrig=game.hud.showTown;
+     await install({enabled:true,progressEnabled:true,movement:{enabled:false},loot:{enabled:false},deathProtection:{enabled:false}});game.state='camp';tick();
+     check('自動戰鬥開啟 → camp 與 levelPool 掛接允許安裝',__d2autobot.hooks.has('camp')&&__d2autobot.hooks.has('levelPool'));
+     __d2autobot.stop();tick();check('停止自動戰鬥 → camp、levelPool 解除、hud 方法為原參照',!__d2autobot.hooks.has('camp')&&!__d2autobot.hooks.has('levelPool')&&game.hud.showTown===townOrig&&Array.prototype.sort===window.nativeSort);
+     delete game.gainXp;game.hud={};
    }
    return {out,fails};
  })()`);

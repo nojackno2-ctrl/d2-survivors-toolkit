@@ -60,7 +60,6 @@
   <section id="sec-save-check">
     <h2>存檔檢查</h2>
     <p id="verdict" style="font-weight:600"></p>
-    <div id="onlineNotice" class="mode-banner" hidden>線上存檔：只檢查、不寫入</div>
     <div id="moduleError" class="mode-banner" hidden>檢查模組載入失敗 <button id="retryModule">重試</button></div>
     <div class="bar">
       <button id="scan">重新掃描</button>
@@ -70,25 +69,20 @@
     <h3>問題明細</h3>
     <table><thead><tr><th style="width:28%">位置</th><th>問題</th><th style="width:26%">怎麼修正</th></tr></thead><tbody id="details"></tbody></table>
     <h3 style="margin-top:16px">檢查清單</h3>
-    <p class="dim">依照遊戲本身的檢查規則（屬性點、經驗值上限、重複技能、存檔模式標記、金幣上限、光之碎片、物品合法性、角色等級、簽章、標記與匯入痕跡）掃描目前的存檔內容。在單機存檔模式下按「一鍵修正」會修正問題並寫回存檔。</p>
+    <p class="dim">依照遊戲本身的檢查規則（屬性點、經驗值上限、重複技能、存檔模式標記、金幣上限、光之碎片、物品合法性、角色等級、簽章、標記與匯入痕跡）掃描目前的存檔內容。按「一鍵修正」會修正問題並寫回本機存檔（寫入的存檔一律設 leaderboard.off = true）。</p>
     <table style="margin-top:8px"><thead><tr><th style="width:80px">狀態</th><th>項目</th><th style="width:150px"></th></tr></thead><tbody id="issues"></tbody></table>
     <h3 style="margin-top:16px">存檔識別碼</h3>
     <table><tbody id="ids"></tbody></table>
     <div class="bar"><button id="newLbId">重新產生排行榜與角色識別碼</button></div>
-    <p class="note">此操作會重設所有角色的爬塔紀錄與恐懼最佳、連勝與被換下角色保存的恐懼紀錄；已開啟的恐懼階會保留。在單機存檔模式下按此按鈕會直接寫回存檔。</p>
+    <p class="note">此操作會重設所有角色的爬塔紀錄與恐懼最佳、連勝與被換下角色保存的恐懼紀錄；已開啟的恐懼階會保留。按此按鈕會直接寫回本機存檔。</p>
   </section>
 
   <!-- (b) 防護狀態（反偵測） -->
   <section id="sec-guard-status">
     <h2>防護狀態（反偵測）</h2>
-    <p class="dim">顯示工具包目前的反偵測與上傳攔截狀態，並說明每一項「遊戲會不會看到、後果是什麼」。說明依據官方 20261105.3 程式碼與更新日誌已確認的結論；前端無法得知或尚未實機擷取的伺服器端判定皆明確標示「未確認」。</p>
+    <p class="dim">顯示工具包目前的反偵測與上傳攔截狀態，並說明每一項「遊戲會不會看到、後果是什麼」。政策：修改器與本頁寫入的存檔一律設定 leaderboard.off = true；排行榜上傳封鎖由桌面應用啟動遊戲時的環境變數（D2S_LEADERBOARD_URL／D2S_REPORT_URL）與本機空伺服器完成，不包裝頁面原生函式。</p>
     <div class="bar" style="margin-bottom:10px">
-      <span>存檔模式切換：</span>
-      <button type="button" data-set-mode="auto" id="modeBtnAuto">自動</button>
-      <button type="button" data-set-mode="local" id="modeBtnLocal">單機</button>
-      <button type="button" data-set-mode="online" id="modeBtnOnline">線上</button>
       <button type="button" id="refreshGuardStatus">重新整理狀態</button>
-      <span id="modeSwitchMsg" class="dim"></span>
     </div>
     <table>
       <thead><tr><th style="width:22%">項目</th><th style="width:24%">目前狀態</th><th>遊戲會不會看到、後果是什麼（白話說明）</th></tr></thead>
@@ -122,66 +116,23 @@ const TOOLKIT_VERSION = "1.0.13";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-// 建立後端呼叫橋接：支援桌面／Electron preload 的 window.api，以及網頁版全螢幕 iframe 的 postMessage 協定；
+// 建立桌面應用後端呼叫橋接（直接使用 Electron preload 提供的 window.api）；
 // 呼叫不存在或失敗的方法一律回傳 { error }，頁面容錯不崩潰。
 const backend = (() => {
-  const GAME = "https://d2survivors.lol";
-  const target = new URLSearchParams(location.search).get("origin") || GAME;
-  let seq = 0;
-  const waiting = new Map();
-  const inIframe = typeof window !== "undefined" && window.parent && window.parent !== window;
-  if (inIframe) {
-    window.addEventListener("message", (e) => {
-      if (e.origin !== target || !e.data || e.data.d2edit !== "reply") return;
-      const w = waiting.get(e.data.id);
-      if (!w) return;
-      waiting.delete(e.data.id);
-      w(e.data.result);
-    });
-  }
-  const rpc = (fn, args = []) => {
-    if (!inIframe) return Promise.resolve({ error: "不支援的操作：" + fn });
-    return new Promise((resolve) => {
-      const id = "guard_" + (++seq);
-      const timer = setTimeout(() => {
-        if (waiting.has(id)) {
-          waiting.delete(id);
-          resolve({ error: "後端逾時：" + fn });
-        }
-      }, 15000);
-      waiting.set(id, (res) => {
-        clearTimeout(timer);
-        resolve(res);
-      });
-      try {
-        window.parent.postMessage({ d2edit: "call", id, fn, args }, target);
-      } catch (err) {
-        clearTimeout(timer);
-        waiting.delete(id);
-        resolve({ error: String(err?.message ?? err) });
-      }
-    });
-  };
-  // 桌面版 preload 提供的原生 api 先記下來；之後 window.api 可能被指到下面的 obj，直接查 window.api 會自己呼叫自己。
   const native = window.api || null;
   const call = async (fn, ...args) => {
     try {
-      if (native && typeof native[fn] === "function" && native[fn] !== obj[fn]) {
+      if (native && typeof native[fn] === "function") {
         return await native[fn](...args);
       }
-      if (inIframe) return await rpc(fn, args);
       return { error: "不支援的操作：" + fn };
     } catch (err) {
       return { error: String(err?.message ?? err) };
     }
   };
-  const methods = ["load", "save", "assets", "i18n", "engine", "traces", "diag", "gameBuild", "close", "guardStatus", "saveMode", "setSaveMode"];
-  const obj = { web: Boolean(window.api?.web || inIframe), call };
+  const methods = ["load", "save", "assets", "i18n", "engine", "traces", "diag", "gameBuild", "close", "guardStatus"];
+  const obj = { call };
   for (const m of methods) obj[m] = (...args) => call(m, ...args);
-  if (!window.api) window.api = obj;
-  else {
-    for (const m of methods) if (typeof window.api[m] !== "function") window.api[m] = obj[m];
-  }
   return obj;
 })();
 window.backend = backend;
@@ -189,7 +140,7 @@ window.backend = backend;
 let save = null, A = null, lastSeal = "sealed", traceKeys = [];
 let loadedMode = null, loadSequence = 0, moduleReady = false;
 let faultyItems = null, faultyReasons = new WeakMap(), ruleBad = null, gameSaveFaults = null;
-let currentSaveMode = "local", currentSaveModeSource = "default", lastGuardStatus = null;
+let lastGuardStatus = null;
 let torchCls = "sorceress";
 
 function status(t, cls = "") {
@@ -326,45 +277,28 @@ function renderDetails(list) {
 }
 
 function applySaveModeUI() {
-  const blocked = currentSaveMode !== "local";
-  $("#onlineNotice").hidden = !blocked;
-  $("#onlineNotice").textContent = currentSaveMode === "online" ? "線上存檔：只檢查、不寫入" : "無法確認存檔模式，請重試";
   const unavailable = !moduleReady || !save || loadedMode !== $("#mode").value;
   $("#scan").disabled = unavailable;
-  $("#fixAll").disabled = blocked || unavailable;
-  $("#newLbId").disabled = blocked || unavailable;
-  $("#lbOff").disabled = blocked || unavailable;
-  for (const b of document.querySelectorAll("[data-fix]")) b.disabled = blocked || unavailable;
-  const activeKey = currentSaveModeSource === "override" ? currentSaveMode : "auto";
-  for (const b of document.querySelectorAll("[data-set-mode]")) {
-    b.classList.toggle("active-mode", b.dataset.setMode === activeKey);
-  }
+  $("#fixAll").disabled = unavailable;
+  $("#newLbId").disabled = unavailable;
+  $("#lbOff").disabled = unavailable;
+  for (const b of document.querySelectorAll("[data-fix]")) b.disabled = unavailable;
 }
 
-// 舊桌面啟動器與舊網頁後端沒有線上存檔概念；僅明確不支援時回退單機，逾時或其他錯誤仍拒絕寫入。
-async function resolveSaveMode(query) {
-  try {
-    const result = await Promise.race([Promise.resolve().then(query), new Promise(resolve => setTimeout(() => resolve(null), 3000))]);
-    if (typeof result?.error === "string" && /^不支援的操作[：:]\s*saveMode\s*$/.test(result.error)) return "local";
-    const mode = typeof result === "string" ? result : !result?.error ? result?.saveMode ?? result?.mode : null;
-    return mode === "local" || mode === "online" ? mode : "unknown";
-  } catch { return "unknown"; }
-}
 async function saveAfterFix(actionLabel) {
   const target = loadedMode, snapshot = save, seq = loadSequence;
   if (!moduleReady || !snapshot || !target || target !== $("#mode").value) {
     status("存檔槽已變更，請重新讀取", "bad");
     return false;
   }
-  currentSaveMode = await resolveSaveMode(() => backend.saveMode());
-  applySaveModeUI();
-  if (currentSaveMode !== "local") { status(currentSaveMode === "online" ? "線上存檔：只檢查、不寫入" : "無法確認存檔模式，請重試", "bad"); return false; }
+  if (!snapshot.leaderboard || typeof snapshot.leaderboard !== "object") snapshot.leaderboard = {};
+  snapshot.leaderboard.off = true;
   if (seq !== loadSequence || target !== $("#mode").value || snapshot !== save) { status("存檔槽已變更，請重新讀取", "bad"); return false; }
   const r = await backend.save(target, snapshot);
   if (r && !r.error && (r.ok || r.bytes !== undefined)) {
     lastSeal = "sealed";
     await renderGuard();
-    status(`${actionLabel}並寫入存檔；請按右上角「關閉」讓遊戲重新載入以套用修改`, "ok");
+    status(`${actionLabel}並寫入存檔，可以開啟遊戲了`, "ok");
     return true;
   }
   if (r?.error && !/不支援的操作/.test(r.error)) {
@@ -398,16 +332,15 @@ async function renderGuard() {
   if (seq !== loadSequence || snapshot !== save) return;
   traceKeys = Array.isArray(t) ? t : [];
   const list = detectCurrent();
-  const isOnline = currentSaveMode === "online";
   $("#issues").innerHTML = list
     .map(
       (x, i) => `<tr><td class="${x.unknown ? "dim" : x.ok ? "ok" : "bad"}">${x.unknown ? "未驗證" : x.ok ? "✔ 安全" : "✖ 會被偵測"}</td><td>${esc(x.text)}${x.note ? ` <span class="dim">（${esc(x.note)}）</span>` : ""}</td>
-    <td>${x.fix ? `<button data-fix="${i}" ${isOnline ? "disabled" : ""}>${esc(x.fixText)}</button>` : ""}</td></tr>`
+    <td>${x.fix ? `<button data-fix="${i}">${esc(x.fixText)}</button>` : ""}</td></tr>`
     )
     .join("");
   for (const b of document.querySelectorAll("[data-fix]")) {
     b.onclick = async () => {
-      if (currentSaveMode !== "local" || snapshot !== save || loadedMode !== $("#mode").value) return status("存檔狀態已變更，請重新讀取", "bad");
+      if (snapshot !== save || loadedMode !== $("#mode").value) return status("存檔狀態已變更，請重新讀取", "bad");
       await list[b.dataset.fix].fix();
       if (seq !== loadSequence || snapshot !== save) return status("存檔槽已變更，請重新讀取", "bad");
       await saveAfterFix("已修正單項問題");
@@ -421,7 +354,7 @@ async function renderGuard() {
   $("#ids").innerHTML =
     row("排行榜識別碼", lb.id) +
     row("排行榜名稱", lb.name) +
-    row("排行榜", "已關閉（工具包單機模式，無法開啟）") +
+    row("排行榜", "已關閉（工具包單機政策，寫入一律 off: true）") +
     Object.entries(save.climbs ?? {}).map(([c, v]) => row(`${cz(c)} 角色識別碼`, v?.hero)).join("") +
     row("存檔建立時間", save.born ? new Date(save.born * 1000).toLocaleString(LOCALE) : null);
   applySaveModeUI();
@@ -429,10 +362,6 @@ async function renderGuard() {
 
 async function fixAll() {
   if (!save || !moduleReady || loadedMode !== $("#mode").value) return;
-  if (currentSaveMode !== "local") {
-    status("線上存檔：只檢查、不寫入", "bad");
-    return;
-  }
   const snapshot = save, seq = loadSequence;
   for (const x of detectCurrent()) {
     if (snapshot !== save || seq !== loadSequence || loadedMode !== $("#mode").value) return status("存檔槽已變更，請重新讀取", "bad");
@@ -444,10 +373,6 @@ async function fixAll() {
 
 async function newLeaderboardId() {
   if (!save || !moduleReady || loadedMode !== $("#mode").value) return;
-  if (currentSaveMode !== "local") {
-    status("線上存檔：只檢查、不寫入", "bad");
-    return;
-  }
   applyNewLeaderboardId(save);
   await saveAfterFix("已重新產生排行榜與角色識別碼");
 }
@@ -486,29 +411,15 @@ function sealTextZh(v) {
 
 async function refreshGuardStatus() {
   const gs = await backend.guardStatus();
-  const sm = gs && !gs.error && gs.saveMode ? gs.saveMode : await resolveSaveMode(() => backend.saveMode());
-  if (gs && !gs.error && typeof gs === "object") {
-    lastGuardStatus = gs;
-    currentSaveMode = gs.saveMode === "online" || gs.saveMode === "local" ? gs.saveMode : "unknown";
-    currentSaveModeSource = gs.saveModeSource || "default";
-  } else {
-    lastGuardStatus = null;
-    const modeStr = typeof sm === "string" ? sm : sm?.saveMode ?? sm?.mode;
-    currentSaveMode = modeStr === "online" || modeStr === "local" ? modeStr : "unknown";
-    currentSaveModeSource = sm?.saveModeSource || "default";
-  }
+  lastGuardStatus = gs && !gs.error && typeof gs === "object" ? gs : null;
   applySaveModeUI();
-  renderGuardStatusTable(gs && !gs.error ? gs : null);
+  renderGuardStatusTable(lastGuardStatus);
   renderDiag();
 }
 
 function renderGuardStatusTable(gs) {
   const localPage = gameSeesPage(window);
-  const sourceZh = { override: "手動切換（override）", detected: "自動偵測（detected）", default: "預設單機（default）" }[currentSaveModeSource] ?? currentSaveModeSource;
-  const modeStatusHtml = currentSaveMode === "online"
-    ? `<span class="bad">線上存檔模式（online）</span><br><span class="dim">來源：${esc(sourceZh)}</span>`
-    : currentSaveMode === "local" ? `<span class="ok">單機存檔模式（local）</span><br><span class="dim">來源：${esc(sourceZh)}</span>`
-    : '<span class="dim">無法確認存檔模式</span>';
+  const modeStatusHtml = '<span class="ok">本機存檔模式（desktop）</span><br><span class="dim">桌面應用直接讀寫電腦存檔</span>';
 
   const noUploadHtml = gs
     ? (gs.noUpload ? '<span class="ok">✔ 恆為開啟（不可關閉）</span>' : '<span class="bad">✖ 未開啟</span>')
@@ -516,10 +427,10 @@ function renderGuardStatusTable(gs) {
 
   const lbOffHtml = gs
     ? (gs.leaderboardOff === true
-        ? '<span class="ok">✔ 已鎖定為 true（關閉上傳）</span>'
+        ? '<span class="ok">✔ 存檔為 true（關閉上傳）</span>'
         : gs.leaderboardOff === false
-        ? '<span class="bad">✖ 未鎖定（false）</span>'
-        : '<span class="dim">尚未載入記憶體存檔</span>')
+        ? '<span class="bad">✖ 未關閉（false）</span>'
+        : '<span class="dim">尚未載入存檔或無此欄位</span>')
     : (save?.leaderboard?.off ? '<span class="ok">✔ 存檔內為 true</span>' : '<span class="dim">未確認（後端未提供）</span>');
 
   const queueHtml = gs
@@ -527,8 +438,8 @@ function renderGuardStatusTable(gs) {
     : '<span class="dim">未確認（後端未提供）</span>';
 
   const blockedHtml = gs && Number.isFinite(Number(gs.blockedUploads))
-    ? `<span class="ok">已攔截 ${Number(gs.blockedUploads)} 次</span>`
-    : '<span class="dim">未確認（後端未提供）</span>';
+    ? `<span class="ok">本機伺服器已攔截 ${Number(gs.blockedUploads)} 次</span>`
+    : '<span class="dim">由桌面應用本機空伺服器攔截（D2S_LEADERBOARD_URL）</span>';
 
   const scSeal = gs?.seals ? gs.seals.softcore : ($("#mode").value === "softcore" ? lastSeal : undefined);
   const hcSeal = gs?.seals ? gs.seals.hardcore : ($("#mode").value === "hardcore" ? lastSeal : undefined);
@@ -545,88 +456,69 @@ function renderGuardStatusTable(gs) {
   const webdriverVal = typeof gs?.webdriver === "boolean" ? gs.webdriver : Boolean(navigator.webdriver);
   const webdriverHtml = webdriverVal
     ? '<span class="bad">✖ true（自動化瀏覽器）</span>'
-    : '<span class="ok">✔ false（一般瀏覽器）</span>';
+    : '<span class="ok">✔ false（一般環境）</span>';
 
   const paramsList = Array.isArray(gs?.restrictedParams) ? gs.restrictedParams : [];
-  const paramsHtml = gs || !backend.web
+  const paramsHtml = gs
     ? (paramsList.length ? `<span class="bad">✖ 含有：${esc(paramsList.join("、"))}</span>` : '<span class="ok">✔ 無受限參數</span>')
     : '<span class="dim">未確認（後端未提供）</span>';
 
   const rows = [
     [
-      "目前存檔模式與來源",
+      "目前存檔模式",
       modeStatusHtml,
-      "【已確認】單機模式允許修改器與本頁「一鍵修正」寫入本機存檔（寫入時自動把 leaderboard.off 設為 true 並重簽章）；線上存檔模式則鎖定所有存檔寫入（只檢查、不修改），避免動到線上存檔。",
+      "【已確認】桌面版只讀寫電腦上的本機存檔。政策：修改器與本頁寫入存檔時，一律自動將 leaderboard.off 設為 true 並重簽章。",
     ],
     [
       "排行榜上傳封鎖（恆為開、不可關）",
       noUploadHtml,
-      "【已確認】工具包載入即攔截所有送往 /api/leaderboard 的非 GET 請求（fetch／XHR／sendBeacon，含結算 /runs、/hc/* 與每 ~30 秒抽查 /checks；僅放行 /forge 淬鍊）。遊戲程式碼不會檢查 fetch 是否被覆寫（已靜態確認 47 個 JS 模組）。後果：任何成績與抽查都不會送到官方伺服器；專家榜因要求伺服器全程見證（20261027.2 已確認），載入工具包遊玩的專家角色不會上榜。",
+      "【已確認】從工具包啟動遊戲時，會設定官方環境變數 D2S_LEADERBOARD_URL／D2S_REPORT_URL 指向工具包本機空伺服器（只丟棄上傳請求），不包裝或修改任何遊戲函式。",
     ],
     [
-      "記憶體存檔 leaderboard.off",
+      "存檔 leaderboard.off",
       lbOffHtml,
-      "【已確認】工具包把遊戲記憶體中的 game.save.leaderboard.off 鎖定為不可改、不可刪的 true，並每 300ms 巡檢。遊戲會看到 leaderboard.off === true，結算函式（postRun → wC）直接跳過上傳，遊戲選項中的「上傳」開關也無法打開。",
+      "【已確認】政策：修改器寫入的存檔一律設 leaderboard.off = true，遊戲結算函式會直接跳過上傳。",
     ],
     [
       "等待上傳佇列（d2s:leaderboard-queue）",
       queueHtml,
-      "【已確認】遊戲離線或送出失敗時會把成績暫存於 localStorage[\"d2s:leaderboard-queue\"]。工具包載入時立即刪除該鍵並攔截後續寫入。遊戲不會在背景補送舊的待上傳紀錄。",
+      "【已確認】檢查遊戲本機存放區是否遺留待上傳紀錄；由工具包啟動的遊戲不會將上傳送到官方伺服器。",
     ],
     [
       "已擋下上傳次數",
       blockedHtml,
-      "【已確認】本次工作階段工具包攔截到的排行榜非 GET 請求次數。官方自 20261103.1 起天梯只排恐懼階與專家模式，一般難度軟核局本來就不會發送上傳請求，顯示 0 次屬正常現象。",
+      "【已確認】桌面應用本機空伺服器攔截到的排行榜上傳次數。",
     ],
     [
       "存檔封印狀態（HMAC-SHA256）",
       sealsHtml,
-      "【已確認】遊戲載入存檔時以內建金鑰驗證 seal 簽章（saveTransfer 的 OD／kD）。若簽章損壞或缺漏，一般模式會標記 leaderboard.edited = true 並清掉 chase，專家模式會把角色標為 unranked:\"edited\"。工具包寫入存檔時使用同一組金鑰重簽，封印保持有效。",
+      "【已確認】遊戲載入存檔時以內建金鑰驗證 seal 簽章（saveTransfer 的 OD／kD）。工具包寫入存檔時使用同一組金鑰重簽，封印保持有效。",
     ],
     [
       "被替換的原生 API 與 __D2ZH（MOD 診斷）",
       nativesHtml,
-      "【客戶端已確認／伺服器端未確認】遊戲 ui 模組的 ie() 會檢查 __D2ZH 及 7 個原生 API（WeakMap.get、Storage.setItem、drawImage、putImageData、addEventListener、requestAnimationFrame、devicePixelRatio）。工具包因攔截佇列會替換 Storage.setItem，故遊戲的 page 診斷欄位會看到 replaced Storage.setItem。但此結果【只在玩家主動按「回報（Report）」送出 /api/report 時才會隨診斷文字送出】，排行榜上傳資料不含此欄位（已確認）。收到回報後官方伺服器如何處理則屬伺服器端實作（未確認）。",
+      "【已確認】工具包預設不替換 Storage.setItem 等原生 API，也不設定 __D2ZH 標記。",
     ],
     [
       "自動化標記（navigator.webdriver）",
       webdriverHtml,
-      "【已確認】遊戲在 TC、jre 與營地／專家模式會檢查 navigator.webdriver。為 true 時遊戲直接判定不計入排行榜。一般瀏覽器為 false，工具包不會修改此屬性。",
+      "【已確認】工具包不會修改此屬性。",
     ],
     [
       "網址受限參數（40 個除錯參數）",
       paramsHtml,
-      "【已確認】遊戲檢查網址是否帶有 god、speed、difficulty、terror、power、mf 等 40 個受限參數（只要網址出現參數名即算）。若有，遊戲會把該局標記為 tainted、上傳紀錄 notes 加上 \"debug\" 並拒絕排名。工具包不改網址。",
+      "【已確認】桌面版工具包不帶任何受限參數。",
     ],
     [
       "其他伺服器端與未實機項目說明",
       '<span class="dim">部分已確認／伺服器端未確認</span>',
-      "【已確認】客戶端上傳 flags（裝備、技能重複、屬性點、等級經驗、通關最短時間：一般 1800 秒／恐懼階 90 秒）、專家模式世代 gen 回溯偵測（拿舊檔覆蓋標為 restored）與官方桌面版 app.asar 雜湊檢查（本工具包啟動器不改官方 app.asar，不觸發 patched）。<br>【未確認】官方伺服器端實際拒收門檻與經濟總量檢查細節、本地淬鍊（攔截 /forge）在停用工具包後伺服器的判定、恐懼階 /checks 與專家模式實機上傳本文——因伺服器端不公開而標明「未確認」；單機模式下上傳已全面封鎖，資料不會送出。",
+      "【已確認】客戶端上傳 flags（裝備、技能重複、屬性點、等級經驗、通關最短時間）與官方桌面版 app.asar 雜湊檢查（套用繁中資料檔替換時會觸發 patched 狀態，但上傳已由本機空伺服器丟棄）。",
     ],
   ];
 
   $("#guardStatusBody").innerHTML = rows
     .map(([name, st, desc]) => `<tr><td style="font-weight:bold">${esc(name)}</td><td>${st}</td><td class="dim">${desc}</td></tr>`)
     .join("");
-}
-
-async function switchSaveMode(targetMode) {
-  const arg = targetMode === "auto" ? null : targetMode;
-  $("#modeSwitchMsg").textContent = "切換中…";
-  const r = await backend.setSaveMode(arg);
-  if (r?.error) {
-    // 後端尚未支援 setSaveMode 時本機模擬切換以維持介面可用
-    currentSaveMode = arg === "online" ? "online" : "local";
-    currentSaveModeSource = arg === null ? "default" : "override";
-    applySaveModeUI();
-    renderGuardStatusTable(lastGuardStatus);
-    if (save) await renderGuard();
-    $("#modeSwitchMsg").textContent = `已切換為${arg === "online" ? "線上" : arg === "local" ? "單機" : "自動"}（本機狀態；後端回應：${r.error}）`;
-    return;
-  }
-  await refreshGuardStatus();
-  if (save) await renderGuard();
-  $("#modeSwitchMsg").textContent = `已切換為${currentSaveMode === "online" ? "線上存檔模式（只檢查、不寫入）" : "單機存檔模式"}`;
 }
 
 async function load() {
@@ -680,9 +572,6 @@ $("#newLbId").onclick = newLeaderboardId;
 $("#diagIn").oninput = renderDiag;
 $("#closeBtn").onclick = () => backend.close();
 $("#refreshGuardStatus").onclick = refreshGuardStatus;
-for (const b of document.querySelectorAll("[data-set-mode]")) {
-  b.onclick = () => switchSaveMode(b.dataset.setMode);
-}
 $("#versionDismiss").onclick = () => { $("#versionWarn").hidden = true; };
 
 window.__initGuardPage = async () => {

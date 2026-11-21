@@ -1,5 +1,20 @@
 # 交接紀錄
 
+## 【2026-11-21 桌面版重構】獨立應用（分支 desktop-only，未合併 main、未發布）
+- **背景**：官方網頁版 d2survivors.lol 停用（`/play/` 回 404），桌面版仍可玩。使用者決定專案只針對桌面版，做成**獨立應用**，不替換官方函式（盡量），繁中可還原。
+- **新架構（以本節為準，下方舊章節凡提到網頁版／書籤／GitHub Pages／`d2edit.js`／官方網址 `/play/` 者一律作廢）**：
+  - `editor/`（Electron）為唯一入口：`game-link.js` 啟動官方 `D2 Survivors.exe`（`--remote-debugging-port=0`），以 CDP 連線；`launcher.html`＝遊戲控制台（啟動遊戲、輔助器、中文化套用／還原）；`launcher-api.js`／`lang-cli.cjs` 處理提權；`paths.js` 統一本機資源路徑（修改器頁面、字典、特徵碼等都隨 exe 打包，不再從遠端載入）。**發布方式改變：每次修正都要重出 exe，不再有熱重載。**
+  - **取得 game 不掛接函式**：`import("app://game/assets/Game-xxx.js")` 取得 `Game` 類別，`Runtime.queryObjects(Game.prototype)` 取得唯一實例，`exposeGame()` 設為頁面全域 `window.__d2autobotGame`；讀快照約 0.3 ms。
+  - **輔助器 `helper/`**：決策邏輯仍在頁內（`input.js`→`hooks.js`→`autobot.js` 依序由 `startHelper()` 注入）；移動與按鍵走 `Runtime.addBinding("__d2input")`→Node 端 `Input.dispatchKeyEvent`（受信任事件）。**預設不包裝任何官方函式**；使用者核可的例外只在開關開啟時安裝、關閉還原（`hooks.js` 登錄表：stageTime、invincible、xp、forgeEssence、levelPool、camp）。`chooseTree`（任務獎品）、`actCleared`（持續召喚頭目）、`whileForgeIdle` 三項掛接**不在核可名單，暫時停用**（常數 QUEST_PRIZE_HOOK／UBER_EVENT_HOOK／FORGE_IDLE_HOOK=false），要恢復需使用者核可。`forge-local.js` 的 fetchHook 依賴已移除的 guard fetch 包裝，會失效，待處理。
+  - **移動只剩 8 方向鍵盤**：遊戲只認方向鍵／WASD，小角度閃避被量化掉；**實機閃避品質尚未與舊版比較**。鍵盤移動無路徑規劃（`walls.route`），拾取改直接朝物品走；移動鍵重綁未處理。
+  - **排行榜上傳封鎖（政策不變，無關閉入口）**：上傳由遊戲主程序經 IPC 送出（不是頁面 fetch）。工具包啟動遊戲時設 `D2S_LEADERBOARD_URL`、`D2S_REPORT_URL` 指向本機空伺服器（`game-link.js` 的 stub，GET 404、POST 丟棄並計數）。**直接點官方捷徑開遊戲沒有這層封鎖**；修改器寫入的存檔仍一律 `leaderboard.off=true`。`guard/guard.js` 的 fetch／XHR／setItem 包裝與 `saveMode` 已刪，`guard/save-check.js` 保留。
+  - **中文化**：`lang/desktop-lang-core.mjs`（CLI：`lang/tools/desktop-lang.mjs --apply|--restore|--status`）只替換 asar 內 `ko-*.js` 韓文語言包的值（13,988 筆＋追加 517 筆 zh-TW 專有鍵），語言設 `localStorage["d2s:lang"]="ko"`；**另有一處對官方檔案的靜態修補**：`saveTransfer-*.js` 的外文判斷函式（原只認韓文，中文會變「?」）追加 CJK 範圍（以函式本體結構定位，找不到就整個 apply 失敗）。還原＝放回備份 `app.asar.d2lang-orig`（只有目前 asar 雜湊等於記錄的套用後雜湊才放回，防降版）並把 `d2s:lang` 還原。不改 `resources/app.asar.sha256`，所以遊戲會把成績標 `patched`（上傳已被封鎖）。寫入 Program Files 需管理員權限。`lang/lang.js`（舊的執行時翻譯）已不載入，**尚未刪除**：實機看到遊戲內世界文字（例如地上物品標籤 `Replenish Life`）仍是英文、物品名稱組合與 D2R 字型也未與舊版比對，品質是否等同待查，確認後再刪 `lang.js`。
+  - **已刪除**：`d2edit.js`、`index.html`、`site/`、`wrangler.jsonc`、`.nojekyll`、`version.json`、`launcher/`（Rust）、`tools/build-web.js`、`verify/auto.cjs`／`publish.cjs`／`live-smoke.cjs`、`modifier/webapi.js` 與只測網頁行為的測試。`game-bundles/` 保留（`verify/`、各測試仍讀）。
+- **實機測試（新）**：`node tests/live-harness/desktop.cjs`（純 node，不帶 ELECTRON_RUN_AS_NODE）；環境變數 H_OUT、H_CLASS、H_SEED（D2S1 文字或解碼 JSON）、H_EXE、H_LANG、H_SETTINGS、H_SWITCHES、H_SECONDS、H_NOBOT。userData 隔離（`d2` 素材資料夾以 junction 連到真實目錄、其餘獨立）。舊的網頁版腳本（`tests/live-harness/main.js`、`boot.js` 與約百支 `*-live.cjs`）**已過時、不可用**，需逐支改接 `desktop.cjs` 或刪除。
+- **本次實機已驗證（官方桌面 build 2026.1105.3，隔離 userData＋使用者 D2S1 存檔）**：CDP 連線、唯讀取得 Game、輸入（Digit1 選卡、方向鍵按住可移動）；輔助器含受信任輸入跑 150 秒（野蠻人升到 Lv12、827+ 次輸入、無例外）；排行榜本機空伺服器 0 次請求（只做了一般遊玩，**未觸發上傳流程，未實測 POST 被丟棄**）；中文版（複製的遊戲上套用）選單、職業選擇、HUD 繁中顯示正常。**未驗證**：對真實 Program Files 的 UAC 套用／還原、`d2s:lang` 寫入 LevelDB 後遊戲是否讀到（實測用 CDP 設 localStorage）、封裝後 exe、閃避品質、任務模式長時間、例外掛接開啟後的實機行為、遊戲控制台 UI。
+- **回歸**：`node verify/verify.cjs --quick` 18 項、`helper/tests/autobot.cjs` 290／290、`memory-only.cjs`、`editor/tests` 13／13、`lang/tests`、`modifier`／`guard` 單元測試通過。
+- **待辦**：實機驗證上列未驗證項；閃避與走位與舊版比較（必要時再討論退回 `steer` 覆寫）；移植或刪除舊 live-harness 腳本；`forge-local.js` 的 fetchHook；`lang.js` 去留；電腦端功能（系統匣、全域快捷鍵、狀態浮窗）尚未做；輔助器設定面板仍畫在遊戲頁面內（未移到獨立應用）。
+
 ## 野蠻人 2 號長時間實機（2026-11-20 Codex，進行中）
 - 原 PID 55672 已死亡；以原 `tests/live-harness/run-barbarian-2/profile`、官方 `/play/`、不設 `H_SEED`／`H_LOCAL` 重啟，PID 21488。`status.json` 確認野蠻人 Lv92、地獄、戰鬥輔助與自動戰鬥開啟、作弊關閉。測試主程式移除螢幕外座標並停用視窗遮蔽判定；保留前代理的 `boot.js` 未提交修改。
 - 重啟前 `hellClears=2`，重啟後歸零；`helper/autobot.js:344-351` 顯示這是程序內計數，官方遊戲記憶體 `save.baalSlain.barbarian` 實測為 `hell`，Lv99 補任務實際流程尚待驗證。啟動時 `startRun` 的 `reading 'id'` 例外與前次相同，註解指出是 setup 測試路徑；後續仍須監視。
@@ -31,7 +46,7 @@
 ## 反覆發生的問題（必讀）
 使用者多次糾正的事項，接手前必須遵守：
 1. **一律繁體中文**：回覆、交接、更新日誌、程式內介面均使用繁體中文。
-2. **「完成」前必須實機驗證**：單元測試與模擬不算完成。實機一律指官方網址 `https://d2survivors.lol/play/`。回報時清楚列出「實機驗證了什麼、哪些未驗證」，未經驗證不可宣稱修好。
+2. **「完成」前必須實機驗證**：單元測試與模擬不算完成。（2026-11-21 起官方網頁版停用，實機目標改為電腦版，見最上方決策；網頁版 `/play/` 驗證已不可用。）回報時清楚列出「實機驗證了什麼、哪些未驗證」，未經驗證不可宣稱修好。
 3. **用使用者回報的原始輸入重現**：依使用者貼出的字串、截圖或存檔為驗收基準。
 4. **自己測完、修完，不要一直發問**：除非發布前確認、刪除使用者資料或規則衝突，否則自主完成測試與修復。
 5. **發布日誌給玩家看**：日誌寫在公告站（`site/index.html`）與修改器，說明工具包更新內容；同一天的更新合併為同一則（標註日期，不標小版號）。工具包支援熱重載，平時不升版號；發布 GitHub Release 桌面版時才加 `--bump`。

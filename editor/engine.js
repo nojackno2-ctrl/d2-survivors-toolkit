@@ -10,8 +10,8 @@ const GAME_ASSETS = path.join(GAME_ARCHIVE, "desktop", "dist", "web", "assets");
 const GAME_CHANGELOG = path.join(GAME_ARCHIVE, "desktop", "dist", "web", "changelog.json");
 const ITEMSTATS = path.join(process.env.APPDATA, "D2 Survivors", "d2", "itemstats.json");
 
-// 簽章、patch、引擎頁面都從 GitHub 抓（見 remote.js），與網頁版共用同一份，不用重新打包 exe
-const remote = require("./remote");
+// 簽章、patch、引擎頁面都從本機隨附資源讀取（見 paths.js）
+const paths = require("./paths");
 
 let win = null, ready = null, preparedArchive = null;
 function archiveStamp() {
@@ -23,11 +23,9 @@ function installedBuild() {
 }
 
 async function prepare() {
-  const [sigText, patchText, pageText] = await Promise.all([
-    remote.text("modifier/signatures.json"),
-    remote.text("modifier/patch.mjs"),
-    remote.text("modifier/engine-page.js"),
-  ]);
+  const sigText = paths.readAssetText("modifier/signatures.json");
+  const patchText = paths.readAssetText("modifier/patch.mjs");
+  const pageText = paths.readAssetText("modifier/engine-page.js");
   const SIGNATURES = JSON.parse(sigText);
   const stamp = archiveStamp();
   const dir = fs.mkdtempSync(path.join(app.getPath("temp"), "d2s-editor-engine-"));
@@ -87,4 +85,4 @@ async function call(fn, ...args) {
   return win.webContents.executeJavaScript(`window.engine.${fn}(...${JSON.stringify(args)})`);
 }
 
-module.exports = { start, call };
+module.exports = { start, call, installedBuild };

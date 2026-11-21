@@ -1,105 +1,72 @@
-// 桌面版語言注入：把語言模組放進官方桌面版遊戲（D2 Survivors.exe）的 app.asar，開機就載入。
-// 用法（需系統管理員權限，因為遊戲裝在 Program Files）：
-//   node lang/tools/desktop-lang.mjs [--game "C:\Program Files\D2 Survivors"] [--d2r "C:\Program Files (x86)\Diablo II Resurrected"] [--out 另存路徑] [--restore]
-// - 先備份原檔為 app.asar.d2lang-orig（已有就不覆蓋）；--restore 還原備份。
-// - D2R 原版繁中字型（BlizzardGlobalTCUnicode.ttf）在本機從玩家自己的 D2R 取出，只放進本機的 app.asar，不散佈。
-// - 遊戲更新後官方安裝程式會覆蓋 app.asar，重新執行本工具即可。
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+// 桌面版中文化 CLI（薄封裝）：呼叫 lang/desktop-lang-core.mjs
+// 用法（操作 Program Files 時需系統管理員權限）：
+//   node lang/tools/desktop-lang.mjs --apply [--game <dir>] [--d2r <dir>] [--out <path>] [--lang-before <val>]
+//   node lang/tools/desktop-lang.mjs --restore [--game <dir>]
+//   node lang/tools/desktop-lang.mjs --status [--game <dir>]
+import {
+  DEFAULT_D2R_DIR,
+  DEFAULT_GAME_DIR,
+  apply,
+  restore,
+  status,
+} from "../desktop-lang-core.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const require = createRequire(path.join(root, "..", "editor", "package.json"));
-const asar = require("@electron/asar");
+const arg = (name, def) => {
+  const i = process.argv.indexOf(name);
+  return i >= 0 ? process.argv[i + 1] : def;
+};
 
-const arg = (name, def) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : def; };
-const gameDir = arg("--game", "C:\\Program Files\\D2 Survivors");
-const d2rDir = arg("--d2r", "C:\\Program Files (x86)\\Diablo II Resurrected");
-const target = path.join(gameDir, "resources", "app.asar"), backup = target + ".d2lang-orig";
-const out = arg("--out", target);
+const gameDir = arg("--game", DEFAULT_GAME_DIR);
+const d2rDir = arg("--d2r", DEFAULT_D2R_DIR);
+const out = arg("--out", undefined);
+const langBefore = arg("--lang-before", undefined);
 
-if (process.argv.includes("--restore")) {
-  if (!fs.existsSync(backup)) throw new Error("找不到備份 " + backup);
-  fs.copyFileSync(backup, target);
-  console.log("已還原原版 app.asar");
+function formatLangAction(action) {
+  if (!action) return "";
+  if ("set" in action) return `需要把 d2s:lang 還原成 ${action.set}`;
+  if (action.delete) return "需要刪除 d2s:lang（還原為套用前未設定狀態）";
+  return "";
+}
+
+if (process.argv.includes("--status")) {
+  const res = status({ gameDir });
+  console.log(`狀態：${res.label} (${res.status})`);
+  if (res.currentHash) console.log(`目前 SHA-256：${res.currentHash}`);
+  if (res.origHash) console.log(`原版 SHA-256：${res.origHash}`);
+  if (res.patchedHash) console.log(`套用後 SHA-256：${res.patchedHash}`);
   process.exit(0);
 }
 
-// 以 fs 模擬瀏覽器的資料夾 handle，讓 d2rfont.js 在 Node 也能用
-const dirHandle = (dir) => ({
-  async *entries() {
-    for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
-      const p = path.join(dir, d.name);
-      yield [d.name, d.isDirectory() ? { kind: "directory", ...dirHandle(p) } : { kind: "file", ...(await dirHandle(dir).getFileHandle(d.name)) }];
-    }
-  },
-  async getDirectoryHandle(name) { const p = path.join(dir, name); if (!fs.statSync(p).isDirectory()) throw new Error(p); return dirHandle(p); },
-  async getFileHandle(name) {
-    const p = path.join(dir, name);
-    return { async getFile() { const fd = fs.openSync(p, "r"), size = fs.fstatSync(fd).size; return {
-      size, async arrayBuffer() { const b = fs.readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); },
-      slice(start = 0, end = size) { return { async arrayBuffer() { const n = Math.max(0, end - start), b = Buffer.alloc(n); fs.readSync(fd, b, 0, n, start); return b.buffer.slice(b.byteOffset, b.byteOffset + n); } }; },
-    }; } };
-  },
-});
-
-// 判斷目前的 app.asar 是不是已經注入過：是的話從備份重新做，避免重複注入
-const marker = "d2lang/boot.js";
-const sep = path.sep;
-const html = (file) => asar.extractFile(file, ["desktop", "dist", "web", "play", "index.html"].join(sep)).toString();
-let source = target;
-if (html(target).includes(marker)) {
-  if (!fs.existsSync(backup)) throw new Error("app.asar 已注入過但找不到原版備份");
-  source = backup;
-} else if (!fs.existsSync(backup) && out === target) fs.copyFileSync(target, backup);
-
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "d2lang-asar-"));
-try {
-  asar.extractAll(source, tmp);
-  const web = path.join(tmp, "desktop", "dist", "web"), dst = path.join(web, "d2lang");
-  for (const f of ["lang.js", "d2rfont.js", "zh-TW.json"]) fs.copyFileSync(path.join(root, f), path.join(dst, f));
-
-  let font = false;
-  try {
-    const { extractD2rFont } = await import(new URL("../d2rfont.js", import.meta.url));
-    const bytes = await extractD2rFont(dirHandle(d2rDir));
-    fs.writeFileSync(path.join(dst, "d2r-font.ttf"), Buffer.from(bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes));
-    font = true;
-  } catch (e) { console.warn("取不到 D2R 字型，改用系統字型：", e.message); }
-
-  // 啟動腳本：等遊戲畫面出現（遊戲模組已載入）才載入語言模組，避免搶在遊戲之前執行遊戲模組
-  fs.writeFileSync(path.join(dst, "boot.js"), `// 由 lang/tools/desktop-lang.mjs 產生
-window.__d2zhUrl = new URL("zh-TW.json", import.meta.url).href;
-const ready = () => !!document.querySelector("canvas");
-(async () => {
-  for (let i = 0; i < 600 && !ready(); i++) await new Promise((r) => setTimeout(r, 200));
-  await import(new URL("lang.js", import.meta.url).href);
-  ${font ? `try { const r = await fetch(new URL("d2r-font.ttf", import.meta.url)); if (r.ok) await window.__d2lang?.useFontBytes?.(await r.arrayBuffer()); } catch (e) { console.warn("[d2lang] D2R 字型載入失敗", e); }` : ""}
-})();
-`);
-  // 桌面版把翻譯器類別併在 lang-*.js 裡且沒有匯出（網頁版是獨立的 translate-*.js）：
-  // 補一行匯出，語言模組才能像網頁版一樣改用我們的字典
-  const assets = path.join(web, "assets");
-  const langFile = fs.readdirSync(assets).find((f) => /^lang-[\w-]+\.js$/.test(f));
-  if (langFile && !fs.readdirSync(assets).some((f) => /^translate-[\w-]+\.js$/.test(f))) {
-    const p = path.join(assets, langFile), src = fs.readFileSync(p, "utf8");
-    const cls = /var ([\w$]+)=class\{exact=new Map/.exec(src)?.[1];
-    if (cls && !src.includes("__d2Translator")) fs.writeFileSync(p, `${src}\nexport{${cls} as __d2Translator};\n`);
-    else if (!cls) console.warn("找不到遊戲翻譯器類別，桌面版只能用簡易比對");
+if (process.argv.includes("--restore")) {
+  const res = restore({ gameDir });
+  if (!res.ok) {
+    console.error(`還原失敗：${res.message}`);
+    process.exit(1);
   }
+  if (res.restored) {
+    console.log(`已還原原版 app.asar（SHA-256 驗證通過：${res.origHash}）`);
+  } else {
+    console.log("偵測到官方已更新覆蓋 app.asar，已略過還原舊備份並清除備份記錄（防降版）。");
+  }
+  const msg = formatLangAction(res.d2sLangAction);
+  if (msg) console.log(msg);
+  process.exit(0);
+}
 
-  const page = path.join(web, "play", "index.html");
-  const h = fs.readFileSync(page, "utf8");
-  if (!/<script type="module"[^>]*src="\.\.\/assets\/game-/.test(h)) throw new Error("遊戲頁面格式不同，無法注入");
-  fs.writeFileSync(page, h.replace(/<script type="module"[^>]*src="\.\.\/assets\/game-/, (m) => `<script type="module" src="../${marker}"></script>\n${m}`));
-
-  const packed = path.join(tmp, "..", path.basename(tmp) + ".asar");
-  await asar.createPackage(tmp, packed);
-  fs.copyFileSync(packed, out);
-  fs.rmSync(packed, { force: true });
-  console.log(`已注入語言模組到 ${out}${font ? "（含 D2R 原版繁中字型）" : ""}`);
-} finally {
-  fs.rmSync(tmp, { recursive: true, force: true });
+// 預設或 --apply
+const res = await apply({
+  gameDir,
+  d2rDir,
+  out,
+  d2sLangBefore: langBefore,
+});
+console.log(
+  `已套用繁體中文化到 ${res.target}（替換 ${res.replacedCount}/${res.totalCount} 筆，追加 ${res.addedCount} 筆，檔案 ${res.koFile}）`
+);
+console.log(`外文判斷函式修補：${res.cjkPatch.file} 內 ${res.cjkPatch.fnName}()（追加 CJK 範圍，可由備份還原）`);
+console.log(`原版 SHA-256：${res.origHash}`);
+console.log(`套用後 SHA-256：${res.patchedHash}`);
+console.log("需要把 d2s:lang 設為 ko");
+if (res.fontWarning) {
+  console.warn(`字型提示：${res.fontWarning}`);
 }

@@ -79,8 +79,8 @@ function encodeLs(s) {
     : Buffer.concat([Buffer.from([0]), Buffer.from(s, "utf16le")]);
 }
 
-async function openDb() {
-  const db = new ClassicLevel(LDB, { keyEncoding: "buffer", valueEncoding: "buffer", createIfMissing: false });
+async function openDb(dir = LDB) {
+  const db = new ClassicLevel(dir, { keyEncoding: "buffer", valueEncoding: "buffer", createIfMissing: false });
   try {
     await db.open();
   } catch (e) {
@@ -164,6 +164,49 @@ function assets() {
   } catch {
     return { dir: D2_DIR, bases: {}, uniques: {}, sets: {}, quest: {}, runes: {}, gems: {} };
   }
+}
+
+// 讀寫任意 localStorage 鍵（例如語言設定 d2s:lang）。遊戲開著時 LevelDB 被鎖住，openDb 會失敗，這裡改成明確的「請先關閉遊戲」。
+async function openDbClosedGame(dir) {
+  try {
+    return await openDb(dir);
+  } catch (e) {
+    throw new Error("遊戲可能正在執行，無法讀寫遊戲設定；請先完全關閉遊戲再試。(" + e.message + ")");
+  }
+}
+function checkLsKey(key) {
+  if (typeof key !== "string" || !key || !/^[!-~]+$/.test(key)) throw new Error("localStorage 鍵名不正確。");
+}
+// 回傳字串或 null（不存在）
+async function getLocalStorageKeyAt(dir, key) {
+  checkLsKey(key);
+  const db = await openDbClosedGame(dir);
+  try {
+    try { return decodeLs(await db.get(lsKey(key))); } catch { return null; }
+  } finally {
+    await db.close();
+  }
+}
+// valueOrNull 為 null 時刪除該鍵；寫入後讀回驗證
+async function setLocalStorageKeyAt(dir, key, valueOrNull) {
+  checkLsKey(key);
+  if (valueOrNull !== null && typeof valueOrNull !== "string") throw new Error("localStorage 值必須是字串或 null（刪除）。");
+  const db = await openDbClosedGame(dir);
+  try {
+    const k = lsKey(key);
+    if (valueOrNull === null) {
+      await db.del(k);
+      let still = true;
+      try { await db.get(k); } catch { still = false; }
+      if (still) throw new Error("刪除後仍讀得到該鍵。");
+    } else {
+      await db.put(k, encodeLs(valueOrNull));
+      if (decodeLs(await db.get(k)) !== valueOrNull) throw new Error("寫入後讀回的內容不一致。");
+    }
+  } finally {
+    await db.close();
+  }
+  return { ok: true, key, deleted: valueOrNull === null };
 }
 
 // 找出 / 刪除遊戲留下的匯入痕跡
@@ -254,9 +297,12 @@ async function guardStatusDb() {
 // 所有 localStorage 讀寫排隊執行：頁面啟動的讀取與使用者操作不能同時開啟資料庫（LevelDB 會鎖檔，後到的會失敗）
 let dbQueue = Promise.resolve();
 const queued = (fn) => (...args) => { const run = dbQueue.then(() => fn(...args)); dbQueue = run.catch(() => {}); return run; };
+const getLocalStorageKey = queued((key) => getLocalStorageKeyAt(LDB, key));
+const setLocalStorageKey = queued((key, value) => setLocalStorageKeyAt(LDB, key, value));
 const load = queued(loadDb), store = queued(storeDb), traces = queued(tracesDb), guardStatus = queued(guardStatusDb);
 
 module.exports = {
+  getLocalStorageKey, setLocalStorageKey, getLocalStorageKeyAt, setLocalStorageKeyAt,
   load, store, assets, traces, diag, listBackups, readBackup, deleteBackup, snapshot, readFile, writeFile,
   sealText, sealState, sealOf, computeSeals, buildGuardStatus, guardStatus, saveMode, setSaveMode, BACKUP_DIR,
 };

@@ -1,11 +1,10 @@
 # GitHub 頁面內容
 
 ## About（儲存庫右側）
-- **Description**：D2 Survivors D2倖存者工具包：繁體中文存檔修改器：物品編輯、訂製裝備、裝備庫、帳號強化與反修改偵測，支援網頁書籤（含手機）與 Windows 桌面版。
-- **Website**：https://nojackno2-ctrl.github.io/d2-survivors-toolkit/
-- **Topics**：d2-survivors, save-editor, diablo-2, bookmarklet, electron, traditional-chinese
+- **Description**：D2 Survivors D2倖存者工具包：Windows 桌面版繁體中文獨立應用，整合存檔修改器（物品編輯、訂製裝備、裝備庫、帳號強化與反修改偵測）、遊戲輔助器與可還原繁體中文化。
+- **Topics**：d2-survivors, save-editor, diablo-2, electron, traditional-chinese
 
-## Release v1.0.2
+## Release v1.0.2（歷史範本）
 
 **標題**：v1.0.2 支援官方 20261102.1、雙武器組與安全相容封鎖
 
@@ -19,10 +18,8 @@
   - 職業底材符文之語：分離隨機固有詞綴與固定詞綴驗證，避免誤判。
 - **中文化與介面**：
   - 補齊官方最新版本新增的 112 條繁體中文介面翻譯。
-- **網頁版建置同步**：
-  - 已更新 GitHub Pages 網頁版，線上書籤載入自動獲取最新版本。
 
 ### 使用前請留意
-- Windows 可攜版尚未簽署；需要已安裝相容版本的 D2 Survivors。
+- Windows 可攜版尚未簽署；需要已安裝相容版本的 D2 Survivors 桌面版。
 - 使用前請先備份存檔。
 - 「可用詞綴範圍」為底材可能出現的詞綴，並非都能同時出現。
