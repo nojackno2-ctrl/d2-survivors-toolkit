@@ -102,15 +102,11 @@ ipcMain.handle("openPage", wrap((target) => {
 
 const isWeb = (url) => /^https?:/i.test(url);
 function loadPage(target = "editor", opts) {
+  if (!win || win.isDestroyed()) return Promise.resolve();
   return win.loadURL(paths.pageUrl(target, opts));
 }
 
-app.whenReady().then(() => {
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: en() ? "Game Console" : "遊戲控制台", click: () => loadPage("launcher") },
-    { label: en() ? "Save Editor" : "存檔修改器", click: () => loadPage("editor") },
-    { label: en() ? "Save Check & Guard" : "存檔檢查與防護", click: () => loadPage("guard") },
-  ]));
+function createMainWindow() {
   win = new BrowserWindow({
     width: 1240,
     height: 880,
@@ -129,17 +125,27 @@ app.whenReady().then(() => {
     if (isWeb(url)) shell.openExternal(url);
     return { action: "deny" };
   });
+  win.on("close", (e) => { if (!quitting && gameLink.running) { e.preventDefault(); win.hide(); } });
+  win.on("closed", () => { win = null; if (!quitting && !gameLink.running) { quitting = true; app.quit(); } }); // 遊戲沒在跑時關閉主視窗＝離開（浮窗不該讓程序殘留）
   loadPage("launcher");
+}
+
+app.whenReady().then(() => {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: en() ? "Game Console" : "遊戲控制台", click: () => loadPage("launcher") },
+    { label: en() ? "Save Editor" : "存檔修改器", click: () => loadPage("editor") },
+    { label: en() ? "Save Check & Guard" : "存檔檢查與防護", click: () => loadPage("guard") },
+  ]));
+  createMainWindow();
   // 電腦端功能：系統匣、全域快捷鍵、狀態浮窗（遊戲執行中關閉主視窗會縮到系統匣，由匣圖示的「離開」結束）
   extras = createShellExtras({
     electron, launcher, gameLink,
-    showConsole: () => { if (win.isMinimized()) win.restore(); win.show(); win.focus(); },
+    showConsole: () => { if (!win || win.isDestroyed()) createMainWindow(); if (win.isMinimized()) win.restore(); win.show(); win.focus(); },
     quit: () => { quitting = true; app.quit(); },
     log: (t) => { try { console.warn("[shell]", t); } catch {} },
   });
   const r = extras.start();
   console.log("[shell] 已註冊快捷鍵：" + r.registered.join(", "));
-  win.on("close", (e) => { if (!quitting && gameLink.running) { e.preventDefault(); win.hide(); } });
 });
 let extras = null, quitting = false;
 app.on("will-quit", () => { try { extras?.stop(); } catch {} });
