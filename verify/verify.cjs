@@ -168,7 +168,7 @@ async function update() {
     : report.detection.changed
       ? (report.detection.accepted ? "發現差異（已人工確認 --accept-detection）" : "發現差異（⚠️ 需人工確認）")
       : "無差異";
-  const liveDesc = "待桌面版實機階段執行（live-roles）";
+  const liveDesc = "桌面版實機驗證需另跑 tests/live-harness/e2e-desktop.cjs";
 
   if (!selected.length) return finish(true, `遊戲 ${build} 比對完成，未發現需執行的測試；更新內容待分析 ${review.pending} 項、新增未翻譯 ${missing} 項；偵測掃描：${detDesc}；實機驗證：${liveDesc}。本次沒有更新相容版本。`);
   const a = adapt.analyze(build);

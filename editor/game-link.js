@@ -11,7 +11,7 @@ const DEFAULT_EXE_PATH = path.join(
 );
 
 const DEFAULT_USER_DATA = () =>
-  path.join(process.env.APPDATA || "", "D2 Survivors");
+  process.env.D2S_USER_DATA ? path.resolve(process.env.D2S_USER_DATA) : path.join(process.env.APPDATA || "", "D2 Survivors"); // D2S_USER_DATA 是官方遊戲自己的環境變數，同樣決定 DevToolsActivePort 位置
 
 const HELPER_FILES = ["input.js", "hooks.js", "autobot.js"];
 

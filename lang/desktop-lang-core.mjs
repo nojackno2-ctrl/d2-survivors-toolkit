@@ -1,7 +1,7 @@
 // 桌面版中文化核心模組：只替換 app.asar 內 ko-*.js 的「值」為繁體中文，不改任何函式。
 // 提供 apply / restore / status 純函式，供 CLI（lang/tools/desktop-lang.mjs）與桌面端（editor/）呼叫。
 import crypto from "node:crypto";
-import fs from "node:fs";
+import fsStd from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 
 const LANG_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const require = createRequire(import.meta.url);
+// Electron 主程序內 fs 會把 .asar 當資料夾；讀寫 app.asar 本體須用 original-fs（一般 node 沒有此模組則用標準 fs）
+const fs = (() => { try { return require("original-fs"); } catch { return fsStd; } })();
 // @electron/asar：優先用呼叫端（editor 封裝後在 app.asar 內）以 useAsar() 提供；否則開發模式從 editor/node_modules 載入
 let asarModule = null;
 export function useAsar(mod) { asarModule = mod; }

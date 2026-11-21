@@ -56,6 +56,7 @@ global.__d2autobot = {
   game: null,
 };
 
+global.__d2forgeLocalReady = true; // 本地淬鍊在桌面版預設不可用；測試以此旗標驗證其邏輯
 const forgeLocal = require("../forge-local.js");
 forgeLocal.set({ enabled: true, sure: true });
 

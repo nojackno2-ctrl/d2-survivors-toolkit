@@ -68,7 +68,7 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const api = window.api;
+const bridge = window.api;
 const msg = (t, bad) => { const el = $("msg"); el.textContent = t || ""; el.className = bad ? "bad" : "ok"; };
 const set = (id, text, cls) => { const el = $(id); el.textContent = text; el.className = cls || ""; };
 let busy = false;
@@ -98,7 +98,7 @@ function refreshButtons() {
 
 async function refresh(withLang = true) {
   try {
-    const g = await api.gameStatus();
+    const g = await bridge.gameStatus();
     last.game = g.error ? null : g;
     if (g.error) { set("sRun", g.error, "bad"); }
     else {
@@ -110,7 +110,7 @@ async function refresh(withLang = true) {
     }
   } catch (e) { set("sRun", e.message, "bad"); }
   if (withLang) try {
-    const l = await api.langStatus();
+    const l = await bridge.langStatus();
     last.lang = l.error ? null : l;
     if (l.error) set("lStatus", l.error, "bad");
     else {
@@ -121,16 +121,16 @@ async function refresh(withLang = true) {
   refreshButtons();
 }
 
-$("bLaunchHelper").onclick = () => act(() => api.launchGame({ withHelper: true }), (r) => r.helper ? "遊戲已啟動，輔助器已注入。" : "遊戲已啟動，但輔助器未注入：" + (r.helperError || "未知原因"));
-$("bLaunch").onclick = () => act(() => api.launchGame({ withHelper: false }), "遊戲已啟動（未注入輔助器）。");
-$("bStop").onclick = () => act(() => api.stopHelper(), "輔助器已停止。");
+$("bLaunchHelper").onclick = () => act(() => bridge.launchGame({ withHelper: true }), (r) => r.helper ? "遊戲已啟動，輔助器已注入。" : "遊戲已啟動，但輔助器未注入：" + (r.helperError || "未知原因"));
+$("bLaunch").onclick = () => act(() => bridge.launchGame({ withHelper: false }), "遊戲已啟動（未注入輔助器）。");
+$("bStop").onclick = () => act(() => bridge.stopHelper(), "輔助器已停止。");
 $("bApply").onclick = () => {
   if (!confirm("套用繁體中文會修改遊戲的 app.asar（需管理員權限）。\n套用後遊戲會把成績標記為 patched（排行榜上傳已被封鎖）。\n要繼續嗎？")) return;
-  act(() => api.langApply(), (r) => "已套用繁體中文（替換 " + r.replacedCount + "/" + r.totalCount + " 筆）。" + (r.warning ? "\n" + r.warning : ""));
+  act(() => bridge.langApply(), (r) => "已套用繁體中文（替換 " + r.replacedCount + "/" + r.totalCount + " 筆）。" + (r.warning ? "\n" + r.warning : ""));
 };
-$("bRestore").onclick = () => act(() => api.langRestore(), (r) => (r.restored ? "已還原原版。" : "遊戲已被官方更新覆蓋，已略過放回舊備份並清除中文化記錄。") + (r.warning ? "\n" + r.warning : ""));
-$("bEditor").onclick = () => api.openPage("editor");
-$("bGuard").onclick = () => api.openPage("guard");
+$("bRestore").onclick = () => act(() => bridge.langRestore(), (r) => (r.restored ? "已還原原版。" : "遊戲已被官方更新覆蓋，已略過放回舊備份並清除中文化記錄。") + (r.warning ? "\n" + r.warning : ""));
+$("bEditor").onclick = () => bridge.openPage("editor");
+$("bGuard").onclick = () => bridge.openPage("guard");
 
 refresh();
 setInterval(() => { if (!busy) refresh(false); }, 2000); // 中文化狀態要算 asar 雜湊，只在載入與操作後更新

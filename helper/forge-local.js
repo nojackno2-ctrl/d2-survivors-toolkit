@@ -66,7 +66,8 @@
   const settings = () => ({ ...config });
   const set = (patch) => { for (const key of ["enabled", "sure"]) if (typeof patch?.[key] === "boolean") config[key] = patch[key]; try { root.localStorage.setItem(SETTINGS, JSON.stringify(config)); } catch {} return settings(); };
   const online = () => { try { if (root.__d2autobot?.onlineSave?.()) return true; } catch {} try { return root.__d2guard?.saveMode?.() === "online"; } catch { return false; } };
-  const available = () => !online();
+  // 桌面版：遊戲的淬鍊請求經主程序 IPC 送出，頁面層 fetch 攔截已移除，本地淬鍊無法生效；固定回報不可用，避免開關顯示與實際不一致。
+  const available = () => root.__d2forgeLocalReady === true && !online(); // 由未來的本機空伺服器整合設定；目前桌面版固定不可用
   const enabled = () => available() && config.enabled;
   function items(save) {
     const found = [], seen = new WeakSet();
