@@ -398,7 +398,7 @@ let server, win;
      const dir=(x,y)=>{K.releaseAll();log.length=0;K.setMoveDir(x,y,{smooth:1});return K.held().sort().join('+');};
      check('量化：右',dir(1,0)==='ArrowRight');check('量化：左下（y 向下）',dir(-1,1)==='ArrowDown+ArrowLeft');check('量化：上',dir(0,-1)==='ArrowUp');check('量化：右上',dir(1,-1)==='ArrowRight+ArrowUp');
      check('死區：零向量不按鍵',dir(0,0)==='');
-     K.releaseAll();log.length=0;K.setMoveDir(1,0,{smooth:1});K.setMoveDir(1,0.05,{smooth:1});K.setMoveDir(1,0.1,{smooth:1});
+     K.releaseAll();log.length=0;K.setMoveDir(1,0,{smooth:1});K.setMoveDir(1,0.03,{smooth:1});K.setMoveDir(1,0.06,{smooth:1});
      check('方向沒變就不重送按鍵（只送一次 down）',log.length===1&&log[0].action==='down'&&log[0].code==='ArrowRight');
      K.setMoveDir(1,1,{smooth:1});check('方向改變只送差異（加按下鍵）',log.length===2&&log[1].code==='ArrowDown'&&log[1].action==='down');
      K.setMoveDir(0,1,{smooth:1});check('方向改變只送差異（放開右鍵）',log.length===3&&log[2].code==='ArrowRight'&&log[2].action==='up'&&K.held().join()==='ArrowDown');
