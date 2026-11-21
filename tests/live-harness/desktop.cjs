@@ -66,7 +66,7 @@ function prepareProfile() {
   }
   const end = Date.now() + Number(process.env.H_SECONDS || 120) * 1000;
   const census = new Map(); // H_CENSUS=1：統計世界／HUD 內出現過的文字，找出仍為英文的字串
-  const CENSUS_JS = `(g)=>{const out=[];const seen=new Set();const walk=(o,d)=>{if(!o||typeof o!=="object"||d>4||seen.has(o))return;seen.add(o);if(Array.isArray(o)){for(const x of o.slice(0,200))walk(x,d+1);return;}for(const k of Object.keys(o).slice(0,60)){const v=o[k];if(typeof v==="string"&&(k==="text"||k==="label"||k==="name"||k==="title")&&v.length<120)out.push(k+":"+v);else if(v&&typeof v==="object")walk(v,d+1);}};walk(g.world,0);walk(g.hud,0);return out;}`;
+  const CENSUS_JS = `(g)=>{if(!window.__census){window.__census=new Map();const seen=new Set();let found=null;const walk=(o,d)=>{if(found||!o||typeof o!=="object"||d>6||seen.has(o))return;seen.add(o);let adv;try{adv=o.advanceOf}catch{}if(typeof adv==="function"&&typeof o.measure==="function"){found=o;return;}let ks;try{ks=Object.keys(o).slice(0,80)}catch{return}for(const k of ks){let v;try{v=o[k]}catch{continue}if(v&&typeof v==="object")walk(v,d+1);}};walk(g,0);if(!found)return ["__no_font_instance__"];const P=Object.getPrototypeOf(found);window.__censusInstalled=true;for(const name of ["measure","wrapLines"]){const orig=P[name];if(typeof orig!=="function")continue;P[name]=function(e,...r){try{if(typeof e==="string")window.__census.set(e,(window.__census.get(e)||0)+1)}catch{}return orig.call(this,e,...r)}}}const out=[...window.__census.keys()];window.__census.clear();return out;}`;
   let n = 0, deaths = 0, lastState = "", minHp = 1, hpSum = 0, hpN = 0;
   while (Date.now() < end && gl.running) {
     try {
