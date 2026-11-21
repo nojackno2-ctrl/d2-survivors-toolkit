@@ -893,7 +893,13 @@
     if (g.state !== "select" || !questOn() || !settings.quest.autoStart || !g.kit || g.swapping || transition || now - actionAt < 3000 || typeof g.continueRun !== "function") return false;
     let saved = null;
     try { saved = g.frontend?.actions?.saved?.(g.kit.id); } catch { saved = null; }
-    if (!saved) return false;
+    if (!saved) {
+      // 新角色死亡保護離場後沒有續玩進度：本次輔助器曾開過局才自動開新局（避免搶使用者手動選角）。
+      if (!lastRunDiff || typeof g.startRun !== "function" || now - actionAt < 8000) return false;
+      actionAt = now; lastAction = "離場後無續玩進度，重開新局";
+      fire(g.startRun(g.kit, lastRunDiff), "重開新局");
+      return true;
+    }
     actionAt = now; lastAction = "中途離開，自動繼續上次進度";
     fire(g.continueRun(g.kit, "hero"), "續玩");
     return true;
