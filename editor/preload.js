@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld("api", {
   langApply: call("langApply"),
   langRestore: call("langRestore"),
   openPage: call("openPage"),
+  helperSettings: call("helperSettings"),
+  helperSet: call("helperSet"),
+  helperLive: call("helperLive"),
 });
 
 // 桌面版沒有遊戲內的工具包選單；在修改器的「存檔檢查」分頁補上前往防護頁的按鈕（視窗上方選單列亦可隨時切換）

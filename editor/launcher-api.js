@@ -103,6 +103,14 @@ function createLauncherApi({ gameLink, core, engine, paths, runElevated = runEle
       }
     },
 
+    async helperSettings() { return gameLink.helperSettings(); },
+    async helperSet(settingPath, value) {
+      if (typeof settingPath !== "string" || !/^[A-Za-z][A-Za-z0-9.]*$/.test(settingPath)) throw new Error("設定路徑不正確。");
+      if (!(typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)) || (typeof value === "string" && value.length <= 40))) throw new Error("設定值格式不正確。");
+      return { ok: await gameLink.helperSet(settingPath, value) };
+    },
+    async helperLive() { return gameLink.helperLive(); },
+
     gameStatus() {
       return { ...gameLink.status(), build: engine.installedBuild() };
     },

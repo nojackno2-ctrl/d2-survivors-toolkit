@@ -57,6 +57,12 @@
 </section>
 
 <section>
+  <h2>輔助器設定</h2>
+  <p class="dim" id="hsNote">需先「啟動遊戲（含輔助器）」；設定與遊戲內原面板為同一份（遊戲內的設定面板已隱藏，改在這裡調整）。</p>
+  <div id="hsBody"></div>
+</section>
+
+<section>
   <h2>其他工具</h2>
   <div class="bar">
     <button id="bEditor">前往存檔修改器</button>
@@ -131,6 +137,55 @@ $("bApply").onclick = () => {
 $("bRestore").onclick = () => act(() => bridge.langRestore(), (r) => (r.restored ? "已還原原版。" : "遊戲已被官方更新覆蓋，已略過放回舊備份並清除中文化記錄。") + (r.warning ? "\n" + r.warning : ""));
 $("bEditor").onclick = () => bridge.openPage("editor");
 $("bGuard").onclick = () => bridge.openPage("guard");
+
+// ── 輔助器設定（經 CDP 讀寫頁內 __d2autobot，與遊戲內面板同一份設定）
+const HS_GROUPS = [
+  ["自動戰鬥", [["enabled", "戰鬥輔助（走位、喝水、撿裝）"], ["progressEnabled", "自動戰鬥"],
+    ["autoMode", "自動模式", { quest: "任務模式", fixedDifficulty: "固定關卡", terror: "天梯・推關", fixedTier: "天梯・固定層數" }],
+    ["quest.fixedDifficulty", "固定關卡難度", { normal: "普通", nightmare: "惡夢", hell: "地獄" }]]],
+  ["戰鬥輔助", [["potion.autoHp", "自動喝水"], ["movement.enabled", "自動走位"], ["movement.dodgeProjectiles", "閃避飛彈"], ["loot.enabled", "自動撿裝"], ["loot.vacuum", "全圖吸取"], ["deathProtection.enabled", "死亡保護（快死時儲存並離開）"]]],
+  ["裝備與營地", [["gear.autoEquip", "裝備管理（穿上／收藏／存倉／賣出／買裝）"], ["gear.merc", "雇傭兵自動化"], ["town.enabled", "營地整備"], ["build.ladder", "依排行榜配技能"], ["build.autoStats", "自動配屬性點"], ["build.autoReroll", "升級選卡重抽預判"]]],
+  ["遊戲修改（需開總開關）", [["cheat.enabled", "遊戲修改總開關"], ["cheat.invincible", "無敵"], ["cheat.maxCrit", "最大暴擊"], ["cheat.oneHitKill", "一擊必殺"], ["cheat.maxSkills", "技能全滿"], ["cheat.maxCastSpeed", "最大施法速度"], ["cheat.maxMonsterDensity", "最大怪物密度"], ["cheat.allElites", "全部精英"], ["cheat.forgeMax", "淬鍊最大"], ["cheat.larzukMax", "拉茲克最大"], ["cheat.pauseStageTime", "停止關卡時間"], ["cheat.summonAllBosses", "召喚全部頭目"], ["cheat.infiniteRerolls", "無限重抽"], ["cheat.maxDropRate", "最大掉寶率"], ["cheat.maxGoldRate", "最大金幣率"], ["cheat.maxXp", "經驗倍率"], ["cheat.summonCloneOnTerror", "恐懼召喚分身"]]],
+];
+const hsGet = (st, p) => p.split(".").reduce((o, k) => (o == null ? o : o[k]), st);
+let hsBuilt = false, hsBusy = false;
+function hsBuild() {
+  const body = $("hsBody"); body.textContent = "";
+  for (const [title, items] of HS_GROUPS) {
+    const h = document.createElement("h3"); h.textContent = title; body.appendChild(h);
+    const box = document.createElement("div"); box.className = "bar"; box.style.flexWrap = "wrap";
+    for (const [path, label, opts] of items) {
+      const lab = document.createElement("label"); lab.style.cssText = "display:inline-flex;gap:6px;align-items:center;margin:2px 14px 2px 0";
+      let el;
+      if (opts) { el = document.createElement("select"); for (const [v, t] of Object.entries(opts)) { const o = document.createElement("option"); o.value = v; o.textContent = t; el.appendChild(o); } }
+      else { el = document.createElement("input"); el.type = "checkbox"; }
+      el.dataset.path = path;
+      el.onchange = async () => {
+        hsBusy = true;
+        try { const r = await bridge.helperSet(path, opts ? el.value : el.checked); if (r && r.error) msg(r.error, true); else if (r && r.ok === false) msg("設定未套用（可能線上存檔模式不允許）", true); }
+        finally { hsBusy = false; hsRefresh(); }
+      };
+      const sp = document.createElement("span"); sp.textContent = label;
+      lab.append(...(opts ? [sp, el] : [el, sp])); box.appendChild(lab);
+    }
+    body.appendChild(box);
+  }
+  hsBuilt = true;
+}
+async function hsRefresh() {
+  if (hsBusy) return;
+  let st = null;
+  try { st = await bridge.helperSettings(); } catch {}
+  if (!st || st.error) { $("hsNote").textContent = "輔助器尚未注入：請先「啟動遊戲（含輔助器）」。"; for (const el of document.querySelectorAll("#hsBody [data-path]")) el.disabled = true; return; }
+  if (!hsBuilt) hsBuild();
+  $("hsNote").textContent = "設定與遊戲內原面板為同一份（遊戲內的設定面板已隱藏，改在這裡調整）。" + (st.online ? " 目前為線上存檔模式，部分修改項停用。" : "");
+  for (const el of document.querySelectorAll("#hsBody [data-path]")) {
+    const v = hsGet(st, el.dataset.path); el.disabled = false;
+    if (el.type === "checkbox") { el.checked = !!v; el.disabled = (st.onlineDisabledCheats || []).includes(el.dataset.path); } else if (v != null) el.value = v;
+  }
+}
+hsBuild(); for (const el of document.querySelectorAll("#hsBody [data-path]")) el.disabled = true;
+setInterval(hsRefresh, 2500); hsRefresh();
 
 refresh();
 setInterval(() => { if (!busy) refresh(false); }, 2000); // 中文化狀態要算 asar 雜湊，只在載入與操作後更新

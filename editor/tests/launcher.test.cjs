@@ -39,10 +39,10 @@ test("startHelper：依序 enableInputBinding → exposeGame → 設旗標 → �
   const r = await gl.startHelper({ root, build: "2026.1105.3", switches: { enabled: true }, pollMs: 1 });
   assert.equal(r.injected, true);
   const names = calls.filter((c) => c[0] !== "send").map((c) => c[0]);
-  assert.deepEqual(names, ["enableInputBinding", "exposeGame", "exposeGame", "exposeGame", "inject", "inject", "inject", "inject"]);
+  assert.deepEqual(names, ["enableInputBinding", "exposeGame", "exposeGame", "exposeGame", "inject", "inject", "inject", "inject", "inject"]);
   const injects = calls.filter((c) => c[0] === "inject").map((c) => c[1]);
   assert.match(injects[0], /window\.__d2gameBuild="2026\.1105\.3";window\.__d2autobotSwitches=\{"enabled":true\};/);
-  assert.deepEqual(injects.slice(1), ["/*input.js*/", "/*hooks.js*/", "/*autobot.js*/"]);
+  assert.deepEqual(injects.slice(1, 4), ["/*input.js*/", "/*hooks.js*/", "/*autobot.js*/"]); assert.match(injects[4], /setExternalUi[(]true[)]/);
   assert.equal(gl.status().helperInjected, true);
 });
 
@@ -56,18 +56,18 @@ test("startHelper：頁面重新載入（Page.frameNavigated）後自動重做�
   const { gl, calls } = fakeLink();
   await gl.startHelper({ root: fakeRoot(), build: "b", switches: {}, pollMs: 1 });
   const count = () => calls.filter((c) => c[0] === "inject").length;
-  assert.equal(count(), 4);
+  assert.equal(count(), 5);
   gl._onPageEvent({ method: "Page.frameNavigated", params: { frame: { parentId: "x" } } });
   await new Promise((r) => setTimeout(r, 30));
-  assert.equal(count(), 4, "子框架不應觸發");
+  assert.equal(count(), 5, "子框架不應觸發");
   gl._onPageEvent({ method: "Page.frameNavigated", params: { frame: {} } });
   await gl._helperBusy;
-  assert.equal(count(), 8);
+  assert.equal(count(), 10);
   assert.equal(gl.status().helperInjected, true);
   await gl.stopHelper();
   gl._onPageEvent({ method: "Page.frameNavigated", params: { frame: {} } });
   await new Promise((r) => setTimeout(r, 30));
-  assert.equal(count(), 8);
+  assert.equal(count(), 10);
 });
 
 test("stopHelper：呼叫頁內 destroy、移除 binding、清狀態", async () => {

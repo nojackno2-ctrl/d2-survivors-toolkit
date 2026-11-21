@@ -29,7 +29,8 @@
       "launcher-api.js",
       "launcher.html",
       "lang-cli.cjs",
-      "package.json"
+      "package.json",
+      "shell-extras.js"
     ],
     "extraResources": [
       {

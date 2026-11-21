@@ -75,6 +75,13 @@ function profile() {
     check("預設無例外掛接（開關全關）", Array.isArray(d?.diag?.hooks) && d.diag.hooks.every((n) => ["levelPool", "camp"].includes(n)), JSON.stringify(d?.diag?.hooks));
     const h1 = await gl.readSnapshot("(g)=>({t:String(Object.getPrototypeOf(g).tick).length,s:String(Object.getPrototypeOf(g).steer).length})");
     check("Game.prototype.tick／steer 與原版相同（未被包裝）", JSON.stringify(h0) === JSON.stringify(h1), JSON.stringify(h1));
+    // 5. 設定介面改由獨立應用提供：經 CDP 讀寫、遊戲內面板隱藏
+    const st0 = await gl.helperSettings();
+    check("獨立應用可讀輔助器設定", st0 && typeof st0.enabled === "boolean", `autoMode=${st0 && st0.autoMode}`);
+    check("經 CDP 改設定會生效（自動模式→固定關卡）", (await gl.helperSet("autoMode", "fixedDifficulty")) === true && (await gl.helperSettings()).autoMode === "fixedDifficulty");
+    check("遊戲內設定面板與「輔助」按鈕已隱藏", await gl.evaluate(`(()=>{const l=document.getElementById("d2autobot-launcher"),p=document.getElementById("d2autobot-panel");return !!document.getElementById("d2autobot-external-style")&&(!l||getComputedStyle(l).display==="none")&&(!p||getComputedStyle(p).display==="none")})()`));
+    const live = await gl.helperLive();
+    check("狀態浮窗資料可取得（等級／血量／動作）", live && live.level >= 1 && typeof live.hp === "string", JSON.stringify(live).slice(0, 80));
     check("全程沒有請求到官方網站（本機空伺服器之外）", true, "上傳只能經本機空伺服器");
   } catch (e) { failed = true; check("例外", false, e.stack || e.message); }
   finally { await gl.close().catch(() => {}); }

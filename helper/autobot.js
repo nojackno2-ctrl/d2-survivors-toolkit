@@ -2906,6 +2906,20 @@
     onlineSave,
     virtualEssence: virtualEssenceOn,
     get settings() { return settings; },
+    // 獨立應用的設定介面（editor/launcher.html 經 CDP 呼叫）：讀寫與遊戲內面板同一份設定，行為與面板按鈕相同。
+    getSettings() { return JSON.parse(JSON.stringify({ ...settings, autoMode: get("autoMode"), autoKind: get("autoKind"), ladderMode: get("ladderMode"), online: onlineSave(), onlineDisabledCheats: [...ONLINE_DISABLED_CHEATS] })); },
+    setSetting(path, value) {
+      if (typeof path !== "string" || !/^[A-Za-z][A-Za-z0-9.]*$/.test(path)) return false;
+      if (onlineSave() && ONLINE_DISABLED_CHEATS.has(path)) return false;
+      try { put(path, value); release(); save(true); refreshControls(); return true; } catch { return false; }
+    },
+    // 設定面板改由獨立應用提供：隱藏遊戲內的「輔助」按鈕與設定面板（停止自動戰鬥鈕與狀態列仍留在戰鬥畫面）。
+    setExternalUi(on) {
+      let st = document.getElementById("d2autobot-external-style");
+      if (on && !st) { st = document.createElement("style"); st.id = "d2autobot-external-style"; st.textContent = "#d2autobot-launcher,#d2autobot-panel{display:none!important}"; document.head.appendChild(st); }
+      else if (!on && st) st.remove();
+      return !!on;
+    },
     // 測試用（唯讀）：離線／實機評估自動配裝時直接呼叫評分與挑選函式。
     gearTools: { bestMercGear, mercItemValue, equipMerc, bestGear, gearScore, gearNumbers, charmValue, gearFates, sellList },
   };

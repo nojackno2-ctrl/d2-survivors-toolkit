@@ -1,4 +1,6 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, Menu } = require("electron");
+const electron = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, Menu } = electron;
+const { createShellExtras } = require("./shell-extras");
 const fs = require("fs");
 const path = require("path");
 const core = require("./core");
@@ -86,6 +88,9 @@ ipcMain.handle("launchGame", wrap((opts) => launcher.launchGame(opts)));
 ipcMain.handle("gameStatus", wrap(() => launcher.gameStatus()));
 ipcMain.handle("startHelper", wrap((opts) => launcher.startHelper(opts)));
 ipcMain.handle("stopHelper", wrap(() => launcher.stopHelper()));
+ipcMain.handle("helperSettings", wrap(() => launcher.helperSettings()));
+ipcMain.handle("helperSet", wrap((p, v) => launcher.helperSet(p, v)));
+ipcMain.handle("helperLive", wrap(() => launcher.helperLive()));
 ipcMain.handle("langStatus", wrap(() => launcher.langStatus()));
 ipcMain.handle("langApply", wrap(() => launcher.langApply()));
 ipcMain.handle("langRestore", wrap(() => launcher.langRestore()));
@@ -125,5 +130,18 @@ app.whenReady().then(() => {
     return { action: "deny" };
   });
   loadPage("launcher");
+  // 電腦端功能：系統匣、全域快捷鍵、狀態浮窗（遊戲執行中關閉主視窗會縮到系統匣，由匣圖示的「離開」結束）
+  extras = createShellExtras({
+    electron, launcher, gameLink,
+    showConsole: () => { if (win.isMinimized()) win.restore(); win.show(); win.focus(); },
+    quit: () => { quitting = true; app.quit(); },
+    log: (t) => { try { console.warn("[shell]", t); } catch {} },
+  });
+  const r = extras.start();
+  console.log("[shell] 已註冊快捷鍵：" + r.registered.join(", "));
+  win.on("close", (e) => { if (!quitting && gameLink.running) { e.preventDefault(); win.hide(); } });
 });
+let extras = null, quitting = false;
+app.on("will-quit", () => { try { extras?.stop(); } catch {} });
+app.on("before-quit", () => { quitting = true; });
 app.on("window-all-closed", () => app.quit());

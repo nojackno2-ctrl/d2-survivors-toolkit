@@ -550,6 +550,8 @@ class GameLink {
       if (!alive()) return false;
       await this.injectScript(fs.readFileSync(path.join(h.root, "helper", f), "utf8"));
     }
+    // 設定面板改由獨立應用提供：隱藏遊戲內的「輔助」按鈕與面板
+    await this.injectScript("window.__d2autobot&&window.__d2autobot.setExternalUi&&window.__d2autobot.setExternalUi(true)");
     h.injected = true;
     h.runs += 1;
     h.lastError = "";
@@ -597,6 +599,20 @@ class GameLink {
     try { await this.evaluate("window.__d2autobot?.destroy?.(); 1"); } catch { /* 頁面已不在 */ }
     try { await this.send("Runtime.removeBinding", { name: "__d2input" }); } catch { /* 已移除 */ }
     return { stopped: Boolean(h) };
+  }
+
+  /** 輔助器設定（與遊戲內面板同一份）。helper 未注入時回 null。 */
+  async helperSettings() {
+    const r = await this.evaluate("window.__d2autobot&&window.__d2autobot.getSettings?JSON.stringify(window.__d2autobot.getSettings()):null");
+    return r ? JSON.parse(r) : null;
+  }
+  async helperSet(settingPath, value) {
+    return this.evaluate(`window.__d2autobot&&window.__d2autobot.setSetting?window.__d2autobot.setSetting(${JSON.stringify(settingPath)},${JSON.stringify(value)}):false`);
+  }
+  /** 狀態浮窗用的即時摘要。 */
+  async helperLive() {
+    const r = await this.evaluate(`(()=>{const a=window.__d2autobot,g=a&&a.game,w=g&&g.world,p=w&&w.player,d=a&&a.diagnostics?a.diagnostics():null;if(!a)return null;return JSON.stringify({state:g&&g.state,level:p&&p.level,hp:p?Math.round(p.life)+"/"+Math.round(p.maxLife):null,action:d&&d.lastAction,enabled:a.settings&&a.settings.enabled,auto:a.settings&&a.settings.progressEnabled,hooks:d&&d.hooks})})()`);
+    return r ? JSON.parse(r) : null;
   }
 
   status() {
