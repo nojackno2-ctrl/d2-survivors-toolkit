@@ -57,6 +57,8 @@ function prepareProfile() {
       const s=g.plainSelect(),i=s.cards.findIndex(c=>c.dataset?.class===${JSON.stringify(CLS)}); s.select(i);await sleep(300);s.confirm(false);await sleep(1000);}
     return g.state;})()`;
   log("enter", await gl.evaluate(enter));
+  // H_STARTRUN=normal|nightmare|hell（測試專用）：進場後以遊戲方法 startRun(kit, 難度) 直接開新局，用來覆蓋高難度畫面
+  if (process.env.H_STARTRUN) { log("startRun", process.env.H_STARTRUN, await gl.evaluate(`(async()=>{const g=window.__d2autobotGame;try{for(let i=0;i<40&&g.state==="loading";i++)await new Promise(r=>setTimeout(r,500));await g.startRun(g.kit,${JSON.stringify(process.env.H_STARTRUN)});return g.state+"/"+(g.world&&g.world.difficulty)}catch(e){return "ERR "+e.message}})()`).catch((e) => "EVAL " + e.message)); await sleep(6000); }
   if (!process.env.H_NOBOT) {
     const sw = JSON.stringify({ enabled: true, progressEnabled: true, cheat: false, ...(process.env.H_SWITCHES ? JSON.parse(process.env.H_SWITCHES) : {}) });
     await gl.injectScript(`window.__d2autobotSwitches=${sw};window.__d2gameBuild=${JSON.stringify(process.env.H_BUILD || "2026.1105.3")};`);
