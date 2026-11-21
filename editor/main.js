@@ -59,13 +59,13 @@ ipcMain.handle("deleteBackup", wrap((f) => (core.deleteBackup(safeName(f)), { ok
 ipcMain.handle("snapshot", wrap((save, label) => (checkSave(save), core.snapshot(save, label), { ok: true })));
 ipcMain.handle("exportSave", wrap(async (save) => {
   checkSave(save);
-  const r = await dialog.showSaveDialog(win, { title: en() ? "Export save" : "匯出存檔", defaultPath: en() ? "D2Survivors-save.json" : "D2倖存者存檔.json", filters: [{ name: en() ? "Save" : "存檔", extensions: ["json"] }] });
+  const r = await dialog.showSaveDialog(win, { title: en() ? "Export save" : "匯出存檔", defaultPath: en() ? "D2Survivors-save.json" : "D2倖存者存檔.json", filters: [{ name: en() ? "Save (JSON)" : "存檔（JSON）", extensions: ["json"] }, { name: en() ? "Game export text (D2S1)" : "遊戲匯出文字（D2S1）", extensions: ["txt"] }] });
   if (r.canceled) return { canceled: true };
   core.writeFile(r.filePath, save);
   return { ok: true, path: r.filePath };
 }));
 ipcMain.handle("importSave", wrap(async () => {
-  const r = await dialog.showOpenDialog(win, { title: en() ? "Import save" : "匯入存檔", filters: [{ name: en() ? "Save" : "存檔", extensions: ["json"] }], properties: ["openFile"] });
+  const r = await dialog.showOpenDialog(win, { title: en() ? "Import save" : "匯入存檔", filters: [{ name: en() ? "Save" : "存檔", extensions: ["json", "txt"] }, { name: en() ? "All files" : "所有檔案", extensions: ["*"] }], properties: ["openFile"] });
   if (r.canceled) return { canceled: true };
   const save = core.readFile(r.filePaths[0]);
   checkSave(save);

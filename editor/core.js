@@ -258,8 +258,18 @@ function snapshot(save, label) {
   const clean = String(label || "快照").replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
   backup(`${clean}.json`, sealText(save));
 }
-function readFile(p) { return JSON.parse(fs.readFileSync(p, "utf8")); }
-function writeFile(p, save) { fs.writeFileSync(p, sealText(save)); }
+const zlib = require("zlib");
+// 兩種檔案格式：.json（原始存檔）與 .txt／D2S1:（遊戲內匯出的壓縮文字），讀取時依內容判斷，不經過遊戲。
+function readFile(p) {
+  const t = fs.readFileSync(p, "utf8").replace(/^﻿/, "").trim();
+  if (t.startsWith("D2S1:")) return JSON.parse(zlib.inflateSync(Buffer.from(t.slice(5).replace(/-/g, "+").replace(/_/g, "/"), "base64")).toString("utf8"));
+  return JSON.parse(t);
+}
+function writeFile(p, save) {
+  const text = sealText(save);
+  if (/\.txt$/i.test(p)) fs.writeFileSync(p, "D2S1:" + zlib.deflateSync(Buffer.from(text, "utf8")).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
+  else fs.writeFileSync(p, text);
+}
 
 // 診斷資訊：各個檔案找不找得到（不含存檔內容）
 function diag() {
