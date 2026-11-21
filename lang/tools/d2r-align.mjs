@@ -112,7 +112,7 @@ for (const [key, val] of Object.entries({ ...dict })) {
   if (itemish.length && !itemish.includes(now)) set(`item:${en}`, first(ITEMISH, en), "item-key");
   if (monsterish.length && !monsterish.includes(now)) set(`monster:${en}`, first(MONSTERISH, en), "monster-key");
 }
-// 稀有字首／字尾單字：一般鍵另有他義時補 affix: 鍵（未列舉的稀有名稱由 lang.js 逐字組合時使用）
+// 稀有字首／字尾單字：一般鍵另有他義時補 affix: 鍵（未列舉的稀有名稱由遊戲翻譯器 逐字組合時使用）
 for (const c of ["rprefix", "rsuffix"]) for (const r of table(c === "rprefix" ? "rareprefix" : "raresuffix")) {
   const s = r.name && lookup(r.name); if (!s) continue;
   const en = strip(s.en), zh = strip(s.zh), magic = cand(["mprefix", "msuffix"], en);
