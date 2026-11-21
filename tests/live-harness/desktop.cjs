@@ -73,14 +73,15 @@ function prepareProfile() {
     await gl.evaluate("(()=>{const g=window.__d2autobotGame; try{ if(g.state!=='camp') g.enterCamp(); }catch(e){} return g.state})()").catch(() => {});
     await sleep(4000);
     await gl.readSnapshot(CENSUS_JS).catch(() => []); // 先安裝字串收集儀器
-    for (const m of process.env.H_SCREENS.split(",")) {
-      const r = await gl.evaluate(`(()=>{const g=window.__d2autobotGame;try{const r=g[${JSON.stringify(m)}];if(typeof r!=="function")return "no-method";g[${JSON.stringify(m)}]();return "called:"+g.state}catch(e){return "ERR "+e.message}})()`).catch((e) => "EVAL " + e.message);
+    for (const spec of process.env.H_SCREENS.split(",")) {
+      const [m, arg] = spec.split(":"); // 例：openCampTrade:stash
+      const r = await gl.evaluate(`(()=>{const g=window.__d2autobotGame;try{const r=g[${JSON.stringify(m)}];if(typeof r!=="function")return "no-method";g[${JSON.stringify(m)}](${arg === undefined ? "" : JSON.stringify(arg)});return "called:"+g.state}catch(e){return "ERR "+e.message}})()`).catch((e) => "EVAL " + e.message);
       await sleep(2500);
       const texts = await gl.readSnapshot(CENSUS_JS).catch(() => []);
       const texts2 = await gl.readSnapshot(CENSUS_JS).catch(() => []);
       const shot = await gl.send("Page.captureScreenshot", { format: "png" }).catch(() => null);
-      if (shot) fs.writeFileSync(path.join(OUT, "screen-" + m + ".png"), Buffer.from(shot.data, "base64"));
-      out.push({ method: m, result: r, texts: [...new Set([...texts, ...texts2])] });
+      if (shot) fs.writeFileSync(path.join(OUT, "screen-" + spec.replace(/[^\w]/g, "_") + ".png"), Buffer.from(shot.data, "base64"));
+      out.push({ method: spec, result: r, texts: [...new Set([...texts, ...texts2])] });
       await gl.key("Escape", "press", 80).catch(() => {}); await sleep(800);
     }
     fs.writeFileSync(path.join(OUT, "screens.json"), JSON.stringify(out, null, 1));
