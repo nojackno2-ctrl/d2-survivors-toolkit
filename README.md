@@ -2,7 +2,7 @@
 
 《D2 Survivors》桌面版的非官方繁體中文獨立工具包（Windows Electron 桌面應用），整合存檔修改器、遊戲輔助器、存檔合規檢查與繁體中文化。物品直接使用遊戲本身的產生器製作，數值範圍與遊戲一致。
 
-- **Windows 桌面版**：到 [Releases](https://github.com/nojackno2-ctrl.github.io/d2-survivors-toolkit) 或 GitHub Releases 下載獨立桌面應用（免安裝可攜版；開發重構中，以 `editor/` 為主體）。
+- **Windows 桌面版**：到 [GitHub Releases](https://github.com/nojackno2-ctrl/d2-survivors-toolkit/releases) 下載獨立桌面應用（免安裝可攜版；開發重構中，以 `editor/` 為主體）。
 
 > ⚠️ 修改前請先備份存檔。本工具與遊戲官方無關，使用風險自負。
 
